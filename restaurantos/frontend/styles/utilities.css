@@ -1,0 +1,147 @@
+/**
+ * BusinessOS Design System - Utilities & Layout Helpers
+ */
+
+.flex { display: flex; }
+.flex-col { display: flex; flex-direction: column; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.justify-center { justify-content: center; }
+.flex-1 { flex: 1; }
+
+.grid { display: grid; }
+.grid-cols-2 { grid-template-columns: repeat(2, 1fr); }
+.grid-cols-3 { grid-template-columns: repeat(3, 1fr); }
+
+.gap-sm { gap: var(--space-sm); }
+.gap-md { gap: var(--space-md); }
+.gap-lg { gap: var(--space-lg); }
+
+.p-sm { padding: var(--space-sm); }
+.p-md { padding: var(--space-md); }
+.p-lg { padding: var(--space-lg); }
+
+.w-full { width: 100%; }
+.h-full { height: 100%; }
+
+.text-center { text-align: center; }
+.text-muted { color: var(--text-muted); }
+.text-secondary { color: var(--text-secondary); }
+
+.text-sm { font-size: var(--font-size-sm); }
+.text-lg { font-size: var(--font-size-lg); }
+.text-xl { font-size: var(--font-size-xl); }
+.text-2xl { font-size: var(--font-size-2xl); }
+
+/* Animation Utility */
+.animate-fade-in {
+  animation: fadeIn var(--transition-normal) forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Responsive Grid & Shell Helper Classes */
+.grid-2col-responsive {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: var(--space-lg);
+  align-items: start;
+}
+
+.grid-responsive-4 {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-md);
+}
+
+.grid-responsive-6 {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: var(--space-sm);
+}
+
+.app-layout-body {
+  display: flex;
+  flex: 1;
+  width: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.app-sidebar {
+  width: 250px;
+  flex-shrink: 0;
+  background: var(--bg-surface-1);
+  border-right: 1px solid var(--border-subtle);
+  padding: var(--space-md);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.app-main {
+  flex: 1;
+  min-width: 0;
+  padding: var(--space-lg);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  background: var(--bg-dark);
+}
+
+.app-header {
+  background: var(--bg-surface-1);
+  border-bottom: 1px solid var(--border-subtle);
+  padding: var(--space-md) var(--space-xl);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-md);
+  flex-wrap: wrap;
+}
+
+/* Media Queries for Tablets & Mobile Screens */
+@media (max-width: 1024px) {
+  .grid-2col-responsive {
+    grid-template-columns: 1fr !important;
+    gap: var(--space-md);
+  }
+
+  .grid-cols-3, .grid-responsive-4 {
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)) !important;
+  }
+
+  .grid-responsive-6 {
+    grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)) !important;
+  }
+}
+
+@media (max-width: 768px) {
+  .app-layout-body {
+    flex-direction: column !important;
+    overflow: visible !important;
+  }
+
+  .app-sidebar {
+    width: 100% !important;
+    max-height: 220px !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border-subtle);
+  }
+
+  .app-main {
+    padding: var(--space-md) !important;
+  }
+
+  .grid-cols-2, .grid-cols-3, .grid-responsive-4, .grid-responsive-6 {
+    grid-template-columns: 1fr !important;
+  }
+
+  .app-header {
+    padding: var(--space-md) !important;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+}
+

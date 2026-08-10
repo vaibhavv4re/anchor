@@ -1,0 +1,64 @@
+/**
+ * BusinessOS Design System - Design Tokens
+ * Curated HSL color palette, typography scales, touch targets, and elevation tokens.
+ */
+
+:root {
+  /* Color Palette - Premium Dark & Rich Accents */
+  --bg-dark: hsl(222, 47%, 7%);
+  --bg-surface-1: hsl(222, 40%, 12%);
+  --bg-surface-2: hsl(222, 35%, 17%);
+  --bg-surface-3: hsl(222, 30%, 22%);
+
+  --text-primary: hsl(210, 40%, 98%);
+  --text-secondary: hsl(215, 20%, 75%);
+  --text-muted: hsl(215, 16%, 50%);
+
+  --accent-primary: hsl(158, 82%, 40%);
+  --accent-primary-hover: hsl(158, 82%, 46%);
+  --accent-secondary: hsl(217, 91%, 60%);
+
+  --status-success: hsl(142, 71%, 45%);
+  --status-warning: hsl(38, 92%, 50%);
+  --status-danger: hsl(355, 78%, 56%);
+  --status-info: hsl(199, 89%, 48%);
+
+  --border-subtle: hsl(222, 25%, 22%);
+  --border-focus: hsl(158, 82%, 40%);
+
+  /* Typography */
+  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.5rem;
+  --font-size-2xl: 2rem;
+  --font-size-3xl: 2.5rem;
+
+  /* Spacing */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+
+  /* Touch Boundaries & Target Sizes */
+  --touch-target-min: 48px;
+  --keypad-btn-size: 72px;
+
+  /* Border Radii */
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-full: 9999px;
+
+  /* Transitions & Shadows */
+  --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  --shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
