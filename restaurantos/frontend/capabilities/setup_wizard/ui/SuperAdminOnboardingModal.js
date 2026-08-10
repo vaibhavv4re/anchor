@@ -62,7 +62,7 @@ export class SuperAdminOnboardingModal {
               </div>
               <div>
                 <label style="display:block; font-size:0.75rem; margin-bottom:2px;">Admin PIN (6-digits)</label>
-                <input type="password" id="inp-admin-pin" value="999999" maxlength="6" style="width:100%;">
+                <input type="password" id="inp-admin-pin" placeholder="Set 6-digit PIN" maxlength="6" style="width:100%;">
               </div>
             </div>
           </div>

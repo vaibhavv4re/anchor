@@ -2167,36 +2167,7 @@
         }
       }
 
-      // 4. Role Quick Reference PIN Fallbacks for active tenant
-      if (!identity || !emp) {
-        const fallbackRoleMap = {
-          '999999': 'role-admin',
-          '111111': 'role-inventory',
-          '222222': 'role-waiter',
-          '333333': 'role-chef',
-          '444444': 'role-bar',
-          '555555': 'role-cashier'
-        };
-        const roleId = fallbackRoleMap[cleanPin];
-        if (roleId && tenants.length > 0) {
-          const targetTenant = tenants[0];
-          emp = emps.find(e => e.tenantId === targetTenant.tenantId && e.roleId === roleId);
-          if (!emp) {
-            emp = {
-              id: 'emp-' + roleId + '-' + targetTenant.tenantId,
-              identityId: 'id-' + roleId + '-' + targetTenant.tenantId,
-              tenantId: targetTenant.tenantId,
-              employeeCode: 'EMP-' + Math.floor(1000 + Math.random() * 9000),
-              name: (targetTenant.adminName || 'Staff') + ' (' + roleId.replace('role-', '').toUpperCase() + ')',
-              roleId,
-              workspaceDefault: roleId.replace('role-', ''),
-              status: 'ACTIVE'
-            };
-            offlineStore.appendItem('employees', emp);
-          }
-          identity = { id: emp.identityId, status: 'ACTIVE' };
-        }
-      }
+
       if (!identity || !emp) return { success: false, error: 'Invalid PIN. Access denied.' };
       if (identity.status === 'SUSPENDED') return { success: false, error: '❌ Account is SUSPENDED. Contact Manager.' };
       if (emp.status === 'SUSPENDED') return { success: false, error: '❌ Employee account is SUSPENDED.' };
@@ -2280,7 +2251,7 @@
         <div style="text-align:center;">
           <h2 style="font-size:1.5rem;">Anchor RestaurantOS v1.0</h2>
           <p style="font-size:0.8rem; color:var(--text-muted); margin-top:4px; line-height:1.4;">
-            <strong>Quick PINs:</strong> SuperAdmin <code>888888</code> | Admin <code>999999</code> | Inventory <code>111111</code> | Waiter <code>222222</code> | Chef <code>333333</code>
+            Enter your 6-digit Employee Security PIN to login (SuperAdmin PIN: <code>888888</code>)
           </p>
         </div>
         <div class="pin-display-dots">${dots}</div>
@@ -9547,7 +9518,7 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
             <div>
               <label style="display:block; font-size:0.75rem; margin-bottom:2px;">Operational Role Template *</label>
               <select id="inp-emp-role" style="width:100%;">
-                <option value="role-inventory">📦 Inventory Manager (PIN 444444 Default)</option>
+                <option value="role-inventory">📦 Inventory Manager (Full Stock & Procurement Control)</option>
                 <option value="role-waiter">🍽️ Floor Waiter (Floor Map & Orders)</option>
                 <option value="role-chef">👨‍🍳 Head Chef (Kitchen KDS Display)</option>
                 <option value="role-bartender">🍺 Bartender (Bar BDS Display)</option>

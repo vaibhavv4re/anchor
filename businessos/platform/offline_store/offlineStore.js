@@ -68,31 +68,7 @@ class OfflineStore {
       const initialIdentities = [
         {
           id: 'id-superadmin',
-          pinHash: '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918', // SHA-256 for 000000
-          status: 'ACTIVE',
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: 'id-admin',
-          pinHash: '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92', // SHA-256 for 123456
-          status: 'ACTIVE',
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: 'id-waiter-rahul',
-          pinHash: '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92', // SHA-256 for 123456
-          status: 'ACTIVE',
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: 'id-chef-vikram',
-          pinHash: '8d969eef6ecad3c29a3a629280e686cf0c3f5d5a86aff3ca12020c923adc6c92', // SHA-256 for 123456
-          status: 'ACTIVE',
-          createdAt: new Date().toISOString()
-        },
-        {
-          id: 'id-manager-priya',
-          pinHash: 'ef777755a5c4e328c63939226343d7b0965e04729d388f7236c3040e3474378b', // SHA-256 for 999999
+          pinHash: '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918', // SHA-256 for 888888
           status: 'ACTIVE',
           createdAt: new Date().toISOString()
         }
