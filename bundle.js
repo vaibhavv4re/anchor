@@ -2167,23 +2167,39 @@
         }
       }
 
+      // 4. Check Employees collection directly by pinDisplay, pin, or pinHash
+      if (!emp) {
+        emp = emps.find(e => 
+          (e.pinDisplay && String(e.pinDisplay).trim() === cleanPin) ||
+          (e.pin && String(e.pin).trim() === cleanPin) ||
+          (e.pinHash && e.pinHash === pinHash)
+        );
+        if (emp) {
+          identity = ids.find(i => i.id === emp.identityId) || { id: emp.identityId || ('id-' + emp.id), status: 'ACTIVE' };
+          if (!ids.some(i => i.id === identity.id)) {
+            offlineStore.appendItem('identities', { id: identity.id, pinHash, tenantId: emp.tenantId, status: 'ACTIVE' });
+          }
+        }
+      }
 
       if (!identity || !emp) return { success: false, error: 'Invalid PIN. Access denied.' };
       if (identity.status === 'SUSPENDED') return { success: false, error: '❌ Account is SUSPENDED. Contact Manager.' };
       if (emp.status === 'SUSPENDED') return { success: false, error: '❌ Employee account is SUSPENDED.' };
 
       const roles = offlineStore.getCollection('roles') || [];
-      const role = roles.find(r => r.id === emp.roleId) || ROLE_TEMPLATES['role-admin'];
+      const role = roles.find(r => r.id === emp.roleId) || (typeof ROLE_TEMPLATES !== 'undefined' && ROLE_TEMPLATES[emp.roleId]) || (typeof ROLE_TEMPLATES !== 'undefined' && ROLE_TEMPLATES['role-admin']);
       const targetTenantId = emp.tenantId || (tenants[0] ? tenants[0].tenantId : '');
+      const targetTenant = tenants.find(t => t.tenantId === targetTenantId) || tenants[0] || null;
 
       const session = {
-        tenantId: targetTenantId,
+        tenantId: emp.roleId === 'role-superadmin' ? '' : targetTenantId,
+        tenantName: emp.roleId === 'role-superadmin' ? 'System Control (Super Admin)' : (targetTenant ? targetTenant.name : 'Anchor Restaurant'),
         employeeId: emp.id,
-        employeeCode: emp.employeeCode,
+        employeeCode: emp.employeeCode || 'EMP-00001',
         employeeName: emp.name,
         roleId: emp.roleId,
-        roleName: role.name,
-        workspace: role.defaultWorkspace || 'admin',
+        roleName: emp.roleId === 'role-superadmin' ? 'Super Admin' : (role ? role.name : 'Staff'),
+        workspace: emp.roleId === 'role-superadmin' ? 'superadmin' : (emp.workspaceDefault || (role ? role.defaultWorkspace : 'admin')),
         loginTime: new Date().toISOString()
       };
       sessionStorage.setItem('ros_session', JSON.stringify(session));
@@ -2661,7 +2677,7 @@
           <header class="app-header">
             <div class="flex items-center gap-md" style="flex-wrap:wrap;">
               <div style="font-weight:700; font-size:1.25rem; color:var(--accent-primary);">Anchor BusinessOS</div>
-              <span class="badge badge-info">${(tenant?.name || session?.workspace || 'Anchor OS').toUpperCase()}</span>
+              <span class="badge badge-info">${(tenant?.name || session?.tenantName || session?.workspace || 'Anchor OS').toUpperCase()}</span>
               <span class="badge badge-warning" style="font-size:0.75rem;">/${this.activeRoute}</span>
             </div>
             <div class="flex items-center gap-md" style="flex-wrap:wrap;">
