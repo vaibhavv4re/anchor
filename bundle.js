@@ -293,7 +293,8 @@
         const list = raw ? JSON.parse(raw) : null;
         if (!list) return null;
         if (tenantId && Array.isArray(list)) {
-          return list.filter(item => item.tenantId === tenantId);
+          const tenantFiltered = list.filter(item => item.tenantId === tenantId || !item.tenantId);
+          if (tenantFiltered.length > 0) return tenantFiltered;
         }
         return list;
       } catch (e) {
