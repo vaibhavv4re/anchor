@@ -211,6 +211,90 @@
       };
     }
 
+    if (entityName === 'purchase_orders') {
+      return {
+        id: p.id || ('po-' + Math.random().toString(36).substring(2, 7)),
+        tenant_id: job.tenantId || p.tenantId || '',
+        po_number: p.poNumber || p.po_number || '',
+        supplier_code: p.supplierCode || p.supplier_code || '',
+        supplier_name: p.supplierName || p.supplier_name || '',
+        status: p.status || 'DRAFT',
+        total_amount: parseFloat(p.totalAmount || p.total_amount) || 0,
+        data: p
+      };
+    }
+
+    if (entityName === 'goods_receipt_notes') {
+      return {
+        id: p.id || ('grn-' + Math.random().toString(36).substring(2, 7)),
+        tenant_id: job.tenantId || p.tenantId || '',
+        grn_number: p.grnNumber || p.grn_number || '',
+        po_number: p.poNumber || p.po_number || '',
+        supplier_code: p.supplierCode || p.supplier_code || '',
+        status: p.status || 'POSTED',
+        total_received_value: parseFloat(p.totalReceivedValue || p.total_received_value) || 0,
+        data: p
+      };
+    }
+
+    if (entityName === 'stock_transfers') {
+      return {
+        id: p.id || ('st-' + Math.random().toString(36).substring(2, 7)),
+        tenant_id: job.tenantId || p.tenantId || '',
+        transfer_number: p.transferNumber || p.transfer_number || '',
+        from_location_code: p.fromLocationCode || p.from_location_code || '',
+        to_location_code: p.toLocationCode || p.to_location_code || '',
+        status: p.status || 'COMPLETED',
+        data: p
+      };
+    }
+
+    if (entityName === 'stock_issues') {
+      return {
+        id: p.id || ('si-' + Math.random().toString(36).substring(2, 7)),
+        tenant_id: job.tenantId || p.tenantId || '',
+        issue_number: p.issueNumber || p.issue_number || '',
+        location_code: p.locationCode || p.location_code || '',
+        department: p.department || '',
+        status: p.status || 'POSTED',
+        data: p
+      };
+    }
+
+    if (entityName === 'stock_adjustments') {
+      return {
+        id: p.id || ('sa-' + Math.random().toString(36).substring(2, 7)),
+        tenant_id: job.tenantId || p.tenantId || '',
+        adjustment_number: p.adjustmentNumber || p.adjustment_number || '',
+        location_code: p.locationCode || p.location_code || '',
+        reason: p.reason || '',
+        status: p.status || 'POSTED',
+        data: p
+      };
+    }
+
+    if (entityName === 'stock_counts') {
+      return {
+        id: p.id || ('sc-' + Math.random().toString(36).substring(2, 7)),
+        tenant_id: job.tenantId || p.tenantId || '',
+        count_number: p.countNumber || p.count_number || '',
+        location_code: p.locationCode || p.location_code || '',
+        status: p.status || 'COMPLETED',
+        data: p
+      };
+    }
+
+    if (entityName === 'inventory_requests') {
+      return {
+        id: p.id || ('req-' + Math.random().toString(36).substring(2, 7)),
+        tenant_id: job.tenantId || p.tenantId || '',
+        request_number: p.requestNumber || p.request_number || '',
+        department: p.department || '',
+        status: p.status || 'PENDING',
+        data: p
+      };
+    }
+
     return {
       job_id: job.jobId,
       job_type: job.jobType,
@@ -696,7 +780,8 @@
 
         // Format record to match target PostgreSQL table schema
         const dbRecord = formatRecordForTable(job.entityName, job);
-        const res = await supabaseClient.upsertRecord(job.entityName, dbRecord);
+        const targetTable = dbRecord.job_id ? 'offline_journal' : job.entityName;
+        const res = await supabaseClient.upsertRecord(targetTable, dbRecord);
 
         if (res.success) {
           offlineJournal.updateJobState(job.jobId, 'SYNCED', { syncedAt: new Date().toISOString() });
