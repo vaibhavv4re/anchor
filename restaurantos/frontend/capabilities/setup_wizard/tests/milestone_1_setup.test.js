@@ -23,7 +23,7 @@ export async function runMilestone1TestSuite() {
   console.log('🧪 Executing Milestone 1 Operational Playbook Tests (Restaurant Setup & Readiness)...\n');
 
   // Step 1: Super Admin Onboarding (Scenario 1)
-  const newTenant = tenantModel.createTenant({
+  const newTenant = await tenantModel.createTenant({
     name: 'Anchor Bistro & Cafe',
     currency: 'INR',
     timezone: 'Asia/Kolkata',

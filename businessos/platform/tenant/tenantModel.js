@@ -5,6 +5,7 @@
 
 import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
+import { hashPin } from '../identity/identityModel.js';
 
 class TenantModel {
   constructor() {
@@ -36,9 +37,13 @@ class TenantModel {
     return tenants[0] || null;
   }
 
-  createTenant({ name, currency = 'INR', currencySymbol = '₹', timezone = 'Asia/Kolkata', adminName, adminPin }) {
+  async createTenant({ name, currency = 'INR', currencySymbol = '₹', timezone = 'Asia/Kolkata', adminName = 'Admin User', adminPin = '999999' }) {
+    const cleanPin = String(adminPin).trim();
     const tenantId = 'tenant_' + Math.random().toString(36).substring(2, 9);
     const correlationId = 'CID-' + Math.floor(10000 + Math.random() * 90000);
+    const adminIdentityId = 'id-admin-' + Math.random().toString(36).substring(2, 7);
+    const adminEmpId = 'emp-admin-' + Math.random().toString(36).substring(2, 7);
+    const pinHash = await hashPin(cleanPin);
 
     const newTenant = {
       tenantId,
@@ -56,6 +61,27 @@ class TenantModel {
     };
 
     offlineStore.appendItem('tenants', newTenant);
+
+    // Persist Admin Identity and linked Employee Profile
+    offlineStore.appendItem('identities', {
+      id: adminIdentityId,
+      pinHash,
+      tenantId,
+      status: 'ACTIVE',
+      createdAt: new Date().toISOString()
+    });
+
+    offlineStore.appendItem('employees', {
+      id: adminEmpId,
+      identityId: adminIdentityId,
+      tenantId,
+      employeeCode: 'EMP-00001',
+      name: adminName,
+      roleId: 'role-admin',
+      workspaceDefault: 'admin',
+      avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(adminName)}`,
+      status: 'ACTIVE'
+    });
 
     platformEventBus.publish('tenant:created', {
       tenantId,

@@ -90,7 +90,7 @@ export class SuperAdminOnboardingModal {
       const adminName = this.modalEl.querySelector('#inp-admin-name').value;
       const adminPin = this.modalEl.querySelector('#inp-admin-pin').value;
 
-      const newTenant = tenantModel.createTenant({ name, currency, timezone, adminName, adminPin });
+      const newTenant = await tenantModel.createTenant({ name, currency, timezone, adminName, adminPin });
       alert(`Restaurant "${newTenant.name}" created! Log in with Admin PIN "${adminPin}" to launch the Setup Assistant.`);
       if (this.onCreated) this.onCreated(newTenant);
     });

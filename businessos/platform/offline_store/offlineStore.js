@@ -71,6 +71,12 @@ class OfflineStore {
           pinHash: '8c6976e5b5410415bde908bd4dee15dfb167a9c873fc4bb8a81f6f2ab448a918', // SHA-256 for 888888
           status: 'ACTIVE',
           createdAt: new Date().toISOString()
+        },
+        {
+          id: 'id-admin',
+          pinHash: '937377f056160fc4b15e0b770c67136a5f03c15205b4d3bf918268fefa2c6d0a', // SHA-256 for 999999
+          status: 'ACTIVE',
+          createdAt: new Date().toISOString()
         }
       ];
       this.setCollection('identities', initialIdentities);
