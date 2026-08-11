@@ -1,25 +1,11 @@
 -- ====================================================================
 -- Anchor RestaurantOS v1.0 — Enterprise Supabase PostgreSQL Schema DDL
--- RUN THIS SCRIPT IN YOUR SUPABASE SQL EDITOR TO RECREATE ALL TABLES FRESH:
+-- SAFE & NON-DESTRUCTIVE CREATION (PRESERVES ALL EXISTING DATA):
 -- https://supabase.com/dashboard/project/orlcftjkhqypvqzcmfci/sql
 -- ====================================================================
 
--- 💥 STEP 1: DROP ALL EXISTING TABLES (FRESH SLATE RECREATION)
-DROP TABLE IF EXISTS audit_logs CASCADE;
-DROP TABLE IF EXISTS offline_journal CASCADE;
-DROP TABLE IF EXISTS suppliers CASCADE;
-DROP TABLE IF EXISTS inventory CASCADE;
-DROP TABLE IF EXISTS storage_locations CASCADE;
-DROP TABLE IF EXISTS inventory_uoms CASCADE;
-DROP TABLE IF EXISTS inventory_categories CASCADE;
-DROP TABLE IF EXISTS tables_master CASCADE;
-DROP TABLE IF EXISTS dining_areas CASCADE;
-DROP TABLE IF EXISTS employees CASCADE;
-DROP TABLE IF EXISTS identities CASCADE;
-DROP TABLE IF EXISTS tenants CASCADE;
-
 -- 🏢 1. Tenants Master Table
-CREATE TABLE tenants (
+CREATE TABLE IF NOT EXISTS tenants (
   tenant_id TEXT PRIMARY KEY,
   name TEXT NOT NULL,
   legal_name TEXT,
@@ -32,7 +18,7 @@ CREATE TABLE tenants (
 );
 
 -- 🔑 2. Identities & Employees Tables
-CREATE TABLE identities (
+CREATE TABLE IF NOT EXISTS identities (
   id TEXT PRIMARY KEY,
   pin_hash TEXT,
   tenant_id TEXT,
@@ -40,7 +26,7 @@ CREATE TABLE identities (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE employees (
+CREATE TABLE IF NOT EXISTS employees (
   id TEXT PRIMARY KEY,
   identity_id TEXT,
   tenant_id TEXT,
@@ -54,7 +40,7 @@ CREATE TABLE employees (
 );
 
 -- 🪑 3. Dining Areas & Dining Tables Assets
-CREATE TABLE dining_areas (
+CREATE TABLE IF NOT EXISTS dining_areas (
   id TEXT PRIMARY KEY,
   tenant_id TEXT NOT NULL,
   area_code TEXT,
@@ -65,7 +51,7 @@ CREATE TABLE dining_areas (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE tables_master (
+CREATE TABLE IF NOT EXISTS tables_master (
   id TEXT PRIMARY KEY,
   tenant_id TEXT NOT NULL,
   area_id TEXT,
@@ -78,7 +64,7 @@ CREATE TABLE tables_master (
 );
 
 -- 📦 4. Master Product Catalog, Categories, UOMs, Locations & Suppliers
-CREATE TABLE inventory_categories (
+CREATE TABLE IF NOT EXISTS inventory_categories (
   id TEXT PRIMARY KEY,
   tenant_id TEXT NOT NULL,
   category_code TEXT NOT NULL,
@@ -88,7 +74,7 @@ CREATE TABLE inventory_categories (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE inventory_uoms (
+CREATE TABLE IF NOT EXISTS inventory_uoms (
   id TEXT PRIMARY KEY,
   tenant_id TEXT NOT NULL,
   uom_code TEXT NOT NULL,
@@ -100,7 +86,7 @@ CREATE TABLE inventory_uoms (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE storage_locations (
+CREATE TABLE IF NOT EXISTS storage_locations (
   id TEXT PRIMARY KEY,
   tenant_id TEXT NOT NULL,
   location_code TEXT NOT NULL,
@@ -111,7 +97,7 @@ CREATE TABLE storage_locations (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE suppliers (
+CREATE TABLE IF NOT EXISTS suppliers (
   id TEXT PRIMARY KEY,
   tenant_id TEXT NOT NULL,
   supplier_code TEXT NOT NULL,
@@ -125,7 +111,7 @@ CREATE TABLE suppliers (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE inventory (
+CREATE TABLE IF NOT EXISTS inventory (
   uuid TEXT PRIMARY KEY,
   tenant_id TEXT NOT NULL,
   item_code TEXT NOT NULL,
@@ -145,8 +131,99 @@ CREATE TABLE inventory (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- ⚡ 5. Offline Journal Sync Jobs & Audit Logs
-CREATE TABLE offline_journal (
+-- 📑 5. Inventory Transaction Tables (Purchase Orders, GRN, Transfers, Issues, Adjustments, Counts, Balances, Requests)
+CREATE TABLE IF NOT EXISTS purchase_orders (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  po_number TEXT,
+  supplier_code TEXT,
+  supplier_name TEXT,
+  status TEXT DEFAULT 'DRAFT',
+  total_amount NUMERIC DEFAULT 0,
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS goods_receipt_notes (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  grn_number TEXT,
+  po_number TEXT,
+  supplier_code TEXT,
+  status TEXT DEFAULT 'POSTED',
+  total_received_value NUMERIC DEFAULT 0,
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS stock_transfers (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  transfer_number TEXT,
+  from_location_code TEXT,
+  to_location_code TEXT,
+  status TEXT DEFAULT 'COMPLETED',
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS stock_issues (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  issue_number TEXT,
+  location_code TEXT,
+  department TEXT,
+  status TEXT DEFAULT 'POSTED',
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS stock_adjustments (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  adjustment_number TEXT,
+  location_code TEXT,
+  reason TEXT,
+  status TEXT DEFAULT 'POSTED',
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS stock_counts (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  count_number TEXT,
+  location_code TEXT,
+  status TEXT DEFAULT 'COMPLETED',
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS stock_balances (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  location_code TEXT NOT NULL,
+  item_code TEXT NOT NULL,
+  quantity NUMERIC DEFAULT 0,
+  unit_cost NUMERIC DEFAULT 0,
+  valuation NUMERIC DEFAULT 0,
+  data JSONB,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS inventory_requests (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  request_number TEXT,
+  department TEXT,
+  status TEXT DEFAULT 'PENDING',
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- ⚡ 6. Offline Journal Sync Jobs & Audit Logs
+CREATE TABLE IF NOT EXISTS offline_journal (
   job_id TEXT PRIMARY KEY,
   job_type TEXT NOT NULL,
   tenant_id TEXT,
@@ -160,7 +237,7 @@ CREATE TABLE offline_journal (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE TABLE audit_logs (
+CREATE TABLE IF NOT EXISTS audit_logs (
   id TEXT PRIMARY KEY,
   tenant_id TEXT,
   time TEXT,
@@ -181,10 +258,18 @@ ALTER TABLE inventory_uoms DISABLE ROW LEVEL SECURITY;
 ALTER TABLE storage_locations DISABLE ROW LEVEL SECURITY;
 ALTER TABLE suppliers DISABLE ROW LEVEL SECURITY;
 ALTER TABLE inventory DISABLE ROW LEVEL SECURITY;
+ALTER TABLE purchase_orders DISABLE ROW LEVEL SECURITY;
+ALTER TABLE goods_receipt_notes DISABLE ROW LEVEL SECURITY;
+ALTER TABLE stock_transfers DISABLE ROW LEVEL SECURITY;
+ALTER TABLE stock_issues DISABLE ROW LEVEL SECURITY;
+ALTER TABLE stock_adjustments DISABLE ROW LEVEL SECURITY;
+ALTER TABLE stock_counts DISABLE ROW LEVEL SECURITY;
+ALTER TABLE stock_balances DISABLE ROW LEVEL SECURITY;
+ALTER TABLE inventory_requests DISABLE ROW LEVEL SECURITY;
 ALTER TABLE offline_journal DISABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs DISABLE ROW LEVEL SECURITY;
 
--- Add permissive policies
+-- Add permissive policies safely
 DROP POLICY IF EXISTS "Anon Access Tenants" ON tenants;
 CREATE POLICY "Anon Access Tenants" ON tenants FOR ALL USING (true) WITH CHECK (true);
 
@@ -214,6 +299,30 @@ CREATE POLICY "Anon Access Suppliers" ON suppliers FOR ALL USING (true) WITH CHE
 
 DROP POLICY IF EXISTS "Anon Access Inventory" ON inventory;
 CREATE POLICY "Anon Access Inventory" ON inventory FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Anon Access Purchase Orders" ON purchase_orders;
+CREATE POLICY "Anon Access Purchase Orders" ON purchase_orders FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Anon Access Goods Receipt Notes" ON goods_receipt_notes;
+CREATE POLICY "Anon Access Goods Receipt Notes" ON goods_receipt_notes FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Anon Access Stock Transfers" ON stock_transfers;
+CREATE POLICY "Anon Access Stock Transfers" ON stock_transfers FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Anon Access Stock Issues" ON stock_issues;
+CREATE POLICY "Anon Access Stock Issues" ON stock_issues FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Anon Access Stock Adjustments" ON stock_adjustments;
+CREATE POLICY "Anon Access Stock Adjustments" ON stock_adjustments FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Anon Access Stock Counts" ON stock_counts;
+CREATE POLICY "Anon Access Stock Counts" ON stock_counts FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Anon Access Stock Balances" ON stock_balances;
+CREATE POLICY "Anon Access Stock Balances" ON stock_balances FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Anon Access Inventory Requests" ON inventory_requests;
+CREATE POLICY "Anon Access Inventory Requests" ON inventory_requests FOR ALL USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Anon Access Offline Journal" ON offline_journal;
 CREATE POLICY "Anon Access Offline Journal" ON offline_journal FOR ALL USING (true) WITH CHECK (true);

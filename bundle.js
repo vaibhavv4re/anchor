@@ -99,7 +99,7 @@
   // Helper mapper to format exact PostgreSQL columns per table (PD-034)
   function formatRecordForTable(entityName, job) {
     const p = job.payload || {};
-    
+
     if (entityName === 'tables_master') {
       return {
         id: p.id || ('tbl-' + Math.random().toString(36).substring(2, 7)),
@@ -112,7 +112,7 @@
         data: p
       };
     }
-    
+
     if (entityName === 'dining_areas') {
       return {
         id: p.id || ('area-' + Math.random().toString(36).substring(2, 7)),
@@ -693,7 +693,7 @@
       this.isProcessing = true;
       for (const job of pending) {
         offlineJournal.updateJobState(job.jobId, 'SYNCING');
-        
+
         // Format record to match target PostgreSQL table schema
         const dbRecord = formatRecordForTable(job.entityName, job);
         const res = await supabaseClient.upsertRecord(job.entityName, dbRecord);
@@ -791,7 +791,7 @@
     }
     create(itemData, session) {
       const tenantId = session ? session.tenantId : (itemData.tenantId || '');
-      
+
       // Auto-derive Product Family from Category
       let catObj = null;
       if (itemData.categoryCode) {
@@ -947,7 +947,7 @@
       const existing = this.getAll(tenantId);
       const count = existing.length + 1;
       const poNum = poData.poNumber || (`PO-2026-${String(count).padStart(4, '0')}`);
-      
+
       let newPo = {
         id: 'po-' + Math.random().toString(36).substring(2, 7),
         poNumber: poNum,
@@ -955,7 +955,7 @@
         supplierCode: poData.supplierCode,
         supplierName: poData.supplierName,
         orderDate: poData.orderDate || new Date().toISOString().split('T')[0],
-        expectedDeliveryDate: poData.expectedDeliveryDate || new Date(Date.now() + 86400000*2).toISOString().split('T')[0],
+        expectedDeliveryDate: poData.expectedDeliveryDate || new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0],
         destinationLocationCode: poData.destinationLocationCode || 'LOC-MWH',
         paymentTerms: poData.paymentTerms || 'Net 30',
         notes: poData.notes || '',
@@ -1063,7 +1063,7 @@
 
         // Append Ledger Entry
         const ledgerEntry = {
-          ledgerId: `LEDGER-${new Date().toISOString().slice(0,10)}-${Math.random().toString(36).substring(2,6)}`,
+          ledgerId: `LEDGER-${new Date().toISOString().slice(0, 10)}-${Math.random().toString(36).substring(2, 6)}`,
           tenantId,
           transactionType: isOpeningStock ? 'OPENING_STOCK_INBOUND' : 'GOODS_RECEIPT_INBOUND',
           documentNo: grnNum,
@@ -1074,7 +1074,7 @@
           baseUom: line.baseUom || 'KG',
           unitCost: baseUnitCost,
           totalValuation: lineValuation,
-          batchNumber: line.batchNumber || `BATCH-${grnNum}-${idx+1}`,
+          batchNumber: line.batchNumber || `BATCH-${grnNum}-${idx + 1}`,
           expiryDate: line.expiryDate || null,
           postedBy: grnRecord.postedBy,
           timestamp: new Date().toISOString()
@@ -1209,7 +1209,7 @@
 
         // OUT Entry
         ledgerList.push({
-          ledgerId: `LEDGER-${new Date().toISOString().slice(0,10)}-TRFOUT-${idx+1}`,
+          ledgerId: `LEDGER-${new Date().toISOString().slice(0, 10)}-TRFOUT-${idx + 1}`,
           tenantId,
           transactionType: 'TRANSFER_OUT',
           transactionGroupId: groupId,
@@ -1227,7 +1227,7 @@
 
         // IN Entry
         ledgerList.push({
-          ledgerId: `LEDGER-${new Date().toISOString().slice(0,10)}-TRFIN-${idx+1}`,
+          ledgerId: `LEDGER-${new Date().toISOString().slice(0, 10)}-TRFIN-${idx + 1}`,
           tenantId,
           transactionType: 'TRANSFER_IN',
           transactionGroupId: groupId,
@@ -1338,7 +1338,7 @@
         const val = qty * unitCost;
 
         ledgerList.push({
-          ledgerId: `LEDGER-${new Date().toISOString().slice(0,10)}-ISSOUT-${idx+1}`,
+          ledgerId: `LEDGER-${new Date().toISOString().slice(0, 10)}-ISSOUT-${idx + 1}`,
           tenantId,
           transactionType: 'ISSUE_OUT',
           postingId: `${postingId}-${idx}`,
@@ -1417,7 +1417,7 @@
         const val = netQty * unitCost;
 
         ledgerList.push({
-          ledgerId: `LEDGER-${new Date().toISOString().slice(0,10)}-ADJ-${idx+1}`,
+          ledgerId: `LEDGER-${new Date().toISOString().slice(0, 10)}-ADJ-${idx + 1}`,
           tenantId,
           transactionType: isDecrease ? 'ADJUSTMENT_OUT' : 'ADJUSTMENT_IN',
           postingId: `${postingId}-${idx}`,
@@ -2227,7 +2227,7 @@
 
       // 4. Check Employees collection directly by pinDisplay, pin, or pinHash
       if (!emp) {
-        emp = emps.find(e => 
+        emp = emps.find(e =>
           (e.pinDisplay && String(e.pinDisplay).trim() === cleanPin) ||
           (e.pin && String(e.pin).trim() === cleanPin) ||
           (e.pinHash && e.pinHash === pinHash)
@@ -2330,7 +2330,7 @@
         </div>
         <div class="pin-display-dots">${dots}</div>
         <div class="pin-grid">
-          ${[1,2,3,4,5,6,7,8,9].map(n => `<button class="keypad-btn" data-v="${n}">${n}</button>`).join('')}
+          ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map(n => `<button class="keypad-btn" data-v="${n}">${n}</button>`).join('')}
           <button class="keypad-btn" data-a="clear" style="color:var(--status-danger);">C</button>
           <button class="keypad-btn" data-v="0">0</button>
           <button class="keypad-btn" data-a="back">⌫</button>
@@ -2366,6 +2366,11 @@
       this.inventoryCategoryFilter = 'ALL';
       this.inventoryTypeFilter = 'ALL';
       this.inventorySearchQuery = '';
+      this.liveInventorySearchQuery = '';
+      this.liveInventoryLocationFilter = 'ALL';
+      this.liveInventoryCategoryFilter = 'ALL';
+      this.liveInventoryStatusFilter = 'ALL';
+      this.liveInventorySort = 'VALUE_DESC';
       this.configGroupOpen = true;
       this.bindSyncBadgeListener();
       this.bindHashRouter();
@@ -2446,11 +2451,11 @@
       const session = authEngine.getCurrentSession();
       const supSel = document.querySelector('#inp-po-supplier');
       const selectedSupCode = supSel ? supSel.value : 'SUP-001';
-      
+
       const allSuppliers = supplierRepository.getAll(session ? session.tenantId : null);
-      const matchedSup = allSuppliers.find(s => 
-        s.supplierCode === selectedSupCode || 
-        s.id === selectedSupCode || 
+      const matchedSup = allSuppliers.find(s =>
+        s.supplierCode === selectedSupCode ||
+        s.id === selectedSupCode ||
         s.supplierName === selectedSupCode
       );
 
@@ -2459,7 +2464,7 @@
 
       const locSel = document.querySelector('#inp-po-location');
       const destinationLocationCode = locSel && locSel.value ? locSel.value : 'LOC-CHILL';
-      
+
       const dateInp = document.querySelector('#inp-po-date');
       const orderDate = dateInp && dateInp.value ? dateInp.value : new Date().toISOString().split('T')[0];
 
@@ -2516,9 +2521,9 @@
           const allSuppliers = supplierRepository.getAll(session ? session.tenantId : null);
 
           // Find supplier object by code, id, or name
-          const matchedSup = allSuppliers.find(s => 
-            s.supplierCode === selectedSupCode || 
-            s.id === selectedSupCode || 
+          const matchedSup = allSuppliers.find(s =>
+            s.supplierCode === selectedSupCode ||
+            s.id === selectedSupCode ||
             s.supplierName === selectedSupCode
           );
 
@@ -2534,8 +2539,8 @@
             const targetVal = String(selectedSupCode || '').toLowerCase().trim();
 
             return (targetCode && (pref === targetCode || def === targetCode)) ||
-                   (targetName && (pref === targetName || def === targetName)) ||
-                   (targetVal  && (pref === targetVal  || def === targetVal));
+              (targetName && (pref === targetName || def === targetName)) ||
+              (targetVal && (pref === targetVal || def === targetVal));
           });
 
           const isFiltered = mapped.length > 0;
@@ -2774,7 +2779,7 @@
     renderSidebarHTML(session) {
       const isCrossWorkspace = session.roleId === 'role-admin' || session.roleId === 'role-superadmin';
       let mainNavHTML = '';
-      
+
       if (this.activeRoute === 'superadmin') {
         mainNavHTML = `
           <button class="btn-secondary nav-btn ${this.activeSubView === 'superadmin' ? 'active' : ''}" data-v="superadmin" style="text-align:left;">👑 Super Admin Console</button>
@@ -2908,7 +2913,7 @@
 
     bindHeader() {
       this.appEl.querySelector('#btn-logout').addEventListener('click', () => { authEngine.logout(); this.render(); });
-      
+
       const syncBadge = this.appEl.querySelector('#header-sync-badge');
       if (syncBadge) {
         syncBadge.addEventListener('click', () => {
@@ -3361,21 +3366,21 @@
                 </thead>
                 <tbody>
                   ${jobs.map(j => {
-                    const p = j.payload || {};
-                    let summary = '-';
-                    if (p.tableCode) summary = `Table Code: <strong>${p.tableCode}</strong> (${p.seats || 4} seats)`;
-                    else if (p.areaName) summary = `Area: <strong>${p.areaName}</strong> (${p.areaCode})`;
-                    else if (p.itemName) summary = `Item: <strong>${p.itemName}</strong> (${p.itemCode})`;
-                    else if (p.name) summary = `Name: <strong>${p.name}</strong>`;
-                    else if (p.supplierName) summary = `Supplier: <strong>${p.supplierName}</strong>`;
-                    else summary = JSON.stringify(p).substring(0, 30);
+        const p = j.payload || {};
+        let summary = '-';
+        if (p.tableCode) summary = `Table Code: <strong>${p.tableCode}</strong> (${p.seats || 4} seats)`;
+        else if (p.areaName) summary = `Area: <strong>${p.areaName}</strong> (${p.areaCode})`;
+        else if (p.itemName) summary = `Item: <strong>${p.itemName}</strong> (${p.itemCode})`;
+        else if (p.name) summary = `Name: <strong>${p.name}</strong>`;
+        else if (p.supplierName) summary = `Supplier: <strong>${p.supplierName}</strong>`;
+        else summary = JSON.stringify(p).substring(0, 30);
 
-                    let badgeClass = 'badge-warning';
-                    if (j.syncState === 'SYNCED') badgeClass = 'badge-success';
-                    if (j.syncState === 'ERROR') badgeClass = 'badge-danger';
-                    if (j.syncState === 'SYNCING') badgeClass = 'badge-info';
+        let badgeClass = 'badge-warning';
+        if (j.syncState === 'SYNCED') badgeClass = 'badge-success';
+        if (j.syncState === 'ERROR') badgeClass = 'badge-danger';
+        if (j.syncState === 'SYNCING') badgeClass = 'badge-info';
 
-                    return `
+        return `
                       <tr style="border-bottom:1px solid var(--border-subtle);">
                         <td style="padding:8px; font-family:monospace; font-weight:600;">${j.jobId}</td>
                         <td style="padding:8px; font-weight:700;">${j.jobType}</td>
@@ -3390,7 +3395,7 @@
                         </td>
                       </tr>
                     `;
-                  }).join('')}
+      }).join('')}
                 </tbody>
               </table>
             ` : `
@@ -3427,25 +3432,35 @@
       const suppliers = supplierRepository.getAll(tenantId);
       const requests = offlineStore.getCollection('inventory_requests', tenantId) || [];
       const history = offlineStore.getCollection('import_history', tenantId) || [];
+      const balances = offlineStore.getCollection('stock_balances', tenantId) || [];
+
+      const itemsInStockCount = balances.length > 0
+        ? new Set(balances.filter(b => (parseFloat(b.quantity) || 0) > 0 && (!tenantId || b.tenantId === tenantId)).map(b => b.itemCode)).size
+        : items.filter(i => (parseFloat(i.currentStock !== undefined ? i.currentStock : i.openingStock) || 0) > 0).length;
 
       const lowStockItems = items.filter(i => {
-        const currentQty = i.currentStock !== undefined ? i.currentStock : (i.openingStock !== undefined ? i.openingStock : 0);
+        const itemBalances = balances.filter(b => b.itemCode === i.itemCode && (!tenantId || b.tenantId === tenantId));
+        const currentQty = itemBalances.length
+          ? itemBalances.reduce((sum, b) => sum + (parseFloat(b.quantity) || 0), 0)
+          : (i.currentStock !== undefined ? i.currentStock : (i.openingStock !== undefined ? i.openingStock : 0));
         return currentQty <= (i.reorderLevel || 0);
       });
 
-      const totalValuation = items.reduce((sum, i) => {
-        const factor = parseFloat(i.conversionFactor) || 1;
-        const purPrice = parseFloat(i.lastPurchasePrice) || 0;
-        const unitCost = parseFloat(i.unitValuation) || (factor > 0 ? (purPrice / factor) : purPrice);
-        const qty = parseFloat(i.currentStock !== undefined ? i.currentStock : (i.openingStock !== undefined ? i.openingStock : 0));
-        return sum + (unitCost * qty);
-      }, 0);
+      const totalValuation = balances.length
+        ? balances.reduce((sum, b) => sum + (parseFloat(b.valuation) || 0), 0)
+        : items.reduce((sum, i) => {
+          const factor = parseFloat(i.conversionFactor) || 1;
+          const purPrice = parseFloat(i.lastPurchasePrice) || 0;
+          const unitCost = parseFloat(i.unitValuation) || (factor > 0 ? (purPrice / factor) : purPrice);
+          const qty = parseFloat(i.currentStock !== undefined ? i.currentStock : (i.openingStock !== undefined ? i.openingStock : 0));
+          return sum + (unitCost * qty);
+        }, 0);
       const activeTab = this.activeSubView || 'inv-dashboard';
 
       mount.innerHTML = `
         <div class="animate-fade-in" style="display:flex; flex-direction:column; gap:20px;">
           <div style="background:var(--bg-surface-1); padding:20px; border-radius:8px; border:1px solid var(--border-subtle);">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
               <div>
                 <h2 style="font-size:1.6rem; margin:0;">📦 INVENTORY MANAGER WORKSPACE</h2>
                 <p style="color:var(--text-muted); font-size:0.85rem; margin-top:2px;">Role: ${session.employeeName} (${session.roleName}) • Supabase Cloud Connected</p>
@@ -3463,10 +3478,11 @@
               </div>
             </div>
 
-            <div class="grid-responsive-6">
+            <!-- Top Metric Cards -->
+            <div class="grid-responsive-6" style="margin-bottom:16px;">
               <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; text-align:center;">
-                <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">MASTER ITEMS</div>
-                <div style="font-size:1.5rem; font-weight:700; color:var(--accent-primary); margin-top:4px;">${items.length}</div>
+                <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">ITEMS IN STOCK</div>
+                <div style="font-size:1.5rem; font-weight:700; color:var(--status-success); margin-top:4px;">${itemsInStockCount}</div>
               </div>
               <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; text-align:center;">
                 <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">LOW STOCK ALERTS</div>
@@ -3490,58 +3506,83 @@
               </div>
             </div>
 
-            <!-- Subtab Navigation Bar -->
-            <div style="display:flex; gap:8px; border-top:1px solid var(--border-subtle); padding-top:14px; overflow-x:auto;">
-              <button type="button" class="btn-subtab ${activeTab === 'inv-dashboard' || activeTab === 'dashboard' ? 'active-subtab' : ''}" data-subtab="inv-dashboard" style="padding:8px 16px; font-size:0.85rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-dashboard' || activeTab === 'dashboard' ? 'var(--accent-primary)' : 'var(--bg-surface-2)'}; color:${activeTab === 'inv-dashboard' || activeTab === 'dashboard' ? '#fff' : 'var(--text-secondary)'}; cursor:pointer;">
-                📊 Dashboard
-              </button>
-              <button type="button" class="btn-subtab ${activeTab === 'inv-categories' ? 'active-subtab' : ''}" data-subtab="inv-categories" style="padding:8px 16px; font-size:0.85rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-categories' ? 'var(--accent-primary)' : 'var(--bg-surface-2)'}; color:${activeTab === 'inv-categories' ? '#fff' : 'var(--text-secondary)'}; cursor:pointer;">
-                🏷 Categories & Families
-              </button>
-              <button type="button" class="btn-subtab ${activeTab === 'inv-uom' ? 'active-subtab' : ''}" data-subtab="inv-uom" style="padding:8px 16px; font-size:0.85rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-uom' ? 'var(--accent-primary)' : 'var(--bg-surface-2)'}; color:${activeTab === 'inv-uom' ? '#fff' : 'var(--text-secondary)'}; cursor:pointer;">
-                📐 UOM Master
-              </button>
-              <button type="button" class="btn-subtab ${activeTab === 'inv-locations' ? 'active-subtab' : ''}" data-subtab="inv-locations" style="padding:8px 16px; font-size:0.85rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-locations' ? 'var(--accent-primary)' : 'var(--bg-surface-2)'}; color:${activeTab === 'inv-locations' ? '#fff' : 'var(--text-secondary)'}; cursor:pointer;">
-                🏬 Storage Locations
-              </button>
-              <button type="button" class="btn-subtab ${activeTab === 'inv-po' || activeTab === 'inv-po-form' ? 'active-subtab' : ''}" data-subtab="inv-po" style="padding:8px 16px; font-size:0.85rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-po' || activeTab === 'inv-po-form' ? 'var(--accent-primary)' : 'var(--bg-surface-2)'}; color:${activeTab === 'inv-po' || activeTab === 'inv-po-form' ? '#fff' : 'var(--text-secondary)'}; cursor:pointer;">
-                📋 Purchase Orders
-              </button>
-              <button type="button" class="btn-subtab ${activeTab === 'inv-grn' || activeTab === 'inv-grn-form' ? 'active-subtab' : ''}" data-subtab="inv-grn" style="padding:8px 16px; font-size:0.85rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-grn' || activeTab === 'inv-grn-form' ? 'var(--accent-primary)' : 'var(--bg-surface-2)'}; color:${activeTab === 'inv-grn' || activeTab === 'inv-grn-form' ? '#fff' : 'var(--text-secondary)'}; cursor:pointer;">
-                📥 Goods Receiving / GRN
-              </button>
-              <button type="button" class="btn-subtab ${activeTab === 'inv-transfers' ? 'active-subtab' : ''}" data-subtab="inv-transfers" style="padding:8px 16px; font-size:0.85rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-transfers' ? 'var(--accent-primary)' : 'var(--bg-surface-2)'}; color:${activeTab === 'inv-transfers' ? '#fff' : 'var(--text-secondary)'}; cursor:pointer;">
-                🚚 Stock Transfers
-              </button>
-              <button type="button" class="btn-subtab ${activeTab === 'inv-issues' ? 'active-subtab' : ''}" data-subtab="inv-issues" style="padding:8px 16px; font-size:0.85rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-issues' ? 'var(--accent-primary)' : 'var(--bg-surface-2)'}; color:${activeTab === 'inv-issues' ? '#fff' : 'var(--text-secondary)'}; cursor:pointer;">
-                📤 Stock Issues
-              </button>
-              <button type="button" class="btn-subtab ${activeTab === 'inv-adjustments' ? 'active-subtab' : ''}" data-subtab="inv-adjustments" style="padding:8px 16px; font-size:0.85rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-adjustments' ? 'var(--accent-primary)' : 'var(--bg-surface-2)'}; color:${activeTab === 'inv-adjustments' ? '#fff' : 'var(--text-secondary)'}; cursor:pointer;">
-                ⚖️ Stock Adjustments
-              </button>
-              <button type="button" class="btn-subtab ${activeTab === 'inv-counts' ? 'active-subtab' : ''}" data-subtab="inv-counts" style="padding:8px 16px; font-size:0.85rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-counts' ? 'var(--accent-primary)' : 'var(--bg-surface-2)'}; color:${activeTab === 'inv-counts' ? '#fff' : 'var(--text-secondary)'}; cursor:pointer;">
-                📋 Stock Count
-              </button>
-              <button type="button" class="btn-subtab ${activeTab === 'inv-alerts' ? 'active-subtab' : ''}" data-subtab="inv-alerts" style="padding:8px 16px; font-size:0.85rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-alerts' ? 'var(--accent-primary)' : 'var(--bg-surface-2)'}; color:${activeTab === 'inv-alerts' ? '#fff' : 'var(--text-secondary)'}; cursor:pointer;">
-                ⚠️ Low Stock Alerts
-              </button>
-              <button type="button" class="btn-subtab ${activeTab === 'inv-requests' ? 'active-subtab' : ''}" data-subtab="inv-requests" style="padding:8px 16px; font-size:0.85rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-requests' ? 'var(--accent-primary)' : 'var(--bg-surface-2)'}; color:${activeTab === 'inv-requests' ? '#fff' : 'var(--text-secondary)'}; cursor:pointer;">
-                ✅ Inventory Requests
-              </button>
-              <button type="button" class="btn-subtab ${activeTab === 'inv-ledger' ? 'active-subtab' : ''}" data-subtab="inv-ledger" style="padding:8px 16px; font-size:0.85rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-ledger' ? 'var(--accent-primary)' : 'var(--bg-surface-2)'}; color:${activeTab === 'inv-ledger' ? '#fff' : 'var(--text-secondary)'}; cursor:pointer;">
-                📜 Stock Ledger Explorer
-              </button>
-              <button type="button" class="btn-subtab ${activeTab === 'inv-suppliers' ? 'active-subtab' : ''}" data-subtab="inv-suppliers" style="padding:8px 16px; font-size:0.85rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-suppliers' ? 'var(--accent-primary)' : 'var(--bg-surface-2)'}; color:${activeTab === 'inv-suppliers' ? '#fff' : 'var(--text-secondary)'}; cursor:pointer;">
-                🏢 Suppliers Master
-              </button>
-              <button type="button" class="btn-subtab ${activeTab === 'inv-import' ? 'active-subtab' : ''}" data-subtab="inv-import" style="padding:8px 16px; font-size:0.85rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-import' ? 'var(--accent-primary)' : 'var(--bg-surface-2)'}; color:${activeTab === 'inv-import' ? '#fff' : 'var(--text-secondary)'}; cursor:pointer;">
-                ⚡ Import Suite
-              </button>
+            <!-- Grouped & Fully Responsive Subtab Navigation Bar -->
+            <div style="border-top:1px solid var(--border-subtle); padding-top:14px; display:flex; flex-direction:column; gap:10px;">
+              
+              <!-- Section 1: Overview & Live Balances -->
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; background:var(--bg-surface-2); padding:8px 12px; border-radius:8px; border:1px solid var(--border-subtle);">
+                <span style="font-size:0.72rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; min-width:85px;">📊 OVERVIEW:</span>
+                <div style="display:flex; gap:6px; flex-wrap:wrap; flex:1;">
+                  <button type="button" class="btn-subtab ${activeTab === 'inv-dashboard' || activeTab === 'dashboard' ? 'active-subtab' : ''}" data-subtab="inv-dashboard" style="padding:6px 12px; font-size:0.8rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-dashboard' || activeTab === 'dashboard' ? 'var(--accent-primary)' : 'var(--bg-surface-1)'}; color:${activeTab === 'inv-dashboard' || activeTab === 'dashboard' ? '#fff' : 'var(--text-primary)'}; cursor:pointer; white-space:nowrap;">
+                    📊 Dashboard
+                  </button>
+                  <button type="button" class="btn-subtab ${activeTab === 'inv-live-stock' || activeTab === 'inv-live-balances' ? 'active-subtab' : ''}" data-subtab="inv-live-stock" style="padding:6px 12px; font-size:0.8rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-live-stock' || activeTab === 'inv-live-balances' ? 'var(--accent-primary)' : 'var(--bg-surface-1)'}; color:${activeTab === 'inv-live-stock' || activeTab === 'inv-live-balances' ? '#fff' : 'var(--text-primary)'}; cursor:pointer; white-space:nowrap;">
+                    📦 Live Store Balances
+                  </button>
+                  <button type="button" class="btn-subtab ${activeTab === 'inv-alerts' ? 'active-subtab' : ''}" data-subtab="inv-alerts" style="padding:6px 12px; font-size:0.8rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-alerts' ? 'var(--accent-primary)' : 'var(--bg-surface-1)'}; color:${activeTab === 'inv-alerts' ? '#fff' : 'var(--text-primary)'}; cursor:pointer; white-space:nowrap;">
+                    ⚠️ Low Stock Alerts ${lowStockItems.length > 0 ? `<span class="badge badge-danger" style="font-size:0.7rem; padding:1px 5px; margin-left:3px;">${lowStockItems.length}</span>` : ''}
+                  </button>
+                  <button type="button" class="btn-subtab ${activeTab === 'inv-ledger' ? 'active-subtab' : ''}" data-subtab="inv-ledger" style="padding:6px 12px; font-size:0.8rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-ledger' ? 'var(--accent-primary)' : 'var(--bg-surface-1)'}; color:${activeTab === 'inv-ledger' ? '#fff' : 'var(--text-primary)'}; cursor:pointer; white-space:nowrap;">
+                    📜 Stock Ledger
+                  </button>
+                </div>
+              </div>
+
+              <!-- Section 2: Stock Movements & Operations -->
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; background:var(--bg-surface-2); padding:8px 12px; border-radius:8px; border:1px solid var(--border-subtle);">
+                <span style="font-size:0.72rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; min-width:85px;">🔄 MOVEMENTS:</span>
+                <div style="display:flex; gap:6px; flex-wrap:wrap; flex:1;">
+                  <button type="button" class="btn-subtab ${activeTab === 'inv-po' || activeTab === 'inv-po-form' ? 'active-subtab' : ''}" data-subtab="inv-po" style="padding:6px 12px; font-size:0.8rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-po' || activeTab === 'inv-po-form' ? 'var(--accent-primary)' : 'var(--bg-surface-1)'}; color:${activeTab === 'inv-po' || activeTab === 'inv-po-form' ? '#fff' : 'var(--text-primary)'}; cursor:pointer; white-space:nowrap;">
+                    📋 Purchase Orders
+                  </button>
+                  <button type="button" class="btn-subtab ${activeTab === 'inv-grn' || activeTab === 'inv-grn-form' ? 'active-subtab' : ''}" data-subtab="inv-grn" style="padding:6px 12px; font-size:0.8rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-grn' || activeTab === 'inv-grn-form' ? 'var(--accent-primary)' : 'var(--bg-surface-1)'}; color:${activeTab === 'inv-grn' || activeTab === 'inv-grn-form' ? '#fff' : 'var(--text-primary)'}; cursor:pointer; white-space:nowrap;">
+                    📥 Goods Receiving (GRN)
+                  </button>
+                  <button type="button" class="btn-subtab ${activeTab === 'inv-transfers' ? 'active-subtab' : ''}" data-subtab="inv-transfers" style="padding:6px 12px; font-size:0.8rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-transfers' ? 'var(--accent-primary)' : 'var(--bg-surface-1)'}; color:${activeTab === 'inv-transfers' ? '#fff' : 'var(--text-primary)'}; cursor:pointer; white-space:nowrap;">
+                    🚚 Transfers
+                  </button>
+                  <button type="button" class="btn-subtab ${activeTab === 'inv-issues' ? 'active-subtab' : ''}" data-subtab="inv-issues" style="padding:6px 12px; font-size:0.8rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-issues' ? 'var(--accent-primary)' : 'var(--bg-surface-1)'}; color:${activeTab === 'inv-issues' ? '#fff' : 'var(--text-primary)'}; cursor:pointer; white-space:nowrap;">
+                    📤 Stock Issues
+                  </button>
+                  <button type="button" class="btn-subtab ${activeTab === 'inv-adjustments' ? 'active-subtab' : ''}" data-subtab="inv-adjustments" style="padding:6px 12px; font-size:0.8rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-adjustments' ? 'var(--accent-primary)' : 'var(--bg-surface-1)'}; color:${activeTab === 'inv-adjustments' ? '#fff' : 'var(--text-primary)'}; cursor:pointer; white-space:nowrap;">
+                    ⚖️ Adjustments
+                  </button>
+                  <button type="button" class="btn-subtab ${activeTab === 'inv-counts' ? 'active-subtab' : ''}" data-subtab="inv-counts" style="padding:6px 12px; font-size:0.8rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-counts' ? 'var(--accent-primary)' : 'var(--bg-surface-1)'}; color:${activeTab === 'inv-counts' ? '#fff' : 'var(--text-primary)'}; cursor:pointer; white-space:nowrap;">
+                    📋 Audit Count
+                  </button>
+                  <button type="button" class="btn-subtab ${activeTab === 'inv-requests' ? 'active-subtab' : ''}" data-subtab="inv-requests" style="padding:6px 12px; font-size:0.8rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-requests' ? 'var(--accent-primary)' : 'var(--bg-surface-1)'}; color:${activeTab === 'inv-requests' ? '#fff' : 'var(--text-primary)'}; cursor:pointer; white-space:nowrap;">
+                    ✅ Item Requests ${requests.filter(r => r.status === 'PENDING').length > 0 ? `<span class="badge badge-warning" style="font-size:0.7rem; padding:1px 5px; margin-left:3px;">${requests.filter(r => r.status === 'PENDING').length}</span>` : ''}
+                  </button>
+                </div>
+              </div>
+
+              <!-- Section 3: Master Data & Setup -->
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; background:var(--bg-surface-2); padding:8px 12px; border-radius:8px; border:1px solid var(--border-subtle);">
+                <span style="font-size:0.72rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; min-width:85px;">⚙️ SETUP:</span>
+                <div style="display:flex; gap:6px; flex-wrap:wrap; flex:1;">
+                  <button type="button" class="btn-subtab ${activeTab === 'inv-categories' ? 'active-subtab' : ''}" data-subtab="inv-categories" style="padding:6px 12px; font-size:0.8rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-categories' ? 'var(--accent-primary)' : 'var(--bg-surface-1)'}; color:${activeTab === 'inv-categories' ? '#fff' : 'var(--text-primary)'}; cursor:pointer; white-space:nowrap;">
+                    🏷 Categories & Families
+                  </button>
+                  <button type="button" class="btn-subtab ${activeTab === 'inv-uom' ? 'active-subtab' : ''}" data-subtab="inv-uom" style="padding:6px 12px; font-size:0.8rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-uom' ? 'var(--accent-primary)' : 'var(--bg-surface-1)'}; color:${activeTab === 'inv-uom' ? '#fff' : 'var(--text-primary)'}; cursor:pointer; white-space:nowrap;">
+                    📐 UOM Master
+                  </button>
+                  <button type="button" class="btn-subtab ${activeTab === 'inv-locations' ? 'active-subtab' : ''}" data-subtab="inv-locations" style="padding:6px 12px; font-size:0.8rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-locations' ? 'var(--accent-primary)' : 'var(--bg-surface-1)'}; color:${activeTab === 'inv-locations' ? '#fff' : 'var(--text-primary)'}; cursor:pointer; white-space:nowrap;">
+                    🏬 Storage Locations
+                  </button>
+                  <button type="button" class="btn-subtab ${activeTab === 'inv-suppliers' ? 'active-subtab' : ''}" data-subtab="inv-suppliers" style="padding:6px 12px; font-size:0.8rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-suppliers' ? 'var(--accent-primary)' : 'var(--bg-surface-1)'}; color:${activeTab === 'inv-suppliers' ? '#fff' : 'var(--text-primary)'}; cursor:pointer; white-space:nowrap;">
+                    🏢 Suppliers Master
+                  </button>
+                  <button type="button" class="btn-subtab ${activeTab === 'inv-import' ? 'active-subtab' : ''}" data-subtab="inv-import" style="padding:6px 12px; font-size:0.8rem; font-weight:600; border-radius:6px; border:1px solid var(--border-subtle); background:${activeTab === 'inv-import' ? 'var(--accent-primary)' : 'var(--bg-surface-1)'}; color:${activeTab === 'inv-import' ? '#fff' : 'var(--text-primary)'}; cursor:pointer; white-space:nowrap;">
+                    ⚡ Import Suite
+                  </button>
+                </div>
+              </div>
+
             </div>
           </div>
 
           <main class="card" style="padding:20px; background:var(--bg-surface-1);">
-            ${this.renderInventoryTabBody(activeTab, items, categories, uoms, locations, suppliers, requests, history, session)}
+            ${this.renderInventoryTabBody(activeTab, items, categories, uoms, locations, suppliers, requests, history, session, balances)}
           </main>
         </div>
       `;
@@ -3569,6 +3610,7 @@
       }
 
       this.bindInventoryTabEvents(mount, session);
+      this.bindInventoryMasterDataEvents(mount, session);
     }
 
     bindInventoryTabEvents(mount, session) {
@@ -3826,15 +3868,15 @@
 
         const updateItemsForSupplier = () => {
           const selectedSupCode = supSel.value;
-          const supName = (supSel.selectedIndex >= 0 && supSel.options[supSel.selectedIndex]) 
-            ? supSel.options[supSel.selectedIndex].text.split(' (')[0] 
+          const supName = (supSel.selectedIndex >= 0 && supSel.options[supSel.selectedIndex])
+            ? supSel.options[supSel.selectedIndex].text.split(' (')[0]
             : selectedSupCode;
-          
+
           const allItems = inventoryRepository.getAll(session ? session.tenantId : null);
 
           // Filter items mapped to selected supplier
-          let mapped = allItems.filter(i => 
-            i.preferredSupplierCode === selectedSupCode || 
+          let mapped = allItems.filter(i =>
+            i.preferredSupplierCode === selectedSupCode ||
             i.defaultSupplierCode === selectedSupCode
           );
 
@@ -3877,13 +3919,13 @@
       const savePo = (status) => {
         const supSel = mount.querySelector('#inp-po-supplier');
         const supplierCode = supSel && supSel.value ? supSel.value : 'SUP-001';
-        const supplierName = (supSel && supSel.selectedIndex >= 0 && supSel.options[supSel.selectedIndex]) 
-          ? supSel.options[supSel.selectedIndex].text.split(' (')[0] 
+        const supplierName = (supSel && supSel.selectedIndex >= 0 && supSel.options[supSel.selectedIndex])
+          ? supSel.options[supSel.selectedIndex].text.split(' (')[0]
           : 'Prime Foods';
 
         const locSel = mount.querySelector('#inp-po-location');
         const destinationLocationCode = locSel && locSel.value ? locSel.value : 'LOC-CHILL';
-        
+
         const dateInp = mount.querySelector('#inp-po-date');
         const orderDate = dateInp && dateInp.value ? dateInp.value : new Date().toISOString().split('T')[0];
 
@@ -3974,7 +4016,7 @@
 
           const selectedCode = currentItemSel.value;
           const itemObj = inventoryRepository.getByCode(selectedCode, session ? session.tenantId : null);
-          
+
           if (!itemObj) {
             alert(`❌ Master item ${selectedCode} not found.`);
             return;
@@ -4060,7 +4102,7 @@
               rejectedQty: 0,
               rejectionReason: 'None',
               batchNumber: `BATCH-OPEN-${mi.itemCode}`,
-              expiryDate: new Date(Date.now() + 86400000*30).toISOString().split('T')[0],
+              expiryDate: new Date(Date.now() + 86400000 * 30).toISOString().split('T')[0],
               actualPurchaseUnitPrice: mi.lastPurchasePrice || 0
             });
           });
@@ -4079,10 +4121,10 @@
               <td style="padding:6px; font-weight:700; color:${l.rejectedQty > 0 ? 'var(--status-danger)' : 'var(--text-muted)'};" id="grn-rej-val-${idx}">${l.rejectedQty}</td>
               <td style="padding:6px;">
                 <select class="grn-rej-reason" data-idx="${idx}" style="font-size:0.78rem; padding:4px;">
-                  <option value="None" ${l.rejectionReason==='None'?'selected':''}>None</option>
-                  <option value="Damaged Packaging" ${l.rejectionReason==='Damaged Packaging'?'selected':''}>Damaged Packaging</option>
-                  <option value="Spoiled / Quality Breach" ${l.rejectionReason==='Spoiled / Quality Breach'?'selected':''}>Spoiled / Quality Breach</option>
-                  <option value="Wrong Specifications" ${l.rejectionReason==='Wrong Specifications'?'selected':''}>Wrong Specs</option>
+                  <option value="None" ${l.rejectionReason === 'None' ? 'selected' : ''}>None</option>
+                  <option value="Damaged Packaging" ${l.rejectionReason === 'Damaged Packaging' ? 'selected' : ''}>Damaged Packaging</option>
+                  <option value="Spoiled / Quality Breach" ${l.rejectionReason === 'Spoiled / Quality Breach' ? 'selected' : ''}>Spoiled / Quality Breach</option>
+                  <option value="Wrong Specifications" ${l.rejectionReason === 'Wrong Specifications' ? 'selected' : ''}>Wrong Specs</option>
                 </select>
               </td>
               <td style="padding:6px;"><input type="text" class="grn-batch" data-idx="${idx}" value="${l.batchNumber}" style="width:100px; font-size:0.78rem; padding:4px;"></td>
@@ -4535,14 +4577,109 @@
       }
     }
 
-    renderInventoryTabBody(tabKey, items, categories, uoms, locations, suppliers, requests, history, session) {
+    renderInventoryTabBody(tabKey, items, categories, uoms, locations, suppliers, requests, history, session, balances = []) {
       if (tabKey === 'inv-dashboard' || tabKey === 'dashboard') {
-        const lowStock = items.filter(i => (i.openingStock || 0) <= (i.reorderLevel || 0));
+        const tenantId = session ? session.tenantId : '';
+        const activeBalances = balances.filter(b => (parseFloat(b.quantity) || 0) !== 0 && (!tenantId || b.tenantId === tenantId));
+        const lowStock = items.map(i => {
+          const itemBalances = activeBalances.filter(b => b.itemCode === i.itemCode);
+          const currentQty = itemBalances.length
+            ? itemBalances.reduce((sum, b) => sum + (parseFloat(b.quantity) || 0), 0)
+            : (parseFloat(i.currentStock !== undefined ? i.currentStock : i.openingStock) || 0);
+          return { ...i, currentQty };
+        }).filter(i => i.currentQty <= (parseFloat(i.reorderLevel) || 0));
         const pendingReqs = requests.filter(r => r.status === 'PENDING');
+        const locationSnapshots = locations.map(loc => {
+          const locBalances = activeBalances.filter(b => b.locationCode === loc.locationCode);
+          const locationValue = locBalances.reduce((sum, b) => sum + (parseFloat(b.valuation) || 0), 0);
+          const itemCount = new Set(locBalances.map(b => b.itemCode)).size;
+          const lastUpdated = locBalances.reduce((latest, b) => {
+            const stamp = b.lastUpdatedAt ? new Date(b.lastUpdatedAt).getTime() : 0;
+            return stamp > latest ? stamp : latest;
+          }, 0);
+          return { ...loc, locBalances, locationValue, itemCount, lastUpdated };
+        }).sort((a, b) => b.locationValue - a.locationValue);
+        const itemStockRows = activeBalances.map(b => {
+          const item = items.find(i => i.itemCode === b.itemCode) || {};
+          const loc = locations.find(l => l.locationCode === b.locationCode) || {};
+          return {
+            itemCode: b.itemCode,
+            itemName: item.itemName || b.itemCode,
+            categoryCode: item.categoryCode || '--',
+            locationCode: b.locationCode,
+            locationName: loc.locationName || b.locationCode,
+            quantity: parseFloat(b.quantity) || 0,
+            baseUom: b.baseUom || item.baseUom || '',
+            valuation: parseFloat(b.valuation) || 0,
+            lastUpdatedAt: b.lastUpdatedAt
+          };
+        }).sort((a, b) => b.valuation - a.valuation).slice(0, 12);
 
         return `
           <h3>Inventory Manager Dashboard</h3>
-          <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:16px;">Daily operational hub & stock health status.</p>
+          <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:16px;">Daily operational hub, live store balances, and stock health status.</p>
+
+          <div class="card" style="background:var(--bg-surface-2); padding:18px; margin-bottom:20px; border-left:4px solid var(--accent-primary);">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:14px;">
+              <div>
+                <h4 style="margin:0; color:var(--accent-primary);">Location-wise Live Inventory</h4>
+                <p style="color:var(--text-muted); font-size:0.8rem; margin-top:2px;">Bird's-eye view sourced from live stock_balances updated by GRN, transfers, issues, counts, and adjustments.</p>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <span class="badge badge-success" style="font-size:0.78rem;">${activeBalances.length} active store balances</span>
+                <button type="button" class="btn-primary btn-subtab" data-subtab="inv-live-stock" style="font-size:0.8rem; padding:6px 14px;">
+                  🔍 View Detailed Live Inventory →
+                </button>
+              </div>
+            </div>
+
+            ${activeBalances.length ? `
+              <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:12px; margin-bottom:18px;">
+                ${locationSnapshots.map(l => `
+                  <div style="background:var(--bg-surface-1); border:1px solid var(--border-subtle); border-radius:6px; padding:14px;">
+                    <div style="display:flex; justify-content:space-between; gap:8px; align-items:start;">
+                      <div>
+                        <div style="font-weight:700;">${l.locationName || l.locationCode}</div>
+                        <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">${l.locationCode} ${l.locationType ? '- ' + l.locationType : ''}</div>
+                      </div>
+                      <span class="badge ${l.itemCount ? 'badge-success' : 'badge-secondary'}">${l.itemCount} items</span>
+                    </div>
+                    <div style="font-size:1.25rem; font-weight:700; color:var(--status-success); margin-top:10px;">Rs. ${l.locationValue.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</div>
+                    <div style="font-size:0.72rem; color:var(--text-muted); margin-top:4px;">${l.lastUpdated ? 'Updated ' + new Date(l.lastUpdated).toLocaleString() : 'No posted stock yet'}</div>
+                  </div>
+                `).join('')}
+              </div>
+
+              <div style="overflow-x:auto;">
+                <table style="width:100%; border-collapse:collapse; font-size:0.84rem;">
+                  <thead>
+                    <tr style="border-bottom:1px solid var(--border-subtle); text-align:left; background:var(--bg-surface-1);">
+                      <th style="padding:9px;">Item</th>
+                      <th style="padding:9px;">Location</th>
+                      <th style="padding:9px;">Qty On Hand</th>
+                      <th style="padding:9px;">Valuation</th>
+                      <th style="padding:9px;">Last Movement</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${itemStockRows.map(r => `
+                      <tr style="border-bottom:1px solid var(--border-subtle);">
+                        <td style="padding:9px; font-weight:700;">${r.itemName}<div style="font-size:0.72rem; color:var(--text-muted); font-family:monospace;">${r.itemCode} - ${r.categoryCode}</div></td>
+                        <td style="padding:9px;"><span class="badge badge-info">${r.locationName} (${r.locationCode})</span></td>
+                        <td style="padding:9px; font-weight:700; color:var(--status-success);">${r.quantity.toFixed(3)} ${r.baseUom}</td>
+                        <td style="padding:9px; font-weight:700;">Rs. ${r.valuation.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</td>
+                        <td style="padding:9px; color:var(--text-muted);">${r.lastUpdatedAt ? new Date(r.lastUpdatedAt).toLocaleString() : '--'}</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            ` : `
+              <div style="padding:22px; text-align:center; color:var(--text-muted); background:var(--bg-surface-1); border-radius:6px;">
+                No live stock balances yet. Post a GRN or opening stock receipt and this view will populate by receiving location.
+              </div>
+            `}
+          </div>
           
           <div class="grid-2col-responsive">
             <div>
@@ -4581,7 +4718,7 @@
                           <td style="padding:8px; font-weight:600;">${i.itemCode}</td>
                           <td style="padding:8px;">${i.itemName}</td>
                           <td style="padding:8px;"><span class="badge badge-warning">${i.itemType}</span></td>
-                          <td style="padding:8px; font-weight:700; color:var(--status-danger);">${i.openingStock} ${i.baseUom}</td>
+                          <td style="padding:8px; font-weight:700; color:var(--status-danger);">${i.currentQty.toFixed(2)} ${i.baseUom}</td>
                           <td style="padding:8px;">${i.reorderLevel} ${i.baseUom}</td>
                           <td style="padding:8px;">${i.defaultSupplierCode}</td>
                         </tr>
@@ -4597,13 +4734,293 @@
                 <h4>Category Breakdown</h4>
                 <div class="flex-col gap-xs" style="margin-top:10px; font-size:0.85rem;">
                   ${categories.map(c => {
-                    const count = items.filter(i => i.categoryCode === c.categoryCode).length;
-                    return `<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid var(--border-subtle);">
+          const count = items.filter(i => i.categoryCode === c.categoryCode).length;
+          return `<div style="display:flex; justify-content:space-between; padding:4px 0; border-bottom:1px solid var(--border-subtle);">
                       <span>${c.categoryName}</span><span style="font-weight:700;">${count} items</span>
                     </div>`;
-                  }).join('')}
+        }).join('')}
                 </div>
               </div>
+            </div>
+          </div>
+        `;
+      }
+
+      if (tabKey === 'inv-live-stock' || tabKey === 'inv-live-balances') {
+        const tenantId = session ? session.tenantId : '';
+        const activeBalances = balances.filter(b => (!tenantId || b.tenantId === tenantId));
+
+        let stockLines = [];
+        if (activeBalances.length > 0) {
+          stockLines = activeBalances.map(b => {
+            const item = items.find(i => i.itemCode === b.itemCode) || {};
+            const loc = locations.find(l => l.locationCode === b.locationCode) || {};
+            const qty = parseFloat(b.quantity) || 0;
+            const factor = parseFloat(item.conversionFactor) || 1;
+            const purPrice = parseFloat(item.lastPurchasePrice) || 0;
+            const unitCost = parseFloat(b.unitCost !== undefined ? b.unitCost : (item.unitValuation || (factor > 0 ? purPrice / factor : purPrice) || 0));
+            const valuation = b.valuation !== undefined ? parseFloat(b.valuation) : (qty * unitCost);
+            const reorderLevel = parseFloat(item.reorderLevel) || 0;
+
+            let status = 'IN_STOCK';
+            if (qty <= 0) {
+              status = 'OUT_OF_STOCK';
+            } else if (qty <= reorderLevel) {
+              status = 'LOW_STOCK';
+            }
+
+            return {
+              id: b.id || `${b.itemCode}_${b.locationCode}`,
+              itemCode: b.itemCode,
+              itemName: item.itemName || b.itemCode,
+              categoryCode: item.categoryCode || 'UNASSIGNED',
+              locationCode: b.locationCode,
+              locationName: loc.locationName || b.locationCode,
+              locationType: loc.locationType || 'Storage',
+              quantity: qty,
+              baseUom: b.baseUom || item.baseUom || 'PCS',
+              unitCost: unitCost,
+              valuation: valuation,
+              reorderLevel: reorderLevel,
+              status: status,
+              lastUpdatedAt: b.lastUpdatedAt || b.updatedAt || ''
+            };
+          });
+        } else {
+          stockLines = items.map(i => {
+            const qty = parseFloat(i.currentStock !== undefined ? i.currentStock : (i.openingStock || 0));
+            const factor = parseFloat(i.conversionFactor) || 1;
+            const purPrice = parseFloat(i.lastPurchasePrice) || 0;
+            const unitCost = parseFloat(i.unitValuation) || (factor > 0 ? (purPrice / factor) : purPrice) || 0;
+            const valuation = qty * unitCost;
+            const reorderLevel = parseFloat(i.reorderLevel) || 0;
+
+            let status = 'IN_STOCK';
+            if (qty <= 0) {
+              status = 'OUT_OF_STOCK';
+            } else if (qty <= reorderLevel) {
+              status = 'LOW_STOCK';
+            }
+
+            return {
+              id: i.id || i.itemCode,
+              itemCode: i.itemCode,
+              itemName: i.itemName,
+              categoryCode: i.categoryCode || 'UNASSIGNED',
+              locationCode: i.defaultLocationCode || 'MAIN-WH',
+              locationName: i.defaultLocationName || 'Main Warehouse',
+              locationType: 'Warehouse',
+              quantity: qty,
+              baseUom: i.baseUom || 'PCS',
+              unitCost: unitCost,
+              valuation: valuation,
+              reorderLevel: reorderLevel,
+              status: status,
+              lastUpdatedAt: i.updatedAt || ''
+            };
+          });
+        }
+
+        const searchQuery = (this.liveInventorySearchQuery || '').toLowerCase().trim();
+        const locFilter = this.liveInventoryLocationFilter || 'ALL';
+        const catFilter = this.liveInventoryCategoryFilter || 'ALL';
+        const statusFilter = this.liveInventoryStatusFilter || 'ALL';
+        const sortOption = this.liveInventorySort || 'VALUE_DESC';
+
+        let filteredLines = stockLines.filter(line => {
+          if (searchQuery) {
+            const q = searchQuery;
+            const matchName = (line.itemName || '').toLowerCase().includes(q);
+            const matchCode = (line.itemCode || '').toLowerCase().includes(q);
+            const matchCat = (line.categoryCode || '').toLowerCase().includes(q);
+            const matchLoc = (line.locationName || '').toLowerCase().includes(q) || (line.locationCode || '').toLowerCase().includes(q);
+            if (!matchName && !matchCode && !matchCat && !matchLoc) return false;
+          }
+          if (locFilter !== 'ALL' && line.locationCode !== locFilter) return false;
+          if (catFilter !== 'ALL' && line.categoryCode !== catFilter) return false;
+          if (statusFilter !== 'ALL' && line.status !== statusFilter) return false;
+          return true;
+        });
+
+        filteredLines.sort((a, b) => {
+          if (sortOption === 'VALUE_DESC') return b.valuation - a.valuation;
+          if (sortOption === 'VALUE_ASC') return a.valuation - b.valuation;
+          if (sortOption === 'QTY_DESC') return b.quantity - a.quantity;
+          if (sortOption === 'QTY_ASC') return a.quantity - b.quantity;
+          if (sortOption === 'NAME_ASC') return a.itemName.localeCompare(b.itemName);
+          if (sortOption === 'DATE_DESC') {
+            const tA = a.lastUpdatedAt ? new Date(a.lastUpdatedAt).getTime() : 0;
+            const tB = b.lastUpdatedAt ? new Date(b.lastUpdatedAt).getTime() : 0;
+            return tB - tA;
+          }
+          return 0;
+        });
+
+        const totalValuationAll = stockLines.reduce((sum, l) => sum + l.valuation, 0);
+        const totalValuationFiltered = filteredLines.reduce((sum, l) => sum + l.valuation, 0);
+        const totalQtyFiltered = filteredLines.reduce((sum, l) => sum + l.quantity, 0);
+        const lowStockCount = stockLines.filter(l => l.status === 'LOW_STOCK').length;
+        const outOfStockCount = stockLines.filter(l => l.status === 'OUT_OF_STOCK').length;
+        const uniqueItemsCount = new Set(stockLines.map(l => l.itemCode)).size;
+        const activeLocationsCount = new Set(stockLines.map(l => l.locationCode)).size;
+
+        return `
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
+            <div>
+              <h3 style="margin:0; color:var(--accent-primary);">📦 Detailed Live Store Balances & Valuation</h3>
+              <p style="color:var(--text-muted); font-size:0.85rem; margin-top:2px;">
+                Comprehensive single-pane inventory view across all store locations, categories, and stock movement logs.
+              </p>
+            </div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap;">
+              <button type="button" class="btn-primary" id="btn-export-live-inv-csv" style="padding:8px 14px; font-size:0.85rem; font-weight:600; cursor:pointer;">
+                📥 Export Detailed Inventory (CSV)
+              </button>
+            </div>
+          </div>
+
+          <!-- KPI Metric Summary Bar -->
+          <div class="grid-responsive-4" style="margin-bottom:20px;">
+            <div style="background:var(--bg-surface-2); padding:14px; border-radius:6px; text-align:center;">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Total Valuation</div>
+              <div style="font-size:1.4rem; font-weight:700; color:var(--status-success); margin-top:2px;">
+                Rs. ${totalValuationAll.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+              </div>
+            </div>
+            <div style="background:var(--bg-surface-2); padding:14px; border-radius:6px; text-align:center;">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Stock Lines</div>
+              <div style="font-size:1.4rem; font-weight:700; color:var(--accent-primary); margin-top:2px;">
+                ${stockLines.length} (${uniqueItemsCount} Unique Items)
+              </div>
+            </div>
+            <div style="background:var(--bg-surface-2); padding:14px; border-radius:6px; text-align:center;">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Active Locations</div>
+              <div style="font-size:1.4rem; font-weight:700; color:var(--accent-secondary); margin-top:2px;">
+                ${activeLocationsCount} Stores
+              </div>
+            </div>
+            <div style="background:var(--bg-surface-2); padding:14px; border-radius:6px; text-align:center;">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">Reorder & Out of Stock</div>
+              <div style="font-size:1.4rem; font-weight:700; color:${(lowStockCount + outOfStockCount) > 0 ? 'var(--status-danger)' : 'var(--status-success)'}; margin-top:2px;">
+                ${lowStockCount} Low / ${outOfStockCount} Out
+              </div>
+            </div>
+          </div>
+
+          <!-- Controls & Multi-Filter Bar -->
+          <div class="card" style="background:var(--bg-surface-2); padding:14px; margin-bottom:16px; border:1px solid var(--border-subtle);">
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(170px, 1fr)); gap:10px; align-items:end;">
+              <div>
+                <label style="display:block; font-size:0.75rem; font-weight:700; color:var(--text-muted); margin-bottom:4px;">🔍 Search Item / Loc</label>
+                <input type="text" id="inp-live-inv-search" value="${this.liveInventorySearchQuery || ''}" placeholder="Filter by Code, Name, Loc..." style="width:100%; font-size:0.85rem; padding:6px 10px;">
+              </div>
+              <div>
+                <label style="display:block; font-size:0.75rem; font-weight:700; color:var(--text-muted); margin-bottom:4px;">🏬 Storage Location</label>
+                <select id="sel-live-inv-loc" style="width:100%; font-size:0.85rem; padding:6px 10px;">
+                  <option value="ALL" ${locFilter === 'ALL' ? 'selected' : ''}>All Locations (${locations.length})</option>
+                  ${locations.map(l => `
+                    <option value="${l.locationCode}" ${locFilter === l.locationCode ? 'selected' : ''}>${l.locationName} (${l.locationCode})</option>
+                  `).join('')}
+                </select>
+              </div>
+              <div>
+                <label style="display:block; font-size:0.75rem; font-weight:700; color:var(--text-muted); margin-bottom:4px;">🏷 Category</label>
+                <select id="sel-live-inv-cat" style="width:100%; font-size:0.85rem; padding:6px 10px;">
+                  <option value="ALL" ${catFilter === 'ALL' ? 'selected' : ''}>All Categories (${categories.length})</option>
+                  ${categories.map(c => `
+                    <option value="${c.categoryCode}" ${catFilter === c.categoryCode ? 'selected' : ''}>${c.categoryName} (${c.categoryCode})</option>
+                  `).join('')}
+                </select>
+              </div>
+              <div>
+                <label style="display:block; font-size:0.75rem; font-weight:700; color:var(--text-muted); margin-bottom:4px;">⚠️ Stock Health Status</label>
+                <select id="sel-live-inv-status" style="width:100%; font-size:0.85rem; padding:6px 10px;">
+                  <option value="ALL" ${statusFilter === 'ALL' ? 'selected' : ''}>All Stock Statuses</option>
+                  <option value="IN_STOCK" ${statusFilter === 'IN_STOCK' ? 'selected' : ''}>✔ In Stock</option>
+                  <option value="LOW_STOCK" ${statusFilter === 'LOW_STOCK' ? 'selected' : ''}>⚠️ Low Stock / Reorder</option>
+                  <option value="OUT_OF_STOCK" ${statusFilter === 'OUT_OF_STOCK' ? 'selected' : ''}>🔴 Out of Stock</option>
+                </select>
+              </div>
+              <div>
+                <label style="display:block; font-size:0.75rem; font-weight:700; color:var(--text-muted); margin-bottom:4px;">🔀 Sort Order</label>
+                <select id="sel-live-inv-sort" style="width:100%; font-size:0.85rem; padding:6px 10px;">
+                  <option value="VALUE_DESC" ${sortOption === 'VALUE_DESC' ? 'selected' : ''}>Valuation: High → Low</option>
+                  <option value="VALUE_ASC" ${sortOption === 'VALUE_ASC' ? 'selected' : ''}>Valuation: Low → High</option>
+                  <option value="QTY_DESC" ${sortOption === 'QTY_DESC' ? 'selected' : ''}>Quantity: High → Low</option>
+                  <option value="QTY_ASC" ${sortOption === 'QTY_ASC' ? 'selected' : ''}>Quantity: Low → High</option>
+                  <option value="NAME_ASC" ${sortOption === 'NAME_ASC' ? 'selected' : ''}>Item Name: A → Z</option>
+                  <option value="DATE_DESC" ${sortOption === 'DATE_DESC' ? 'selected' : ''}>Last Movement: Newest</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Table View for Large Inventory -->
+          <div style="overflow-x:auto; background:var(--bg-surface-1); border-radius:6px; border:1px solid var(--border-subtle);">
+            <table style="width:100%; border-collapse:collapse; font-size:0.84rem;">
+              <thead>
+                <tr style="background:var(--bg-surface-2); border-bottom:2px solid var(--border-subtle); text-align:left;">
+                  <th style="padding:10px;">Item Code & Name</th>
+                  <th style="padding:10px;">Category</th>
+                  <th style="padding:10px;">Location</th>
+                  <th style="padding:10px;">Qty On Hand</th>
+                  <th style="padding:10px;">Unit Rate</th>
+                  <th style="padding:10px;">Total Valuation</th>
+                  <th style="padding:10px;">Status</th>
+                  <th style="padding:10px;">Last Movement</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${filteredLines.length ? filteredLines.map(line => `
+                  <tr style="border-bottom:1px solid var(--border-subtle);">
+                    <td style="padding:10px;">
+                      <div style="font-weight:700;">${line.itemName}</div>
+                      <div style="font-size:0.72rem; color:var(--text-muted); font-family:monospace;">${line.itemCode}</div>
+                    </td>
+                    <td style="padding:10px;">
+                      <span class="badge badge-info" style="font-size:0.75rem;">${line.categoryCode}</span>
+                    </td>
+                    <td style="padding:10px;">
+                      <div style="font-weight:600;">${line.locationName}</div>
+                      <div style="font-size:0.72rem; color:var(--text-muted);">${line.locationCode} (${line.locationType})</div>
+                    </td>
+                    <td style="padding:10px; font-weight:700; font-size:0.95rem; color:${line.quantity <= 0 ? 'var(--status-danger)' : 'var(--text-primary)'};">
+                      ${line.quantity.toFixed(3)} ${line.baseUom}
+                    </td>
+                    <td style="padding:10px; color:var(--text-muted);">
+                      Rs. ${line.unitCost.toLocaleString('en-IN', { maximumFractionDigits: 2 })} / ${line.baseUom}
+                    </td>
+                    <td style="padding:10px; font-weight:700; color:var(--status-success); font-size:0.95rem;">
+                      Rs. ${line.valuation.toLocaleString('en-IN', { maximumFractionDigits: 2 })}
+                    </td>
+                    <td style="padding:10px;">
+                      ${line.status === 'OUT_OF_STOCK' ? '<span class="badge badge-danger">🔴 Out of Stock</span>' :
+                        (line.status === 'LOW_STOCK' ? `<span class="badge badge-warning">⚠️ Low Stock (Min: ${line.reorderLevel})</span>` :
+                        '<span class="badge badge-success">✔ In Stock</span>')}
+                    </td>
+                    <td style="padding:10px; font-size:0.78rem; color:var(--text-muted);">
+                      ${line.lastUpdatedAt ? new Date(line.lastUpdatedAt).toLocaleString() : '--'}
+                    </td>
+                  </tr>
+                `).join('') : `
+                  <tr>
+                    <td colspan="8" style="padding:24px; text-align:center; color:var(--text-muted);">
+                      No live stock balances match the selected filters.
+                    </td>
+                  </tr>
+                `}
+              </tbody>
+            </table>
+          </div>
+
+          <!-- Footer Summary -->
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; margin-top:14px; font-size:0.82rem; color:var(--text-muted);">
+            <div>
+              Showing <strong>${filteredLines.length}</strong> of <strong>${stockLines.length}</strong> live store stock lines.
+            </div>
+            <div style="display:flex; gap:16px;">
+              <span>Total Quantity: <strong>${totalQtyFiltered.toFixed(2)}</strong></span>
+              <span>Filtered Valuation: <strong style="color:var(--status-success);">Rs. ${totalValuationFiltered.toLocaleString('en-IN', { maximumFractionDigits: 2 })}</strong></span>
             </div>
           </div>
         `;
@@ -4729,21 +5146,21 @@
               </thead>
               <tbody>
                 ${filtered.map(i => {
-                  const purUom = i.purchaseUom || i.baseUom || 'KG';
-                  const factor = parseFloat(i.conversionFactor) || 1;
-                  const purPrice = parseFloat(i.lastPurchasePrice) || 0;
-                  const baseCost = parseFloat(i.unitValuation) || (factor > 0 ? (purPrice / factor) : purPrice);
-                  const yieldPct = i.standardYieldPercent !== undefined ? i.standardYieldPercent : 100.0;
-                  const deptScope = i.departmentUsageScope || 'ALL';
-                  
-                  const badges = [];
-                  if (i.isRecipeIngredient !== false) badges.push('<span class="badge badge-info" style="font-size:0.68rem;">Ingredient</span>');
-                  if (i.autoDeductionEnabled !== false) badges.push('<span class="badge badge-success" style="font-size:0.68rem;">Auto-Deduct</span>');
-                  if (i.isSemiFinished) badges.push('<span class="badge badge-warning" style="font-size:0.68rem;">Prep Batch</span>');
-                  if (i.isDirectSale) badges.push('<span class="badge badge-secondary" style="font-size:0.68rem;">Direct Sale</span>');
-                  if (!badges.length) badges.push('<span class="badge badge-secondary" style="font-size:0.68rem;">Standard</span>');
+          const purUom = i.purchaseUom || i.baseUom || 'KG';
+          const factor = parseFloat(i.conversionFactor) || 1;
+          const purPrice = parseFloat(i.lastPurchasePrice) || 0;
+          const baseCost = parseFloat(i.unitValuation) || (factor > 0 ? (purPrice / factor) : purPrice);
+          const yieldPct = i.standardYieldPercent !== undefined ? i.standardYieldPercent : 100.0;
+          const deptScope = i.departmentUsageScope || 'ALL';
 
-                  return `
+          const badges = [];
+          if (i.isRecipeIngredient !== false) badges.push('<span class="badge badge-info" style="font-size:0.68rem;">Ingredient</span>');
+          if (i.autoDeductionEnabled !== false) badges.push('<span class="badge badge-success" style="font-size:0.68rem;">Auto-Deduct</span>');
+          if (i.isSemiFinished) badges.push('<span class="badge badge-warning" style="font-size:0.68rem;">Prep Batch</span>');
+          if (i.isDirectSale) badges.push('<span class="badge badge-secondary" style="font-size:0.68rem;">Direct Sale</span>');
+          if (!badges.length) badges.push('<span class="badge badge-secondary" style="font-size:0.68rem;">Standard</span>');
+
+          return `
                     <tr class="master-item-row" data-code="${i.itemCode}" style="border-bottom:1px solid var(--border-subtle); cursor:pointer;">
                       <td style="padding:10px; font-weight:700; color:var(--accent-primary);">${i.itemCode}</td>
                       <td style="padding:10px; font-weight:600;">${i.itemName}</td>
@@ -4760,7 +5177,7 @@
                       </td>
                     </tr>
                   `;
-                }).join('')}
+        }).join('')}
               </tbody>
             </table>
           ` : `
@@ -4833,8 +5250,8 @@
               </thead>
               <tbody>
                 ${cats.map(c => {
-                  const fam = PRODUCT_FAMILIES_REGISTRY[c.productFamilyCode] || { icon: '📦', name: c.productFamilyName || c.productFamilyCode };
-                  return `
+          const fam = PRODUCT_FAMILIES_REGISTRY[c.productFamilyCode] || { icon: '📦', name: c.productFamilyName || c.productFamilyCode };
+          return `
                     <tr style="border-bottom:1px solid var(--border-subtle);">
                       <td style="padding:10px; font-weight:700; color:var(--accent-primary);">${c.categoryCode}</td>
                       <td style="padding:10px; font-weight:600;">${c.categoryName}</td>
@@ -4847,7 +5264,7 @@
                       </td>
                     </tr>
                   `;
-                }).join('')}
+        }).join('')}
               </tbody>
             </table>
           </div>
@@ -5214,223 +5631,371 @@
       return `<h3>${tabKey.toUpperCase()}</h3><p style="color:var(--text-muted); font-size:0.85rem;">Operational module view.</p>`;
     }
 
+    exportLiveInventoryToCSV(session) {
+      const tenantId = session ? session.tenantId : '';
+      const balances = offlineStore.getCollection('stock_balances', tenantId) || [];
+      const items = masterItemRepository.getAll(tenantId);
+      const locations = storageLocationRepository.getAll(tenantId);
+
+      let stockLines = [];
+      if (balances.length > 0) {
+        stockLines = balances.map(b => {
+          const item = items.find(i => i.itemCode === b.itemCode) || {};
+          const loc = locations.find(l => l.locationCode === b.locationCode) || {};
+          const qty = parseFloat(b.quantity) || 0;
+          const factor = parseFloat(item.conversionFactor) || 1;
+          const purPrice = parseFloat(item.lastPurchasePrice) || 0;
+          const unitCost = parseFloat(b.unitCost !== undefined ? b.unitCost : (item.unitValuation || (factor > 0 ? purPrice / factor : purPrice) || 0));
+          const valuation = b.valuation !== undefined ? parseFloat(b.valuation) : (qty * unitCost);
+          const reorderLevel = parseFloat(item.reorderLevel) || 0;
+
+          let status = 'IN_STOCK';
+          if (qty <= 0) status = 'OUT_OF_STOCK';
+          else if (qty <= reorderLevel) status = 'LOW_STOCK';
+
+          return {
+            itemCode: b.itemCode,
+            itemName: item.itemName || b.itemCode,
+            categoryCode: item.categoryCode || '',
+            locationCode: b.locationCode,
+            locationName: loc.locationName || b.locationCode,
+            quantity: qty,
+            baseUom: b.baseUom || item.baseUom || '',
+            unitCost: unitCost,
+            valuation: valuation,
+            reorderLevel: reorderLevel,
+            status: status,
+            lastUpdatedAt: b.lastUpdatedAt || ''
+          };
+        });
+      } else {
+        stockLines = items.map(i => {
+          const qty = parseFloat(i.currentStock !== undefined ? i.currentStock : (i.openingStock || 0));
+          const factor = parseFloat(i.conversionFactor) || 1;
+          const purPrice = parseFloat(i.lastPurchasePrice) || 0;
+          const unitCost = parseFloat(i.unitValuation) || (factor > 0 ? (purPrice / factor) : purPrice) || 0;
+          const valuation = qty * unitCost;
+          const reorderLevel = parseFloat(i.reorderLevel) || 0;
+
+          let status = 'IN_STOCK';
+          if (qty <= 0) status = 'OUT_OF_STOCK';
+          else if (qty <= reorderLevel) status = 'LOW_STOCK';
+
+          return {
+            itemCode: i.itemCode,
+            itemName: i.itemName,
+            categoryCode: i.categoryCode || '',
+            locationCode: i.defaultLocationCode || 'MAIN-WH',
+            locationName: i.defaultLocationName || 'Main Warehouse',
+            quantity: qty,
+            baseUom: i.baseUom || '',
+            unitCost: unitCost,
+            valuation: valuation,
+            reorderLevel: reorderLevel,
+            status: status,
+            lastUpdatedAt: i.updatedAt || ''
+          };
+        });
+      }
+
+      const headers = ['Item Code', 'Item Name', 'Category Code', 'Location Code', 'Location Name', 'Quantity On Hand', 'Base UOM', 'Unit Cost (INR)', 'Total Valuation (INR)', 'Reorder Level', 'Stock Health Status', 'Last Movement Timestamp'];
+      const rows = stockLines.map(l => [
+        `"${(l.itemCode || '').replace(/"/g, '""')}"`,
+        `"${(l.itemName || '').replace(/"/g, '""')}"`,
+        `"${(l.categoryCode || '').replace(/"/g, '""')}"`,
+        `"${(l.locationCode || '').replace(/"/g, '""')}"`,
+        `"${(l.locationName || '').replace(/"/g, '""')}"`,
+        l.quantity.toFixed(3),
+        `"${(l.baseUom || '').replace(/"/g, '""')}"`,
+        l.unitCost.toFixed(2),
+        l.valuation.toFixed(2),
+        l.reorderLevel.toFixed(2),
+        `"${l.status}"`,
+        `"${l.lastUpdatedAt || ''}"`
+      ]);
+
+      const csvContent = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `Live_Inventory_Balances_${new Date().toISOString().slice(0, 10)}.csv`);
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    bindInventoryMasterDataEvents(mount, session) {
+      // 0. Live Inventory Controls
+      const inpSearch = mount.querySelector('#inp-live-inv-search');
+      if (inpSearch) {
+        inpSearch.addEventListener('input', (e) => {
+          this.liveInventorySearchQuery = e.target.value;
+          this.render();
+          const newlyCreatedInp = mount.querySelector('#inp-live-inv-search');
+          if (newlyCreatedInp) {
+            newlyCreatedInp.focus();
+            newlyCreatedInp.setSelectionRange(newlyCreatedInp.value.length, newlyCreatedInp.value.length);
+          }
+        });
+      }
+
+      const selLoc = mount.querySelector('#sel-live-inv-loc');
+      if (selLoc) {
+        selLoc.addEventListener('change', (e) => {
+          this.liveInventoryLocationFilter = e.target.value;
+          this.render();
+        });
+      }
+
+      const selCat = mount.querySelector('#sel-live-inv-cat');
+      if (selCat) {
+        selCat.addEventListener('change', (e) => {
+          this.liveInventoryCategoryFilter = e.target.value;
+          this.render();
+        });
+      }
+
+      const selStatus = mount.querySelector('#sel-live-inv-status');
+      if (selStatus) {
+        selStatus.addEventListener('change', (e) => {
+          this.liveInventoryStatusFilter = e.target.value;
+          this.render();
+        });
+      }
+
+      const selSort = mount.querySelector('#sel-live-inv-sort');
+      if (selSort) {
+        selSort.addEventListener('change', (e) => {
+          this.liveInventorySort = e.target.value;
+          this.render();
+        });
+      }
+
+      const btnExportLiveCsv = mount.querySelector('#btn-export-live-inv-csv');
+      if (btnExportLiveCsv) {
+        btnExportLiveCsv.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.exportLiveInventoryToCSV(session);
+        });
+      }
 
       // 1. Download Sample Supplier Template
-      const btnSample = mount.querySelector('#btn-download-supplier-sample');
-      if (btnSample) {
-        btnSample.addEventListener('click', (e) => {
-          e.preventDefault();
-          this.downloadSampleSupplierTemplate();
-        });
-      }
-      const btnSampleStep4 = mount.querySelector('#btn-download-supplier-sample-step4');
-      if (btnSampleStep4) {
-        btnSampleStep4.addEventListener('click', (e) => {
-          e.preventDefault();
-          this.downloadSampleSupplierTemplate();
-        });
-      }
-
-      // 2. Export Suppliers Data (CSV)
-      const btnExport = mount.querySelector('#btn-export-suppliers');
-      if (btnExport) {
-        btnExport.addEventListener('click', (e) => {
-          e.preventDefault();
-          this.exportSuppliersData(session);
-        });
-      }
-
-      // 3. Bulk Import Suppliers Trigger Buttons & File Listeners
-      const btnTriggerImport = mount.querySelector('#btn-trigger-import-suppliers');
-      const inputImport = mount.querySelector('#file-import-suppliers');
-      if (btnTriggerImport && inputImport) {
-        btnTriggerImport.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          inputImport.click();
-        });
-        inputImport.addEventListener('change', (e) => {
-          e.preventDefault();
-          if (e.target.files && e.target.files[0]) {
-            this.importSuppliersFromCSV(e.target.files[0], session);
-            e.target.value = '';
-          }
-        });
-      }
-
-      const btnTriggerImportStep4 = mount.querySelector('#btn-trigger-import-suppliers-step4');
-      const inputImportStep4 = mount.querySelector('#file-import-suppliers-step4');
-      if (btnTriggerImportStep4 && inputImportStep4) {
-        btnTriggerImportStep4.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          inputImportStep4.click();
-        });
-        inputImportStep4.addEventListener('change', (e) => {
-          e.preventDefault();
-          if (e.target.files && e.target.files[0]) {
-            this.importSuppliersFromCSV(e.target.files[0], session);
-            e.target.value = '';
-          }
-        });
-      }
-
-      // 4. Add Single Supplier Modal
-      const btnAddSup = mount.querySelector('#btn-add-supplier-modal');
-      if (btnAddSup) {
-        btnAddSup.addEventListener('click', (e) => {
-          e.preventDefault();
-          this.openAddSupplierModal(session);
-        });
-      }
-
-      // 5. Edit Supplier Listeners
-      mount.querySelectorAll('.btn-edit-supplier').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          const supId = btn.dataset.id;
-          this.openEditSupplierModal(supId, session);
-        });
+    const btnSample = mount.querySelector('#btn-download-supplier-sample');
+    if(btnSample) {
+      btnSample.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.downloadSampleSupplierTemplate();
       });
-
-      // 6. Delete Supplier Listeners
-      mount.querySelectorAll('.btn-delete-supplier').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          const supId = btn.dataset.id;
-          const supName = btn.dataset.name;
-          if (confirm(`🗑️ Are you sure you want to delete supplier "${supName}" (${supId})?`)) {
-            const list = offlineStore.getCollection('suppliers') || [];
-            const updated = list.filter(s => s.id !== supId && s.supplierCode !== supId);
-            offlineStore.setCollection('suppliers', updated);
-            logAudit(session.employeeName, `Deleted Supplier "${supName}" (${supId})`, session.tenantId);
-            alert(`🗑️ Supplier "${supName}" deleted successfully.`);
-            this.render();
-          }
-        });
-      });
-      mount.querySelectorAll('.btn-edit-cat').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          const catId = btn.dataset.id;
-          this.openCategoryModal(catId, session);
-        });
-      });
-
-      mount.querySelectorAll('.btn-archive-cat').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          const catId = btn.dataset.id;
-          const catName = btn.dataset.name;
-          if (confirm(`🏷️ Are you sure you want to archive category "${catName}"?`)) {
-            const res = categoryRepository.archive(catId, session);
-            if (res.success) {
-              alert(`🏷️ Category "${catName}" archived successfully.`);
-              this.render();
-            } else {
-              alert(res.error || 'Failed to archive category.');
-            }
-          }
-        });
-      });
-
-      const btnAddCat = mount.querySelector('#btn-add-category-modal');
-      if (btnAddCat) {
-        btnAddCat.addEventListener('click', (e) => {
-          e.preventDefault();
-          this.openCategoryModal(null, session);
-        });
-      }
-
-      // Storage Location Event Listeners
-      const btnAddLoc = mount.querySelector('#btn-add-location-modal');
-      if (btnAddLoc) {
-        btnAddLoc.addEventListener('click', (e) => {
-          e.preventDefault();
-          this.openLocationModal(null, session);
-        });
-      }
-
-      const btnDownloadLocSample = mount.querySelector('#btn-download-location-sample');
-      if (btnDownloadLocSample) {
-        btnDownloadLocSample.addEventListener('click', (e) => {
-          e.preventDefault();
-          this.downloadSampleStorageLocationTemplate();
-        });
-      }
-
-      const btnExportLocs = mount.querySelector('#btn-export-locations');
-      if (btnExportLocs) {
-        btnExportLocs.addEventListener('click', (e) => {
-          e.preventDefault();
-          this.exportStorageLocationsData(session);
-        });
-      }
-
-      const btnClearLocs = mount.querySelector('#btn-clear-locations');
-      if (btnClearLocs) {
-        btnClearLocs.addEventListener('click', (e) => {
-          e.preventDefault();
-          if (confirm('🧹 Are you sure you want to clear all storage locations from local storage?')) {
-            storageLocationRepository.clearAll(session);
-            alert('🧹 All storage locations cleared from local storage!');
-            this.render();
-          }
-        });
-      }
-
-      const btnTriggerImportLocs = mount.querySelector('#btn-trigger-import-locations');
-      const inputImportLocs = mount.querySelector('#file-import-locations');
-      if (btnTriggerImportLocs && inputImportLocs) {
-        btnTriggerImportLocs.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          inputImportLocs.click();
-        });
-        inputImportLocs.addEventListener('change', (e) => {
-          e.preventDefault();
-          if (e.target.files && e.target.files[0]) {
-            this.importStorageLocationsFromFile(e.target.files[0], session);
-            e.target.value = '';
-          }
-        });
-      }
-
-      mount.querySelectorAll('.btn-edit-loc').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          const locId = btn.dataset.id;
-          this.openLocationModal(locId, session);
-        });
-      });
-
-      mount.querySelectorAll('.btn-archive-loc').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          const locId = btn.dataset.id;
-          const locName = btn.dataset.name;
-          if (confirm(`📦 Are you sure you want to archive storage location "${locName}"?`)) {
-            const res = storageLocationRepository.archive(locId, session);
-            if (res.success) {
-              alert(`📦 Storage location "${locName}" archived successfully.`);
-              this.render();
-            } else {
-              alert(res.error || 'Failed to archive location.');
-            }
-          }
-        });
+    }
+    const btnSampleStep4 = mount.querySelector('#btn-download-supplier-sample-step4');
+    if(btnSampleStep4) {
+      btnSampleStep4.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.downloadSampleSupplierTemplate();
       });
     }
 
+    // 2. Export Suppliers Data (CSV)
+    const btnExport = mount.querySelector('#btn-export-suppliers');
+    if(btnExport) {
+      btnExport.addEventListener('click', (e) => {
+        e.preventDefault();
+        this.exportSuppliersData(session);
+      });
+    }
+
+    // 3. Bulk Import Suppliers Trigger Buttons & File Listeners
+    const btnTriggerImport = mount.querySelector('#btn-trigger-import-suppliers');
+    const inputImport = mount.querySelector('#file-import-suppliers');
+    if(btnTriggerImport && inputImport) {
+    btnTriggerImport.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      inputImport.click();
+    });
+    inputImport.addEventListener('change', (e) => {
+      e.preventDefault();
+      if (e.target.files && e.target.files[0]) {
+        this.importSuppliersFromCSV(e.target.files[0], session);
+        e.target.value = '';
+      }
+    });
+  }
+
+  const btnTriggerImportStep4 = mount.querySelector('#btn-trigger-import-suppliers-step4');
+  const inputImportStep4 = mount.querySelector('#file-import-suppliers-step4');
+  if (btnTriggerImportStep4 && inputImportStep4) {
+    btnTriggerImportStep4.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      inputImportStep4.click();
+    });
+    inputImportStep4.addEventListener('change', (e) => {
+      e.preventDefault();
+      if (e.target.files && e.target.files[0]) {
+        this.importSuppliersFromCSV(e.target.files[0], session);
+        e.target.value = '';
+      }
+    });
+  }
+
+  // 4. Add Single Supplier Modal
+  const btnAddSup = mount.querySelector('#btn-add-supplier-modal');
+  if (btnAddSup) {
+    btnAddSup.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.openAddSupplierModal(session);
+    });
+  }
+
+  // 5. Edit Supplier Listeners
+  mount.querySelectorAll('.btn-edit-supplier').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const supId = btn.dataset.id;
+      this.openEditSupplierModal(supId, session);
+    });
+  });
+
+  // 6. Delete Supplier Listeners
+  mount.querySelectorAll('.btn-delete-supplier').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const supId = btn.dataset.id;
+      const supName = btn.dataset.name;
+      if (confirm(`🗑️ Are you sure you want to delete supplier "${supName}" (${supId})?`)) {
+        const list = offlineStore.getCollection('suppliers') || [];
+        const updated = list.filter(s => s.id !== supId && s.supplierCode !== supId);
+        offlineStore.setCollection('suppliers', updated);
+        logAudit(session.employeeName, `Deleted Supplier "${supName}" (${supId})`, session.tenantId);
+        alert(`🗑️ Supplier "${supName}" deleted successfully.`);
+        this.render();
+      }
+    });
+  });
+  mount.querySelectorAll('.btn-edit-cat').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const catId = btn.dataset.id;
+      this.openCategoryModal(catId, session);
+    });
+  });
+
+  mount.querySelectorAll('.btn-archive-cat').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const catId = btn.dataset.id;
+      const catName = btn.dataset.name;
+      if (confirm(`🏷️ Are you sure you want to archive category "${catName}"?`)) {
+        const res = categoryRepository.archive(catId, session);
+        if (res.success) {
+          alert(`🏷️ Category "${catName}" archived successfully.`);
+          this.render();
+        } else {
+          alert(res.error || 'Failed to archive category.');
+        }
+      }
+    });
+  });
+
+  const btnAddCat = mount.querySelector('#btn-add-category-modal');
+  if (btnAddCat) {
+    btnAddCat.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.openCategoryModal(null, session);
+    });
+  }
+
+  // Storage Location Event Listeners
+  const btnAddLoc = mount.querySelector('#btn-add-location-modal');
+  if (btnAddLoc) {
+    btnAddLoc.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.openLocationModal(null, session);
+    });
+  }
+
+  const btnDownloadLocSample = mount.querySelector('#btn-download-location-sample');
+  if (btnDownloadLocSample) {
+    btnDownloadLocSample.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.downloadSampleStorageLocationTemplate();
+    });
+  }
+
+  const btnExportLocs = mount.querySelector('#btn-export-locations');
+  if (btnExportLocs) {
+    btnExportLocs.addEventListener('click', (e) => {
+      e.preventDefault();
+      this.exportStorageLocationsData(session);
+    });
+  }
+
+  const btnClearLocs = mount.querySelector('#btn-clear-locations');
+  if (btnClearLocs) {
+    btnClearLocs.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (confirm('🧹 Are you sure you want to clear all storage locations from local storage?')) {
+        storageLocationRepository.clearAll(session);
+        alert('🧹 All storage locations cleared from local storage!');
+        this.render();
+      }
+    });
+  }
+
+  const btnTriggerImportLocs = mount.querySelector('#btn-trigger-import-locations');
+  const inputImportLocs = mount.querySelector('#file-import-locations');
+  if (btnTriggerImportLocs && inputImportLocs) {
+    btnTriggerImportLocs.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      inputImportLocs.click();
+    });
+    inputImportLocs.addEventListener('change', (e) => {
+      e.preventDefault();
+      if (e.target.files && e.target.files[0]) {
+        this.importStorageLocationsFromFile(e.target.files[0], session);
+        e.target.value = '';
+      }
+    });
+  }
+
+  mount.querySelectorAll('.btn-edit-loc').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const locId = btn.dataset.id;
+      this.openLocationModal(locId, session);
+    });
+  });
+
+  mount.querySelectorAll('.btn-archive-loc').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const locId = btn.dataset.id;
+      const locName = btn.dataset.name;
+      if (confirm(`📦 Are you sure you want to archive storage location "${locName}"?`)) {
+        const res = storageLocationRepository.archive(locId, session);
+        if (res.success) {
+          alert(`📦 Storage location "${locName}" archived successfully.`);
+          this.render();
+        } else {
+          alert(res.error || 'Failed to archive location.');
+        }
+      }
+    });
+  });
+}
+
     renderStorageLocationsTabHTML(locations, session) {
-      const allLocs = storageLocationRepository.getAll(session.tenantId);
-      const activeLocs = allLocs.filter(l => l.status === 'ACTIVE');
-      const topWarehouses = allLocs.filter(l => l.level === 'Warehouse' || !l.parentLocationCode);
-      const isComplete = activeLocs.length > 0;
+  const allLocs = storageLocationRepository.getAll(session.tenantId);
+  const activeLocs = allLocs.filter(l => l.status === 'ACTIVE');
+  const topWarehouses = allLocs.filter(l => l.level === 'Warehouse' || !l.parentLocationCode);
+  const isComplete = activeLocs.length > 0;
 
-      const getChildren = (parentCode) => allLocs.filter(l => l.parentLocationCode === parentCode);
+  const getChildren = (parentCode) => allLocs.filter(l => l.parentLocationCode === parentCode);
 
-      return `
+  return `
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
           <div>
             <h3 style="margin:0;">🏬 Storage & Locations Master (${allLocs.length})</h3>
@@ -5483,8 +6048,8 @@
         <!-- Location Cards & Hierarchical Tree -->
         <div class="flex-col gap-md" style="display:flex; flex-direction:column; gap:16px;">
           ${topWarehouses.map(wh => {
-            const children = getChildren(wh.locationCode);
-            return `
+    const children = getChildren(wh.locationCode);
+    return `
               <div class="card" style="background:var(--bg-surface-2); border-left:4px solid var(--accent-primary); padding:18px;">
                 <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px;">
                   <div>
@@ -5512,8 +6077,8 @@
                   <div style="margin-top:14px; padding-top:12px; border-top:1px dashed var(--border-subtle); display:flex; flex-direction:column; gap:8px;">
                     <div style="font-size:0.72rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">CHILD STORAGE LOCATIONS (${children.length})</div>
                     ${children.map(ch => {
-                      const grandChildren = getChildren(ch.locationCode);
-                      return `
+      const grandChildren = getChildren(ch.locationCode);
+      return `
                         <div style="background:var(--bg-surface-1); padding:12px 14px; border-radius:6px; border-left:3px solid var(--accent-secondary); margin-left:12px;">
                           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
                             <div>
@@ -5547,25 +6112,25 @@
                           ` : ''}
                         </div>
                       `;
-                    }).join('')}
+    }).join('')}
                   </div>
                 ` : ''}
               </div>
             `;
-          }).join('')}
+  }).join('')}
         </div>
       `;
-    }
+}
 
-    openLocationModal(locIdOrObj, session) {
-      const modalMount = this.appEl.querySelector('#modal-container-mount');
-      const allLocs = storageLocationRepository.getAll(session.tenantId);
-      const isEdit = !!locIdOrObj;
-      const loc = isEdit ? (typeof locIdOrObj === 'string' ? storageLocationRepository.getById(locIdOrObj, session.tenantId) : locIdOrObj) : null;
+openLocationModal(locIdOrObj, session) {
+  const modalMount = this.appEl.querySelector('#modal-container-mount');
+  const allLocs = storageLocationRepository.getAll(session.tenantId);
+  const isEdit = !!locIdOrObj;
+  const loc = isEdit ? (typeof locIdOrObj === 'string' ? storageLocationRepository.getById(locIdOrObj, session.tenantId) : locIdOrObj) : null;
 
-      const modal = document.createElement('div');
-      modal.className = 'lock-screen-overlay animate-fade-in';
-      modal.innerHTML = `
+  const modal = document.createElement('div');
+  modal.className = 'lock-screen-overlay animate-fade-in';
+  modal.innerHTML = `
         <div class="card modal-card" style="background:var(--bg-surface-1); padding:24px; width:min(850px, 95vw); max-height:90vh; overflow-y:auto;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
             <h3 style="margin:0;">${isEdit ? '✏️ Edit Storage Location' : '🏬 + Add Storage Location'}</h3>
@@ -5646,14 +6211,14 @@
               <legend style="font-weight:700; font-size:0.85rem; padding:0 6px; color:var(--accent-primary);">3. Allowed Storage Purpose</legend>
               <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:8px; font-size:0.8rem;">
                 ${['Raw Materials', 'Semi-Finished', 'Finished Goods', 'Beverages', 'Packaging', 'Consumables', 'Cleaning Supplies', 'Assets', 'Mixed'].map(p => {
-                  const checked = loc ? (loc.purposes || []).includes(p) : (p === 'Raw Materials');
-                  return `
+    const checked = loc ? (loc.purposes || []).includes(p) : (p === 'Raw Materials');
+    return `
                     <label style="display:flex; align-items:center; gap:6px;">
                       <input type="checkbox" class="chk-loc-purpose" value="${p}" ${checked ? 'checked' : ''}>
                       <span>${p}</span>
                     </label>
                   `;
-                }).join('')}
+  }).join('')}
               </div>
             </fieldset>
 
@@ -5685,22 +6250,22 @@
               <legend style="font-weight:700; font-size:0.85rem; padding:0 6px; color:var(--accent-primary);">5. Operational Permissions</legend>
               <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:8px; font-size:0.8rem;">
                 ${[
-                  { id: 'perm-rec', key: 'receive', label: 'Receive Stock' },
-                  { id: 'perm-tr-in', key: 'transferIn', label: 'Transfer In' },
-                  { id: 'perm-tr-out', key: 'transferOut', label: 'Transfer Out' },
-                  { id: 'perm-issue', key: 'issue', label: 'Issue to Workspace' },
-                  { id: 'perm-prod', key: 'production', label: 'Production Consumption' },
-                  { id: 'perm-count', key: 'count', label: 'Stock Count' },
-                  { id: 'perm-adj', key: 'adjustment', label: 'Stock Adjustment' }
-                ].map(item => {
-                  const checked = loc && loc.permissions ? !!loc.permissions[item.key] : (item.key !== 'production');
-                  return `
+      { id: 'perm-rec', key: 'receive', label: 'Receive Stock' },
+      { id: 'perm-tr-in', key: 'transferIn', label: 'Transfer In' },
+      { id: 'perm-tr-out', key: 'transferOut', label: 'Transfer Out' },
+      { id: 'perm-issue', key: 'issue', label: 'Issue to Workspace' },
+      { id: 'perm-prod', key: 'production', label: 'Production Consumption' },
+      { id: 'perm-count', key: 'count', label: 'Stock Count' },
+      { id: 'perm-adj', key: 'adjustment', label: 'Stock Adjustment' }
+    ].map(item => {
+      const checked = loc && loc.permissions ? !!loc.permissions[item.key] : (item.key !== 'production');
+      return `
                     <label style="display:flex; align-items:center; gap:6px;">
                       <input type="checkbox" id="${item.id}" data-key="${item.key}" ${checked ? 'checked' : ''}>
                       <span>${item.label}</span>
                     </label>
                   `;
-                }).join('')}
+    }).join('')}
               </div>
             </fieldset>
 
@@ -5768,75 +6333,75 @@
           </form>
         </div>
       `;
-      modalMount.appendChild(modal);
+  modalMount.appendChild(modal);
 
-      modal.querySelector('#btn-cancel-loc-modal').addEventListener('click', () => { modalMount.innerHTML = ''; });
-      modal.querySelector('#form-location-modal').addEventListener('submit', (e) => {
-        e.preventDefault();
-        const locationCode = modal.querySelector('#inp-loc-code').value.trim();
-        const locationName = modal.querySelector('#inp-loc-name').value.trim();
-        const shortName = modal.querySelector('#inp-loc-short').value.trim();
-        const locationType = modal.querySelector('#sel-loc-type').value;
-        const status = modal.querySelector('#sel-loc-status').value;
-        const description = modal.querySelector('#inp-loc-desc').value.trim();
-        const level = modal.querySelector('#sel-loc-level').value;
-        const parentLocationCode = modal.querySelector('#sel-loc-parent').value;
+  modal.querySelector('#btn-cancel-loc-modal').addEventListener('click', () => { modalMount.innerHTML = ''; });
+  modal.querySelector('#form-location-modal').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const locationCode = modal.querySelector('#inp-loc-code').value.trim();
+    const locationName = modal.querySelector('#inp-loc-name').value.trim();
+    const shortName = modal.querySelector('#inp-loc-short').value.trim();
+    const locationType = modal.querySelector('#sel-loc-type').value;
+    const status = modal.querySelector('#sel-loc-status').value;
+    const description = modal.querySelector('#inp-loc-desc').value.trim();
+    const level = modal.querySelector('#sel-loc-level').value;
+    const parentLocationCode = modal.querySelector('#sel-loc-parent').value;
 
-        const purposes = Array.from(modal.querySelectorAll('.chk-loc-purpose:checked')).map(cb => cb.value);
-        const condition = modal.querySelector('#sel-loc-cond').value;
-        const tempMinVal = modal.querySelector('#inp-loc-tmin').value;
-        const tempMaxVal = modal.querySelector('#inp-loc-tmax').value;
-        const tempMin = tempMinVal !== '' ? parseFloat(tempMinVal) : null;
-        const tempMax = tempMaxVal !== '' ? parseFloat(tempMaxVal) : null;
+    const purposes = Array.from(modal.querySelectorAll('.chk-loc-purpose:checked')).map(cb => cb.value);
+    const condition = modal.querySelector('#sel-loc-cond').value;
+    const tempMinVal = modal.querySelector('#inp-loc-tmin').value;
+    const tempMaxVal = modal.querySelector('#inp-loc-tmax').value;
+    const tempMin = tempMinVal !== '' ? parseFloat(tempMinVal) : null;
+    const tempMax = tempMaxVal !== '' ? parseFloat(tempMaxVal) : null;
 
-        const permissions = {
-          receive: modal.querySelector('#perm-rec').checked,
-          transferIn: modal.querySelector('#perm-tr-in').checked,
-          transferOut: modal.querySelector('#perm-tr-out').checked,
-          issue: modal.querySelector('#perm-issue').checked,
-          production: modal.querySelector('#perm-prod').checked,
-          count: modal.querySelector('#perm-count').checked,
-          adjustment: modal.querySelector('#perm-adj').checked
-        };
+    const permissions = {
+      receive: modal.querySelector('#perm-rec').checked,
+      transferIn: modal.querySelector('#perm-tr-in').checked,
+      transferOut: modal.querySelector('#perm-tr-out').checked,
+      issue: modal.querySelector('#perm-issue').checked,
+      production: modal.querySelector('#perm-prod').checked,
+      count: modal.querySelector('#perm-count').checked,
+      adjustment: modal.querySelector('#perm-adj').checked
+    };
 
-        const responsibleWorkspace = modal.querySelector('#sel-loc-workspace').value;
-        const responsibleManager = modal.querySelector('#inp-loc-manager').value.trim();
-        const restrictedAccess = modal.querySelector('#chk-loc-restricted').checked;
-        const foodStorage = modal.querySelector('#chk-loc-food').checked;
-        const alcoholStorage = modal.querySelector('#chk-loc-alcohol').checked;
+    const responsibleWorkspace = modal.querySelector('#sel-loc-workspace').value;
+    const responsibleManager = modal.querySelector('#inp-loc-manager').value.trim();
+    const restrictedAccess = modal.querySelector('#chk-loc-restricted').checked;
+    const foodStorage = modal.querySelector('#chk-loc-food').checked;
+    const alcoholStorage = modal.querySelector('#chk-loc-alcohol').checked;
 
-        const building = modal.querySelector('#inp-loc-bldg').value.trim();
-        const floor = modal.querySelector('#inp-loc-floor').value.trim();
-        const room = modal.querySelector('#inp-loc-room').value.trim();
-        const notes = modal.querySelector('#inp-loc-notes').value.trim();
+    const building = modal.querySelector('#inp-loc-bldg').value.trim();
+    const floor = modal.querySelector('#inp-loc-floor').value.trim();
+    const room = modal.querySelector('#inp-loc-room').value.trim();
+    const notes = modal.querySelector('#inp-loc-notes').value.trim();
 
-        if (!locationCode || !locationName) {
-          alert('❌ Please enter required Location Code and Location Name.');
-          return;
-        }
-
-        const dataObj = {
-          locationCode, locationName, shortName, locationType, status, description,
-          level, parentLocationCode, purposes, condition, tempMin, tempMax,
-          permissions, responsibleWorkspace, responsibleManager, restrictedAccess,
-          foodStorage, alcoholStorage, building, floor, room, notes
-        };
-
-        if (isEdit) {
-          storageLocationRepository.update(loc.id, dataObj, session);
-          alert(`✔ Storage Location "${locationName}" updated!`);
-        } else {
-          storageLocationRepository.create(dataObj, session);
-          alert(`✨ Storage Location "${locationName}" created!`);
-        }
-
-        modalMount.innerHTML = '';
-        this.render();
-      });
+    if (!locationCode || !locationName) {
+      alert('❌ Please enter required Location Code and Location Name.');
+      return;
     }
 
-    downloadSampleStorageLocationTemplate() {
-      const csvContent = `Location Code,Location Name,Short Name,Location Type,Location Level,Parent Code,Purpose,Condition,Min Temp,Max Temp,Owner Workspace,Owner Manager,Building,Floor,Room,Notes
+    const dataObj = {
+      locationCode, locationName, shortName, locationType, status, description,
+      level, parentLocationCode, purposes, condition, tempMin, tempMax,
+      permissions, responsibleWorkspace, responsibleManager, restrictedAccess,
+      foodStorage, alcoholStorage, building, floor, room, notes
+    };
+
+    if (isEdit) {
+      storageLocationRepository.update(loc.id, dataObj, session);
+      alert(`✔ Storage Location "${locationName}" updated!`);
+    } else {
+      storageLocationRepository.create(dataObj, session);
+      alert(`✨ Storage Location "${locationName}" created!`);
+    }
+
+    modalMount.innerHTML = '';
+    this.render();
+  });
+}
+
+downloadSampleStorageLocationTemplate() {
+  const csvContent = `Location Code,Location Name,Short Name,Location Type,Location Level,Parent Code,Purpose,Condition,Min Temp,Max Temp,Owner Workspace,Owner Manager,Building,Floor,Room,Notes
 LOC-MWH,Main Warehouse,MWH,Warehouse,Warehouse,,Raw Materials;Packaging,Ambient,18,30,inventory,Inventory Manager,Main Building,Ground Floor,BOH-01,Central receiving warehouse
 LOC-DRY,Dry Store,DRY,Store,Store,LOC-MWH,Raw Materials,Ambient,20,28,inventory,Inventory Manager,Main Building,Ground Floor,BOH-02,Dry food items & spices
 LOC-CHILL,Walk-in Chiller,CHILL,Chiller,Store,LOC-MWH,Raw Materials;Semi-Finished,Chilled,0,5,inventory,Inventory Manager,Main Building,Ground Floor,BOH-03,Dairy & meat cold room
@@ -5844,187 +6409,161 @@ LOC-FREEZE,Deep Freezer,FREEZE,Freezer,Store,LOC-MWH,Raw Materials,Frozen,-24,-1
 LOC-KITCHEN,Kitchen Store,KITCHEN,Kitchen Store,Store,LOC-MWH,Raw Materials;Semi-Finished,Ambient,,,kitchen,Head Chef,Main Building,Ground Floor,Kitchen Line,Line prep store
 LOC-BAR,Bar Store,BAR,Bar Store,Store,LOC-MWH,Beverages,Ambient,,,bar,Bar Manager,Main Building,Ground Floor,Bar Counter,Liquor & mixer store`;
 
-      const encodedUri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent);
-      const link = document.createElement('a');
-      link.setAttribute('href', encodedUri);
-      link.setAttribute('download', 'Sample_Storage_Locations_Template.csv');
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+  const encodedUri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent);
+  const link = document.createElement('a');
+  link.setAttribute('href', encodedUri);
+  link.setAttribute('download', 'Sample_Storage_Locations_Template.csv');
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+exportStorageLocationsData(session) {
+  const locations = storageLocationRepository.getAll(session.tenantId) || [];
+  if (!locations.length) {
+    alert('No storage locations available to export.');
+    return;
+  }
+  const headers = ['Location Code', 'Location Name', 'Short Name', 'Location Type', 'Location Level', 'Parent Code', 'Path', 'Purpose', 'Condition', 'Min Temp', 'Max Temp', 'Owner Workspace', 'Owner Manager', 'Status'];
+  const rows = locations.map(l => [
+    `"${(l.locationCode || '').replace(/"/g, '""')}"`,
+    `"${(l.locationName || '').replace(/"/g, '""')}"`,
+    `"${(l.shortName || '').replace(/"/g, '""')}"`,
+    `"${(l.locationType || 'Store').replace(/"/g, '""')}"`,
+    `"${(l.level || 'Store').replace(/"/g, '""')}"`,
+    `"${(l.parentLocationCode || '').replace(/"/g, '""')}"`,
+    `"${(l.path || l.locationCode || '').replace(/"/g, '""')}"`,
+    `"${((l.purposes || []).join(';')).replace(/"/g, '""')}"`,
+    `"${(l.condition || 'Ambient').replace(/"/g, '""')}"`,
+    `"${l.tempMin !== null && l.tempMin !== undefined ? l.tempMin : ''}"`,
+    `"${l.tempMax !== null && l.tempMax !== undefined ? l.tempMax : ''}"`,
+    `"${(l.responsibleWorkspace || 'inventory').replace(/"/g, '""')}"`,
+    `"${(l.responsibleManager || 'Inventory Manager').replace(/"/g, '""')}"`,
+    `"${(l.status || 'ACTIVE').replace(/"/g, '""')}"`
+  ]);
+
+  const csvString = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const encodedUri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvString);
+  const link = document.createElement('a');
+  link.setAttribute('href', encodedUri);
+  link.setAttribute('download', `Storage_Locations_Export_${session.tenantId || 'Master'}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+importStorageLocationsFromFile(file, session) {
+  if (!file) return;
+
+  const sanitizeStr = (str) => {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/^\uFEFF/, '')
+      .replace(/[\x00-\x1F\x7F-\x9F]/g, '')
+      .trim()
+      .replace(/^"+|"+$/g, '');
+  };
+
+  const parseRowsAndImport = (rows) => {
+    if (!rows || rows.length < 2) {
+      alert('❌ File must contain a header row and at least one storage location row.');
+      return;
     }
 
-    exportStorageLocationsData(session) {
-      const locations = storageLocationRepository.getAll(session.tenantId) || [];
-      if (!locations.length) {
-        alert('No storage locations available to export.');
-        return;
-      }
-      const headers = ['Location Code', 'Location Name', 'Short Name', 'Location Type', 'Location Level', 'Parent Code', 'Path', 'Purpose', 'Condition', 'Min Temp', 'Max Temp', 'Owner Workspace', 'Owner Manager', 'Status'];
-      const rows = locations.map(l => [
-        `"${(l.locationCode || '').replace(/"/g, '""')}"`,
-        `"${(l.locationName || '').replace(/"/g, '""')}"`,
-        `"${(l.shortName || '').replace(/"/g, '""')}"`,
-        `"${(l.locationType || 'Store').replace(/"/g, '""')}"`,
-        `"${(l.level || 'Store').replace(/"/g, '""')}"`,
-        `"${(l.parentLocationCode || '').replace(/"/g, '""')}"`,
-        `"${(l.path || l.locationCode || '').replace(/"/g, '""')}"`,
-        `"${((l.purposes || []).join(';')).replace(/"/g, '""')}"`,
-        `"${(l.condition || 'Ambient').replace(/"/g, '""')}"`,
-        `"${l.tempMin !== null && l.tempMin !== undefined ? l.tempMin : ''}"`,
-        `"${l.tempMax !== null && l.tempMax !== undefined ? l.tempMax : ''}"`,
-        `"${(l.responsibleWorkspace || 'inventory').replace(/"/g, '""')}"`,
-        `"${(l.responsibleManager || 'Inventory Manager').replace(/"/g, '""')}"`,
-        `"${(l.status || 'ACTIVE').replace(/"/g, '""')}"`
-      ]);
+    const rawHeaders = rows[0].map(h => sanitizeStr(h));
+    const headers = rawHeaders.map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
 
-      const csvString = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-      const encodedUri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvString);
-      const link = document.createElement('a');
-      link.setAttribute('href', encodedUri);
-      link.setAttribute('download', `Storage_Locations_Export_${session.tenantId || 'Master'}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+    const getIndex = (possibleKeys) => headers.findIndex(h => possibleKeys.includes(h));
+
+    const codeIdx = getIndex(['locationcode', 'code', 'loccode', 'id']);
+    const nameIdx = getIndex(['locationname', 'name', 'locname', 'storagename']);
+    const shortIdx = getIndex(['shortname', 'abbr', 'alias']);
+    const typeIdx = getIndex(['locationtype', 'type', 'storagetype']);
+    const levelIdx = getIndex(['locationlevel', 'level']);
+    const parentIdx = getIndex(['parentcode', 'parentlocationcode', 'parent']);
+    const purposeIdx = getIndex(['purpose', 'purposes', 'storagepurpose']);
+    const conditionIdx = getIndex(['condition', 'storagecondition']);
+    const tminIdx = getIndex(['mintemp', 'tempmin', 'minimumtemperature']);
+    const tmaxIdx = getIndex(['maxtemp', 'tempmax', 'maximumtemperature']);
+    const wrkIdx = getIndex(['ownerworkspace', 'responsibleworkspace', 'workspace']);
+    const mgrIdx = getIndex(['ownermanager', 'responsiblemanager', 'manager']);
+    const bldgIdx = getIndex(['building']);
+    const floorIdx = getIndex(['floor']);
+    const roomIdx = getIndex(['room']);
+    const notesIdx = getIndex(['notes', 'description']);
+
+    const parsedLocs = [];
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row || row.length === 0 || !row.some(c => String(c).trim().length > 0)) continue;
+
+      const name = sanitizeStr(nameIdx !== -1 ? row[nameIdx] : (row[1] || row[0]));
+      if (!name) continue;
+
+      const locationCode = sanitizeStr(codeIdx !== -1 && row[codeIdx] ? row[codeIdx] : ('LOC-' + Math.floor(100 + Math.random() * 900)));
+      const shortName = sanitizeStr(shortIdx !== -1 ? row[shortIdx] : '');
+      const locationType = sanitizeStr(typeIdx !== -1 ? row[typeIdx] : 'Store');
+      const level = sanitizeStr(levelIdx !== -1 ? row[levelIdx] : 'Store');
+      const parentLocationCode = sanitizeStr(parentIdx !== -1 ? row[parentIdx] : '');
+      const purposeStr = sanitizeStr(purposeIdx !== -1 ? row[purposeIdx] : 'Raw Materials');
+      const purposes = purposeStr ? purposeStr.split(/;|\||,/).map(p => p.trim()).filter(Boolean) : ['Raw Materials'];
+      const condition = sanitizeStr(conditionIdx !== -1 ? row[conditionIdx] : 'Ambient');
+      const tminVal = sanitizeStr(tminIdx !== -1 ? row[tminIdx] : '');
+      const tmaxVal = sanitizeStr(tmaxIdx !== -1 ? row[tmaxIdx] : '');
+      const tempMin = tminVal !== '' ? parseFloat(tminVal) : null;
+      const tempMax = tmaxVal !== '' ? parseFloat(tmaxVal) : null;
+      const responsibleWorkspace = sanitizeStr(wrkIdx !== -1 ? row[wrkIdx] : 'inventory');
+      const responsibleManager = sanitizeStr(mgrIdx !== -1 ? row[mgrIdx] : 'Inventory Manager');
+      const building = sanitizeStr(bldgIdx !== -1 ? row[bldgIdx] : '');
+      const floor = sanitizeStr(floorIdx !== -1 ? row[floorIdx] : '');
+      const room = sanitizeStr(roomIdx !== -1 ? row[roomIdx] : '');
+      const notes = sanitizeStr(notesIdx !== -1 ? row[notesIdx] : '');
+
+      parsedLocs.push({
+        locationCode,
+        locationName: name,
+        shortName,
+        locationType: locationType || 'Store',
+        level: level || 'Store',
+        parentLocationCode,
+        purposes: purposes.length > 0 ? purposes : ['Raw Materials'],
+        condition: condition || 'Ambient',
+        tempMin,
+        tempMax,
+        responsibleWorkspace: responsibleWorkspace || 'inventory',
+        responsibleManager: responsibleManager || 'Inventory Manager',
+        building,
+        floor,
+        room,
+        notes,
+        status: 'ACTIVE'
+      });
     }
 
-    importStorageLocationsFromFile(file, session) {
-      if (!file) return;
+    if (parsedLocs.length === 0) {
+      alert('❌ No valid storage location records found in file.');
+      return;
+    }
 
-      const sanitizeStr = (str) => {
-        if (str === null || str === undefined) return '';
-        return String(str)
-          .replace(/^\uFEFF/, '')
-          .replace(/[\x00-\x1F\x7F-\x9F]/g, '')
-          .trim()
-          .replace(/^"+|"+$/g, '');
-      };
+    this.openLocationImportConfirmationModal(parsedLocs, file.name, session);
+  };
 
-      const parseRowsAndImport = (rows) => {
-        if (!rows || rows.length < 2) {
-          alert('❌ File must contain a header row and at least one storage location row.');
-          return;
-        }
+  const fileName = file.name.toLowerCase();
+  const isExcelFile = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
 
-        const rawHeaders = rows[0].map(h => sanitizeStr(h));
-        const headers = rawHeaders.map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
-
-        const getIndex = (possibleKeys) => headers.findIndex(h => possibleKeys.includes(h));
-
-        const codeIdx = getIndex(['locationcode', 'code', 'loccode', 'id']);
-        const nameIdx = getIndex(['locationname', 'name', 'locname', 'storagename']);
-        const shortIdx = getIndex(['shortname', 'abbr', 'alias']);
-        const typeIdx = getIndex(['locationtype', 'type', 'storagetype']);
-        const levelIdx = getIndex(['locationlevel', 'level']);
-        const parentIdx = getIndex(['parentcode', 'parentlocationcode', 'parent']);
-        const purposeIdx = getIndex(['purpose', 'purposes', 'storagepurpose']);
-        const conditionIdx = getIndex(['condition', 'storagecondition']);
-        const tminIdx = getIndex(['mintemp', 'tempmin', 'minimumtemperature']);
-        const tmaxIdx = getIndex(['maxtemp', 'tempmax', 'maximumtemperature']);
-        const wrkIdx = getIndex(['ownerworkspace', 'responsibleworkspace', 'workspace']);
-        const mgrIdx = getIndex(['ownermanager', 'responsiblemanager', 'manager']);
-        const bldgIdx = getIndex(['building']);
-        const floorIdx = getIndex(['floor']);
-        const roomIdx = getIndex(['room']);
-        const notesIdx = getIndex(['notes', 'description']);
-
-        const parsedLocs = [];
-        for (let i = 1; i < rows.length; i++) {
-          const row = rows[i];
-          if (!row || row.length === 0 || !row.some(c => String(c).trim().length > 0)) continue;
-
-          const name = sanitizeStr(nameIdx !== -1 ? row[nameIdx] : (row[1] || row[0]));
-          if (!name) continue;
-
-          const locationCode = sanitizeStr(codeIdx !== -1 && row[codeIdx] ? row[codeIdx] : ('LOC-' + Math.floor(100 + Math.random() * 900)));
-          const shortName = sanitizeStr(shortIdx !== -1 ? row[shortIdx] : '');
-          const locationType = sanitizeStr(typeIdx !== -1 ? row[typeIdx] : 'Store');
-          const level = sanitizeStr(levelIdx !== -1 ? row[levelIdx] : 'Store');
-          const parentLocationCode = sanitizeStr(parentIdx !== -1 ? row[parentIdx] : '');
-          const purposeStr = sanitizeStr(purposeIdx !== -1 ? row[purposeIdx] : 'Raw Materials');
-          const purposes = purposeStr ? purposeStr.split(/;|\||,/).map(p => p.trim()).filter(Boolean) : ['Raw Materials'];
-          const condition = sanitizeStr(conditionIdx !== -1 ? row[conditionIdx] : 'Ambient');
-          const tminVal = sanitizeStr(tminIdx !== -1 ? row[tminIdx] : '');
-          const tmaxVal = sanitizeStr(tmaxIdx !== -1 ? row[tmaxIdx] : '');
-          const tempMin = tminVal !== '' ? parseFloat(tminVal) : null;
-          const tempMax = tmaxVal !== '' ? parseFloat(tmaxVal) : null;
-          const responsibleWorkspace = sanitizeStr(wrkIdx !== -1 ? row[wrkIdx] : 'inventory');
-          const responsibleManager = sanitizeStr(mgrIdx !== -1 ? row[mgrIdx] : 'Inventory Manager');
-          const building = sanitizeStr(bldgIdx !== -1 ? row[bldgIdx] : '');
-          const floor = sanitizeStr(floorIdx !== -1 ? row[floorIdx] : '');
-          const room = sanitizeStr(roomIdx !== -1 ? row[roomIdx] : '');
-          const notes = sanitizeStr(notesIdx !== -1 ? row[notesIdx] : '');
-
-          parsedLocs.push({
-            locationCode,
-            locationName: name,
-            shortName,
-            locationType: locationType || 'Store',
-            level: level || 'Store',
-            parentLocationCode,
-            purposes: purposes.length > 0 ? purposes : ['Raw Materials'],
-            condition: condition || 'Ambient',
-            tempMin,
-            tempMax,
-            responsibleWorkspace: responsibleWorkspace || 'inventory',
-            responsibleManager: responsibleManager || 'Inventory Manager',
-            building,
-            floor,
-            room,
-            notes,
-            status: 'ACTIVE'
-          });
-        }
-
-        if (parsedLocs.length === 0) {
-          alert('❌ No valid storage location records found in file.');
-          return;
-        }
-
-        this.openLocationImportConfirmationModal(parsedLocs, file.name, session);
-      };
-
-      const fileName = file.name.toLowerCase();
-      const isExcelFile = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
-
-      if (isExcelFile || typeof XLSX !== 'undefined') {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          try {
-            const data = new Uint8Array(e.target.result);
-            if (window.XLSX) {
-              const workbook = XLSX.read(data, { type: 'array' });
-              const firstSheetName = workbook.SheetNames[0];
-              const worksheet = workbook.Sheets[firstSheetName];
-              const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, defval: '' });
-              parseRowsAndImport(rows);
-            } else {
-              const text = new TextDecoder('utf-8').decode(data);
-              const lines = text.split(/\r\n|\n/).map(l => l.trim()).filter(l => l.length > 0);
-              const parseCSVLine = (line) => {
-                const result = [];
-                let current = '';
-                let inQuotes = false;
-                for (let i = 0; i < line.length; i++) {
-                  const char = line[i];
-                  if (char === '"') inQuotes = !inQuotes;
-                  else if ((char === ',' || char === '\t' || char === ';') && !inQuotes) { result.push(current); current = ''; }
-                  else current += char;
-                }
-                result.push(current);
-                return result;
-              };
-              parseRowsAndImport(lines.map(l => parseCSVLine(l)));
-            }
-          } catch (err) {
-            console.error('Failed to parse Excel file:', err);
-            alert('❌ Unable to parse Excel file. Please save as CSV format (.csv) and re-upload.');
-          }
-        };
-        reader.readAsArrayBuffer(file);
-      } else {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const text = e.target.result;
+  if (isExcelFile || typeof XLSX !== 'undefined') {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        if (window.XLSX) {
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, defval: '' });
+          parseRowsAndImport(rows);
+        } else {
+          const text = new TextDecoder('utf-8').decode(data);
           const lines = text.split(/\r\n|\n/).map(l => l.trim()).filter(l => l.length > 0);
           const parseCSVLine = (line) => {
             const result = [];
@@ -6040,16 +6579,42 @@ LOC-BAR,Bar Store,BAR,Bar Store,Store,LOC-MWH,Beverages,Ambient,,,bar,Bar Manage
             return result;
           };
           parseRowsAndImport(lines.map(l => parseCSVLine(l)));
-        };
-        reader.readAsText(file);
+        }
+      } catch (err) {
+        console.error('Failed to parse Excel file:', err);
+        alert('❌ Unable to parse Excel file. Please save as CSV format (.csv) and re-upload.');
       }
-    }
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target.result;
+      const lines = text.split(/\r\n|\n/).map(l => l.trim()).filter(l => l.length > 0);
+      const parseCSVLine = (line) => {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"') inQuotes = !inQuotes;
+          else if ((char === ',' || char === '\t' || char === ';') && !inQuotes) { result.push(current); current = ''; }
+          else current += char;
+        }
+        result.push(current);
+        return result;
+      };
+      parseRowsAndImport(lines.map(l => parseCSVLine(l)));
+    };
+    reader.readAsText(file);
+  }
+}
 
-    openLocationImportConfirmationModal(parsedLocations, fileName, session) {
-      const modalMount = this.appEl.querySelector('#modal-container-mount');
-      const modal = document.createElement('div');
-      modal.className = 'lock-screen-overlay animate-fade-in';
-      modal.innerHTML = `
+openLocationImportConfirmationModal(parsedLocations, fileName, session) {
+  const modalMount = this.appEl.querySelector('#modal-container-mount');
+  const modal = document.createElement('div');
+  modal.className = 'lock-screen-overlay animate-fade-in';
+  modal.innerHTML = `
         <div class="card modal-card" style="background:var(--bg-surface-1); padding:24px; width:min(900px, 95vw);">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
             <div>
@@ -6100,192 +6665,166 @@ LOC-BAR,Bar Store,BAR,Bar Store,Store,LOC-MWH,Beverages,Ambient,,,bar,Bar Manage
           </div>
         </div>
       `;
-      modalMount.appendChild(modal);
+  modalMount.appendChild(modal);
 
-      modal.querySelector('#btn-cancel-loc-import').addEventListener('click', () => { modalMount.innerHTML = ''; });
-      modal.querySelector('#btn-confirm-loc-import').addEventListener('click', () => {
-        parsedLocations.forEach(loc => {
-          storageLocationRepository.create(loc, session);
-        });
-        modalMount.innerHTML = '';
-        alert(`🎉 Successfully imported ${parsedLocations.length} storage locations!`);
-        this.render();
-      });
-    }
+  modal.querySelector('#btn-cancel-loc-import').addEventListener('click', () => { modalMount.innerHTML = ''; });
+  modal.querySelector('#btn-confirm-loc-import').addEventListener('click', () => {
+    parsedLocations.forEach(loc => {
+      storageLocationRepository.create(loc, session);
+    });
+    modalMount.innerHTML = '';
+    alert(`🎉 Successfully imported ${parsedLocations.length} storage locations!`);
+    this.render();
+  });
+}
 
-    downloadSampleSupplierTemplate() {
-      const csvContent = `Supplier Code,Supplier Name,Primary Contact,Phone,Email,GSTIN,FSSAI License,Payment Terms,Address
+downloadSampleSupplierTemplate() {
+  const csvContent = `Supplier Code,Supplier Name,Primary Contact,Phone,Email,GSTIN,FSSAI License,Payment Terms,Address
 SUP-101,Fresh Farm Produce Pvt Ltd,Ramesh Kumar,+91 9876543210,orders@freshfarm.com,27AAAAA1234A1Z5,10012022000123,NET30,Plot 42 APMC Market Vashi Navi Mumbai
 SUP-102,Apex Dairy & Poultry Traders,Sunil Sharma,+91 9812345678,sales@apexdairy.com,27BBBBA5678B1Z2,10015022000456,NET15,Gala 15 Industrial Estate Thane
 SUP-103,Royal Spice & Grocery Supplies,Anita Verma,+91 9765432109,info@royalspice.in,27CCCCA9876C1Z9,10018022000789,COD,88 Grain Merchant Street Crawford Market Mumbai
 SUP-104,Ocean Harvest Seafood Co,David Dsouza,+91 9823456789,fresh@oceanharvest.com,27DDDDA4321D1Z8,10019022000890,NET7,Sassoon Dock Colaba Mumbai
 SUP-105,Beverage World Supplies,Vikram Mehta,+91 9898989898,supply@beverageworld.com,27EEEEA8765E1Z4,10020022000999,NET30,Andheri MIDC Mumbai`;
 
-      const encodedUri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent);
-      const link = document.createElement('a');
-      link.setAttribute('href', encodedUri);
-      link.setAttribute('download', 'Sample_Suppliers_Template.csv');
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+  const encodedUri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvContent);
+  const link = document.createElement('a');
+  link.setAttribute('href', encodedUri);
+  link.setAttribute('download', 'Sample_Suppliers_Template.csv');
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+exportSuppliersData(session) {
+  const suppliers = supplierRepository.getAll(session.tenantId) || [];
+  if (!suppliers.length) {
+    alert('No suppliers available to export.');
+    return;
+  }
+  const headers = ['Supplier Code', 'Supplier Name', 'Primary Contact', 'Phone', 'Email', 'GSTIN', 'FSSAI License', 'Payment Terms', 'Address', 'Status'];
+  const rows = suppliers.map(s => [
+    `"${(s.supplierCode || '').replace(/"/g, '""')}"`,
+    `"${(s.supplierName || '').replace(/"/g, '""')}"`,
+    `"${(s.primaryContact || '').replace(/"/g, '""')}"`,
+    `"${(s.phone || '').replace(/"/g, '""')}"`,
+    `"${(s.email || '').replace(/"/g, '""')}"`,
+    `"${(s.gstin || '').replace(/"/g, '""')}"`,
+    `"${(s.fssaiLicense || '').replace(/"/g, '""')}"`,
+    `"${(s.paymentTerms || 'NET30').replace(/"/g, '""')}"`,
+    `"${(s.address || '').replace(/"/g, '""')}"`,
+    `"${(s.status || 'ACTIVE').replace(/"/g, '""')}"`
+  ]);
+
+  const csvString = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+  const encodedUri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvString);
+  const link = document.createElement('a');
+  link.setAttribute('href', encodedUri);
+  link.setAttribute('download', `Suppliers_Export_${session.tenantId || 'Master'}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+importSuppliersFromCSV(file, session) {
+  if (!file) return;
+
+  const sanitizeStr = (str) => {
+    if (str === null || str === undefined) return '';
+    let s = String(str)
+      .replace(/^\uFEFF/, '') // Remove UTF-8 BOM
+      .replace(/[\x00-\x1F\x7F-\x9F]/g, '') // Remove control characters
+      .trim()
+      .replace(/^"+|"+$/g, ''); // Remove surrounding quotes
+
+    // Normalize scientific notation (e.g. 1.0012E+13 or 1.0012e+13)
+    if (/^\d+(\.\d+)?[eE]\+\d+$/i.test(s)) {
+      try {
+        const num = Number(s);
+        if (!isNaN(num)) {
+          s = BigInt(Math.round(num)).toString();
+        }
+      } catch (e) { }
+    }
+    return s;
+  };
+
+  const parseRowsAndImport = (rows) => {
+    if (!rows || rows.length < 2) {
+      alert('❌ File must contain a header row and at least one supplier data row.');
+      return;
     }
 
-    exportSuppliersData(session) {
-      const suppliers = supplierRepository.getAll(session.tenantId) || [];
-      if (!suppliers.length) {
-        alert('No suppliers available to export.');
-        return;
-      }
-      const headers = ['Supplier Code', 'Supplier Name', 'Primary Contact', 'Phone', 'Email', 'GSTIN', 'FSSAI License', 'Payment Terms', 'Address', 'Status'];
-      const rows = suppliers.map(s => [
-        `"${(s.supplierCode || '').replace(/"/g, '""')}"`,
-        `"${(s.supplierName || '').replace(/"/g, '""')}"`,
-        `"${(s.primaryContact || '').replace(/"/g, '""')}"`,
-        `"${(s.phone || '').replace(/"/g, '""')}"`,
-        `"${(s.email || '').replace(/"/g, '""')}"`,
-        `"${(s.gstin || '').replace(/"/g, '""')}"`,
-        `"${(s.fssaiLicense || '').replace(/"/g, '""')}"`,
-        `"${(s.paymentTerms || 'NET30').replace(/"/g, '""')}"`,
-        `"${(s.address || '').replace(/"/g, '""')}"`,
-        `"${(s.status || 'ACTIVE').replace(/"/g, '""')}"`
-      ]);
+    const rawHeaders = rows[0].map(h => sanitizeStr(h));
+    const headers = rawHeaders.map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
 
-      const csvString = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
-      const encodedUri = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csvString);
-      const link = document.createElement('a');
-      link.setAttribute('href', encodedUri);
-      link.setAttribute('download', `Suppliers_Export_${session.tenantId || 'Master'}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+    const getIndex = (possibleKeys) => headers.findIndex(h => possibleKeys.includes(h));
+
+    const codeIdx = getIndex(['suppliercode', 'code', 'supplierid', 'id']);
+    const nameIdx = getIndex(['suppliername', 'name', 'company', 'companyname', 'supplier']);
+    const contactIdx = getIndex(['primarycontact', 'contact', 'contactperson', 'person', 'contactname']);
+    const phoneIdx = getIndex(['phone', 'mobile', 'telephone', 'contactnumber', 'phonenumber']);
+    const emailIdx = getIndex(['email', 'emailaddress', 'mail']);
+    const gstinIdx = getIndex(['gstin', 'gst', 'gstnumber', 'taxid']);
+    const fssaiIdx = getIndex(['fssailicense', 'fssai', 'license', 'fssainumber', 'fssailicence']);
+    const termsIdx = getIndex(['paymentterms', 'terms', 'paymentterm', 'payterms']);
+    const addressIdx = getIndex(['address', 'location', 'city', 'streetaddress']);
+
+    const parsedSuppliers = [];
+    for (let i = 1; i < rows.length; i++) {
+      const row = rows[i];
+      if (!row || row.length === 0 || !row.some(c => String(c).trim().length > 0)) continue;
+
+      const name = sanitizeStr(nameIdx !== -1 ? row[nameIdx] : (row[1] || row[0]));
+      if (!name) continue;
+
+      const supplierCode = sanitizeStr(codeIdx !== -1 && row[codeIdx] ? row[codeIdx] : ('SUP-' + Math.floor(100 + Math.random() * 900)));
+      const primaryContact = sanitizeStr(contactIdx !== -1 ? row[contactIdx] : '');
+      const phone = sanitizeStr(phoneIdx !== -1 ? row[phoneIdx] : '');
+      const email = sanitizeStr(emailIdx !== -1 ? row[emailIdx] : '');
+      const gstin = sanitizeStr(gstinIdx !== -1 ? row[gstinIdx] : '');
+      const fssaiLicense = sanitizeStr(fssaiIdx !== -1 ? row[fssaiIdx] : '');
+      const paymentTerms = sanitizeStr(termsIdx !== -1 ? row[termsIdx] : 'NET30');
+      const address = sanitizeStr(addressIdx !== -1 ? row[addressIdx] : '');
+
+      parsedSuppliers.push({
+        supplierCode,
+        supplierName: name,
+        primaryContact,
+        phone,
+        email,
+        gstin,
+        fssaiLicense,
+        paymentTerms: paymentTerms || 'NET30',
+        address,
+        status: 'ACTIVE'
+      });
     }
 
-    importSuppliersFromCSV(file, session) {
-      if (!file) return;
+    if (parsedSuppliers.length === 0) {
+      alert('❌ No valid supplier records found in the file.');
+      return;
+    }
 
-      const sanitizeStr = (str) => {
-        if (str === null || str === undefined) return '';
-        let s = String(str)
-          .replace(/^\uFEFF/, '') // Remove UTF-8 BOM
-          .replace(/[\x00-\x1F\x7F-\x9F]/g, '') // Remove control characters
-          .trim()
-          .replace(/^"+|"+$/g, ''); // Remove surrounding quotes
-        
-        // Normalize scientific notation (e.g. 1.0012E+13 or 1.0012e+13)
-        if (/^\d+(\.\d+)?[eE]\+\d+$/i.test(s)) {
-          try {
-            const num = Number(s);
-            if (!isNaN(num)) {
-              s = BigInt(Math.round(num)).toString();
-            }
-          } catch(e) {}
-        }
-        return s;
-      };
+    this.openImportConfirmationModal(parsedSuppliers, file.name, session);
+  };
 
-      const parseRowsAndImport = (rows) => {
-        if (!rows || rows.length < 2) {
-          alert('❌ File must contain a header row and at least one supplier data row.');
-          return;
-        }
+  const fileName = file.name.toLowerCase();
+  const isExcelFile = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
 
-        const rawHeaders = rows[0].map(h => sanitizeStr(h));
-        const headers = rawHeaders.map(h => h.toLowerCase().replace(/[^a-z0-9]/g, ''));
-
-        const getIndex = (possibleKeys) => headers.findIndex(h => possibleKeys.includes(h));
-
-        const codeIdx = getIndex(['suppliercode', 'code', 'supplierid', 'id']);
-        const nameIdx = getIndex(['suppliername', 'name', 'company', 'companyname', 'supplier']);
-        const contactIdx = getIndex(['primarycontact', 'contact', 'contactperson', 'person', 'contactname']);
-        const phoneIdx = getIndex(['phone', 'mobile', 'telephone', 'contactnumber', 'phonenumber']);
-        const emailIdx = getIndex(['email', 'emailaddress', 'mail']);
-        const gstinIdx = getIndex(['gstin', 'gst', 'gstnumber', 'taxid']);
-        const fssaiIdx = getIndex(['fssailicense', 'fssai', 'license', 'fssainumber', 'fssailicence']);
-        const termsIdx = getIndex(['paymentterms', 'terms', 'paymentterm', 'payterms']);
-        const addressIdx = getIndex(['address', 'location', 'city', 'streetaddress']);
-
-        const parsedSuppliers = [];
-        for (let i = 1; i < rows.length; i++) {
-          const row = rows[i];
-          if (!row || row.length === 0 || !row.some(c => String(c).trim().length > 0)) continue;
-
-          const name = sanitizeStr(nameIdx !== -1 ? row[nameIdx] : (row[1] || row[0]));
-          if (!name) continue;
-
-          const supplierCode = sanitizeStr(codeIdx !== -1 && row[codeIdx] ? row[codeIdx] : ('SUP-' + Math.floor(100 + Math.random() * 900)));
-          const primaryContact = sanitizeStr(contactIdx !== -1 ? row[contactIdx] : '');
-          const phone = sanitizeStr(phoneIdx !== -1 ? row[phoneIdx] : '');
-          const email = sanitizeStr(emailIdx !== -1 ? row[emailIdx] : '');
-          const gstin = sanitizeStr(gstinIdx !== -1 ? row[gstinIdx] : '');
-          const fssaiLicense = sanitizeStr(fssaiIdx !== -1 ? row[fssaiIdx] : '');
-          const paymentTerms = sanitizeStr(termsIdx !== -1 ? row[termsIdx] : 'NET30');
-          const address = sanitizeStr(addressIdx !== -1 ? row[addressIdx] : '');
-
-          parsedSuppliers.push({
-            supplierCode,
-            supplierName: name,
-            primaryContact,
-            phone,
-            email,
-            gstin,
-            fssaiLicense,
-            paymentTerms: paymentTerms || 'NET30',
-            address,
-            status: 'ACTIVE'
-          });
-        }
-
-        if (parsedSuppliers.length === 0) {
-          alert('❌ No valid supplier records found in the file.');
-          return;
-        }
-
-        this.openImportConfirmationModal(parsedSuppliers, file.name, session);
-      };
-
-      const fileName = file.name.toLowerCase();
-      const isExcelFile = fileName.endsWith('.xlsx') || fileName.endsWith('.xls');
-
-      if (isExcelFile || typeof XLSX !== 'undefined') {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          try {
-            const data = new Uint8Array(e.target.result);
-            if (window.XLSX) {
-              const workbook = XLSX.read(data, { type: 'array' });
-              const firstSheetName = workbook.SheetNames[0];
-              const worksheet = workbook.Sheets[firstSheetName];
-              const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, defval: '' });
-              parseRowsAndImport(rows);
-            } else {
-              // Fallback to text parsing if XLSX library isn't loaded
-              const text = new TextDecoder('utf-8').decode(data);
-              const lines = text.split(/\r\n|\n/).map(l => l.trim()).filter(l => l.length > 0);
-              const parseCSVLine = (line) => {
-                const result = [];
-                let current = '';
-                let inQuotes = false;
-                for (let i = 0; i < line.length; i++) {
-                  const char = line[i];
-                  if (char === '"') inQuotes = !inQuotes;
-                  else if ((char === ',' || char === '\t' || char === ';') && !inQuotes) { result.push(current); current = ''; }
-                  else current += char;
-                }
-                result.push(current);
-                return result;
-              };
-              parseRowsAndImport(lines.map(l => parseCSVLine(l)));
-            }
-          } catch (err) {
-            console.error('Failed to parse Excel file:', err);
-            alert('❌ Unable to parse Excel file. Please save as CSV format (.csv) and re-upload.');
-          }
-        };
-        reader.readAsArrayBuffer(file);
-      } else {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          const text = e.target.result;
+  if (isExcelFile || typeof XLSX !== 'undefined') {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const data = new Uint8Array(e.target.result);
+        if (window.XLSX) {
+          const workbook = XLSX.read(data, { type: 'array' });
+          const firstSheetName = workbook.SheetNames[0];
+          const worksheet = workbook.Sheets[firstSheetName];
+          const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, raw: false, defval: '' });
+          parseRowsAndImport(rows);
+        } else {
+          // Fallback to text parsing if XLSX library isn't loaded
+          const text = new TextDecoder('utf-8').decode(data);
           const lines = text.split(/\r\n|\n/).map(l => l.trim()).filter(l => l.length > 0);
           const parseCSVLine = (line) => {
             const result = [];
@@ -6301,16 +6840,42 @@ SUP-105,Beverage World Supplies,Vikram Mehta,+91 9898989898,supply@beverageworld
             return result;
           };
           parseRowsAndImport(lines.map(l => parseCSVLine(l)));
-        };
-        reader.readAsText(file);
+        }
+      } catch (err) {
+        console.error('Failed to parse Excel file:', err);
+        alert('❌ Unable to parse Excel file. Please save as CSV format (.csv) and re-upload.');
       }
-    }
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target.result;
+      const lines = text.split(/\r\n|\n/).map(l => l.trim()).filter(l => l.length > 0);
+      const parseCSVLine = (line) => {
+        const result = [];
+        let current = '';
+        let inQuotes = false;
+        for (let i = 0; i < line.length; i++) {
+          const char = line[i];
+          if (char === '"') inQuotes = !inQuotes;
+          else if ((char === ',' || char === '\t' || char === ';') && !inQuotes) { result.push(current); current = ''; }
+          else current += char;
+        }
+        result.push(current);
+        return result;
+      };
+      parseRowsAndImport(lines.map(l => parseCSVLine(l)));
+    };
+    reader.readAsText(file);
+  }
+}
 
-    openImportConfirmationModal(parsedSuppliers, fileName, session) {
-      const modalMount = this.appEl.querySelector('#modal-container-mount');
-      const modal = document.createElement('div');
-      modal.className = 'lock-screen-overlay animate-fade-in';
-      modal.innerHTML = `
+openImportConfirmationModal(parsedSuppliers, fileName, session) {
+  const modalMount = this.appEl.querySelector('#modal-container-mount');
+  const modal = document.createElement('div');
+  modal.className = 'lock-screen-overlay animate-fade-in';
+  modal.innerHTML = `
         <div class="card modal-card" style="background:var(--bg-surface-1); padding:24px; width:min(900px, 95vw);">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
             <div>
@@ -6365,29 +6930,29 @@ SUP-105,Beverage World Supplies,Vikram Mehta,+91 9898989898,supply@beverageworld
           </div>
         </div>
       `;
-      modalMount.appendChild(modal);
+  modalMount.appendChild(modal);
 
-      modal.querySelector('#btn-cancel-import-action').addEventListener('click', () => {
-        modalMount.removeChild(modal);
-      });
+  modal.querySelector('#btn-cancel-import-action').addEventListener('click', () => {
+    modalMount.removeChild(modal);
+  });
 
-      modal.querySelector('#btn-confirm-import-action').addEventListener('click', () => {
-        parsedSuppliers.forEach(sup => {
-          supplierRepository.create(sup, session);
-        });
+  modal.querySelector('#btn-confirm-import-action').addEventListener('click', () => {
+    parsedSuppliers.forEach(sup => {
+      supplierRepository.create(sup, session);
+    });
 
-        const totalSuppliers = (supplierRepository.getAll(session.tenantId) || []).length;
-        modalMount.removeChild(modal);
-        alert(`🎉 Successfully imported ${parsedSuppliers.length} suppliers!\nTotal active suppliers in database: ${totalSuppliers}`);
-        this.render();
-      });
-    }
+    const totalSuppliers = (supplierRepository.getAll(session.tenantId) || []).length;
+    modalMount.removeChild(modal);
+    alert(`🎉 Successfully imported ${parsedSuppliers.length} suppliers!\nTotal active suppliers in database: ${totalSuppliers}`);
+    this.render();
+  });
+}
 
-    openAddSupplierModal(session) {
-      const modalMount = this.appEl.querySelector('#modal-container-mount');
-      const modal = document.createElement('div');
-      modal.className = 'lock-screen-overlay animate-fade-in';
-      modal.innerHTML = `
+openAddSupplierModal(session) {
+  const modalMount = this.appEl.querySelector('#modal-container-mount');
+  const modal = document.createElement('div');
+  modal.className = 'lock-screen-overlay animate-fade-in';
+  modal.innerHTML = `
         <div class="card modal-card" style="background:var(--bg-surface-1); padding:24px;">
           <h3>+ Add Supplier</h3>
           <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:16px;">Add a new vendor record to master data.</p>
@@ -6449,43 +7014,43 @@ SUP-105,Beverage World Supplies,Vikram Mehta,+91 9898989898,supply@beverageworld
           </div>
         </div>
       `;
-      modalMount.appendChild(modal);
+  modalMount.appendChild(modal);
 
-      modal.querySelector('#btn-cancel-sup-modal').addEventListener('click', () => { modalMount.innerHTML = ''; });
-      modal.querySelector('#btn-save-sup').addEventListener('click', () => {
-        const supplierCode = modal.querySelector('#inp-sup-code').value;
-        const supplierName = modal.querySelector('#inp-sup-name').value;
-        const primaryContact = modal.querySelector('#inp-sup-contact').value;
-        const phone = modal.querySelector('#inp-sup-phone').value;
-        const email = modal.querySelector('#inp-sup-email').value;
-        const gstin = modal.querySelector('#inp-sup-gst').value;
-        const fssaiLicense = modal.querySelector('#inp-sup-fssai').value;
-        const paymentTerms = modal.querySelector('#inp-sup-terms').value;
-        const address = modal.querySelector('#inp-sup-address').value;
+  modal.querySelector('#btn-cancel-sup-modal').addEventListener('click', () => { modalMount.innerHTML = ''; });
+  modal.querySelector('#btn-save-sup').addEventListener('click', () => {
+    const supplierCode = modal.querySelector('#inp-sup-code').value;
+    const supplierName = modal.querySelector('#inp-sup-name').value;
+    const primaryContact = modal.querySelector('#inp-sup-contact').value;
+    const phone = modal.querySelector('#inp-sup-phone').value;
+    const email = modal.querySelector('#inp-sup-email').value;
+    const gstin = modal.querySelector('#inp-sup-gst').value;
+    const fssaiLicense = modal.querySelector('#inp-sup-fssai').value;
+    const paymentTerms = modal.querySelector('#inp-sup-terms').value;
+    const address = modal.querySelector('#inp-sup-address').value;
 
-        if (!supplierName) { alert('Please enter Supplier Name'); return; }
+    if (!supplierName) { alert('Please enter Supplier Name'); return; }
 
-        supplierRepository.create({
-          supplierCode, supplierName, primaryContact, phone, email, gstin, fssaiLicense, paymentTerms, address, status: 'ACTIVE'
-        }, session);
+    supplierRepository.create({
+      supplierCode, supplierName, primaryContact, phone, email, gstin, fssaiLicense, paymentTerms, address, status: 'ACTIVE'
+    }, session);
 
-        modalMount.innerHTML = '';
-        this.render();
-      });
-    }
+    modalMount.innerHTML = '';
+    this.render();
+  });
+}
 
-    openEditSupplierModal(supId, session) {
-      const modalMount = this.appEl.querySelector('#modal-container-mount');
-      const suppliers = offlineStore.getCollection('suppliers') || [];
-      const sup = suppliers.find(s => s.id === supId || s.supplierCode === supId);
-      if (!sup) {
-        alert('❌ Supplier record not found.');
-        return;
-      }
+openEditSupplierModal(supId, session) {
+  const modalMount = this.appEl.querySelector('#modal-container-mount');
+  const suppliers = offlineStore.getCollection('suppliers') || [];
+  const sup = suppliers.find(s => s.id === supId || s.supplierCode === supId);
+  if (!sup) {
+    alert('❌ Supplier record not found.');
+    return;
+  }
 
-      const modal = document.createElement('div');
-      modal.className = 'lock-screen-overlay animate-fade-in';
-      modal.innerHTML = `
+  const modal = document.createElement('div');
+  modal.className = 'lock-screen-overlay animate-fade-in';
+  modal.innerHTML = `
         <div class="card modal-card" style="background:var(--bg-surface-1); padding:24px;">
           <h3>✏️ Edit Supplier</h3>
           <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:16px;">Update vendor contact, tax registration, and payment terms.</p>
@@ -6547,106 +7112,106 @@ SUP-105,Beverage World Supplies,Vikram Mehta,+91 9898989898,supply@beverageworld
           </div>
         </div>
       `;
-      modalMount.appendChild(modal);
+  modalMount.appendChild(modal);
 
-      modal.querySelector('#btn-cancel-edit-sup').addEventListener('click', () => { modalMount.innerHTML = ''; });
-      modal.querySelector('#btn-save-edit-sup').addEventListener('click', () => {
-        const supplierCode = modal.querySelector('#inp-edit-sup-code').value.trim();
-        const supplierName = modal.querySelector('#inp-edit-sup-name').value.trim();
-        const primaryContact = modal.querySelector('#inp-edit-sup-contact').value.trim();
-        const phone = modal.querySelector('#inp-edit-sup-phone').value.trim();
-        const email = modal.querySelector('#inp-edit-sup-email').value.trim();
-        const gstin = modal.querySelector('#inp-edit-sup-gst').value.trim();
-        const fssaiLicense = modal.querySelector('#inp-edit-sup-fssai').value.trim();
-        const paymentTerms = modal.querySelector('#inp-edit-sup-terms').value;
-        const address = modal.querySelector('#inp-edit-sup-address').value.trim();
+  modal.querySelector('#btn-cancel-edit-sup').addEventListener('click', () => { modalMount.innerHTML = ''; });
+  modal.querySelector('#btn-save-edit-sup').addEventListener('click', () => {
+    const supplierCode = modal.querySelector('#inp-edit-sup-code').value.trim();
+    const supplierName = modal.querySelector('#inp-edit-sup-name').value.trim();
+    const primaryContact = modal.querySelector('#inp-edit-sup-contact').value.trim();
+    const phone = modal.querySelector('#inp-edit-sup-phone').value.trim();
+    const email = modal.querySelector('#inp-edit-sup-email').value.trim();
+    const gstin = modal.querySelector('#inp-edit-sup-gst').value.trim();
+    const fssaiLicense = modal.querySelector('#inp-edit-sup-fssai').value.trim();
+    const paymentTerms = modal.querySelector('#inp-edit-sup-terms').value;
+    const address = modal.querySelector('#inp-edit-sup-address').value.trim();
 
-        if (!supplierName) { alert('Please enter Supplier Name'); return; }
+    if (!supplierName) { alert('Please enter Supplier Name'); return; }
 
-        offlineStore.updateItem('suppliers', 'id', sup.id, {
-          supplierCode, supplierName, primaryContact, phone, email, gstin, fssaiLicense, paymentTerms, address, modifiedAt: new Date().toISOString()
-        });
+    offlineStore.updateItem('suppliers', 'id', sup.id, {
+      supplierCode, supplierName, primaryContact, phone, email, gstin, fssaiLicense, paymentTerms, address, modifiedAt: new Date().toISOString()
+    });
 
-        logAudit(session.employeeName, `Updated Supplier "${supplierName}" (${supplierCode})`, session.tenantId);
-        modalMount.innerHTML = '';
-        alert(`💾 Supplier "${supplierName}" updated successfully.`);
-        this.render();
-      });
-    }
+    logAudit(session.employeeName, `Updated Supplier "${supplierName}" (${supplierCode})`, session.tenantId);
+    modalMount.innerHTML = '';
+    alert(`💾 Supplier "${supplierName}" updated successfully.`);
+    this.render();
+  });
+}
 
-    downloadSampleCategoryTemplate() {
-      const csv = `CategoryCode,CategoryName,ProductFamilyCode,DefaultBaseUom,Description
+downloadSampleCategoryTemplate() {
+  const csv = `CategoryCode,CategoryName,ProductFamilyCode,DefaultBaseUom,Description
 CAT-BUTTER,Butter & Ghee,FAM-DAIRY,KG,Salted & unsalted butter
 CAT-CHICKEN,Chicken,FAM-MEAT,KG,Fresh bone & boneless chicken
 CAT-FISH,Fish & Finfish,FAM-SEAFOOD,KG,Fresh marine & river fish
 CAT-VEG,Fresh Vegetables,FAM-PRODUCE,KG,Daily fresh vegetables & herbs
 CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
 
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement('a');
-      link.href = URL.createObjectURL(blob);
-      link.setAttribute('download', 'Categories_Import_Template.csv');
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(blob);
+  link.setAttribute('download', 'Categories_Import_Template.csv');
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
 
     async importCategoriesFromCSV(file, session) {
-      const text = await file.text();
-      const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
-      if (lines.length <= 1) {
-        alert('❌ Selected CSV file is empty or missing data rows.');
-        return;
-      }
+  const text = await file.text();
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+  if (lines.length <= 1) {
+    alert('❌ Selected CSV file is empty or missing data rows.');
+    return;
+  }
 
-      let created = 0;
-      let skipped = 0;
+  let created = 0;
+  let skipped = 0;
 
-      for (let i = 1; i < lines.length; i++) {
-        const row = lines[i].split(',').map(cell => cell.trim().replace(/^"(.*)"$/, '$1'));
-        if (row.length === 0 || !row[0]) continue;
+  for (let i = 1; i < lines.length; i++) {
+    const row = lines[i].split(',').map(cell => cell.trim().replace(/^"(.*)"$/, '$1'));
+    if (row.length === 0 || !row[0]) continue;
 
-        const code = row[0] || ('CAT-' + Math.floor(100 + Math.random() * 900));
-        const name = row[1] || code;
-        const familyCode = row[2] || 'FAM-PRODUCE';
-        const uom = row[3] || 'KG';
-        const desc = row[4] || '';
+    const code = row[0] || ('CAT-' + Math.floor(100 + Math.random() * 900));
+    const name = row[1] || code;
+    const familyCode = row[2] || 'FAM-PRODUCE';
+    const uom = row[3] || 'KG';
+    const desc = row[4] || '';
 
-        const existing = categoryRepository.getByCode(code, session.tenantId);
-        if (existing) {
-          skipped++;
-          continue;
-        }
-
-        categoryRepository.create({
-          categoryCode: code,
-          categoryName: name,
-          productFamilyCode: familyCode,
-          defaultUom: uom,
-          description: desc,
-          status: 'ACTIVE'
-        }, session);
-        created++;
-      }
-
-      alert(`🎉 Category Import Complete!\n\n✔ ${created} new categories imported.\n⏩ ${skipped} duplicate category codes skipped.`);
-      this.render();
+    const existing = categoryRepository.getByCode(code, session.tenantId);
+    if (existing) {
+      skipped++;
+      continue;
     }
 
-    openCategoryModal(catIdOrObj, session) {
-      const isEdit = !!catIdOrObj;
-      const cat = isEdit ? (typeof catIdOrObj === 'object' ? catIdOrObj : categoryRepository.getById(catIdOrObj, session.tenantId)) : null;
+    categoryRepository.create({
+      categoryCode: code,
+      categoryName: name,
+      productFamilyCode: familyCode,
+      defaultUom: uom,
+      description: desc,
+      status: 'ACTIVE'
+    }, session);
+    created++;
+  }
 
-      const familyOptions = Object.values(PRODUCT_FAMILIES_REGISTRY).map(f => `
+  alert(`🎉 Category Import Complete!\n\n✔ ${created} new categories imported.\n⏩ ${skipped} duplicate category codes skipped.`);
+  this.render();
+}
+
+openCategoryModal(catIdOrObj, session) {
+  const isEdit = !!catIdOrObj;
+  const cat = isEdit ? (typeof catIdOrObj === 'object' ? catIdOrObj : categoryRepository.getById(catIdOrObj, session.tenantId)) : null;
+
+  const familyOptions = Object.values(PRODUCT_FAMILIES_REGISTRY).map(f => `
         <option value="${f.code}" ${cat && (cat.productFamilyCode === f.code || cat.productFamily === f.code) ? 'selected' : ''}>${f.icon} ${f.name} (${f.code})</option>
       `).join('');
 
-      const uomList = uomRepository.getAll();
-      const uomOptions = uomList.map(u => `
+  const uomList = uomRepository.getAll();
+  const uomOptions = uomList.map(u => `
         <option value="${u.uomCode}" ${cat && cat.defaultUom === u.uomCode ? 'selected' : (u.uomCode === 'KG' ? 'selected' : '')}>${u.uomCode} (${u.uomName})</option>
       `).join('');
 
-      const html = `
+  const html = `
         <div class="lock-screen-overlay animate-fade-in" style="display:flex; align-items:center; justify-content:center;">
           <div class="card modal-card" style="background:var(--bg-surface-1); width:100%; max-width:540px; border-radius:8px; padding:24px; border:1px solid var(--border-subtle); box-shadow:0 8px 32px rgba(0,0,0,0.4);">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; border-bottom:1px solid var(--border-subtle); padding-bottom:12px;">
@@ -6696,67 +7261,67 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
         </div>
       `;
 
-      const modalMount = this.appEl.querySelector('#modal-container-mount') || document.body;
-      modalMount.innerHTML = html;
+  const modalMount = this.appEl.querySelector('#modal-container-mount') || document.body;
+  modalMount.innerHTML = html;
 
-      const closeModal = () => { modalMount.innerHTML = ''; };
+  const closeModal = () => { modalMount.innerHTML = ''; };
 
-      modalMount.querySelector('#btn-close-cat-modal').addEventListener('click', closeModal);
-      modalMount.querySelector('#btn-cancel-cat').addEventListener('click', closeModal);
+  modalMount.querySelector('#btn-close-cat-modal').addEventListener('click', closeModal);
+  modalMount.querySelector('#btn-cancel-cat').addEventListener('click', closeModal);
 
-        modalMount.querySelector('#btn-save-cat').addEventListener('click', () => {
-        const code = modalMount.querySelector('#inp-cat-code').value.trim();
-        const name = modalMount.querySelector('#inp-cat-name').value.trim();
-        const familyCode = modalMount.querySelector('#inp-cat-family').value;
-        const uom = modalMount.querySelector('#inp-cat-uom').value;
-        const desc = modalMount.querySelector('#inp-cat-desc').value.trim();
+  modalMount.querySelector('#btn-save-cat').addEventListener('click', () => {
+    const code = modalMount.querySelector('#inp-cat-code').value.trim();
+    const name = modalMount.querySelector('#inp-cat-name').value.trim();
+    const familyCode = modalMount.querySelector('#inp-cat-family').value;
+    const uom = modalMount.querySelector('#inp-cat-uom').value;
+    const desc = modalMount.querySelector('#inp-cat-desc').value.trim();
 
-        if (!code || !name) {
-          alert('❌ Please enter a Category Code and Category Name.');
-          return;
-        }
-
-        if (isEdit) {
-          categoryRepository.update(cat.id, {
-            categoryName: name,
-            productFamilyCode: familyCode,
-            defaultUom: uom,
-            description: desc
-          }, session);
-          alert(`💾 Category "${name}" updated successfully.`);
-        } else {
-          categoryRepository.create({
-            categoryCode: code,
-            categoryName: name,
-            productFamilyCode: familyCode,
-            defaultUom: uom,
-            description: desc,
-            status: 'ACTIVE'
-          }, session);
-          alert(`🎉 Category "${name}" created under ${PRODUCT_FAMILIES_REGISTRY[familyCode].name}.`);
-        }
-
-        closeModal();
-        this.render();
-      });
+    if (!code || !name) {
+      alert('❌ Please enter a Category Code and Category Name.');
+      return;
     }
 
-    openAddMasterItemModal(session) {
-      const modalMount = this.appEl.querySelector('#modal-container-mount');
-      const modal = document.createElement('div');
-      modal.className = 'lock-screen-overlay animate-fade-in';
+    if (isEdit) {
+      categoryRepository.update(cat.id, {
+        categoryName: name,
+        productFamilyCode: familyCode,
+        defaultUom: uom,
+        description: desc
+      }, session);
+      alert(`💾 Category "${name}" updated successfully.`);
+    } else {
+      categoryRepository.create({
+        categoryCode: code,
+        categoryName: name,
+        productFamilyCode: familyCode,
+        defaultUom: uom,
+        description: desc,
+        status: 'ACTIVE'
+      }, session);
+      alert(`🎉 Category "${name}" created under ${PRODUCT_FAMILIES_REGISTRY[familyCode].name}.`);
+    }
 
-      const tenantId = session.tenantId;
-      const categories = categoryRepository.getAll(tenantId);
-      const uomList = uomRepository.getAll();
-      const storageLocs = offlineStore.getCollection('storage_locations', tenantId) || [];
-      const suppliersList = supplierRepository.getAll(tenantId);
+    closeModal();
+    this.render();
+  });
+}
 
-      const uomOptions = uomList.map(u => `<option value="${u.uomCode}">${u.uomCode} (${u.uomName})</option>`).join('');
-      const locationOptions = storageLocs.map(l => `<option value="${l.locationCode}">${l.locationName} (${l.locationCode})</option>`).join('');
-      const supplierOptions = suppliersList.map(s => `<option value="${s.supplierCode}">${s.supplierName} (${s.supplierCode})</option>`).join('');
+openAddMasterItemModal(session) {
+  const modalMount = this.appEl.querySelector('#modal-container-mount');
+  const modal = document.createElement('div');
+  modal.className = 'lock-screen-overlay animate-fade-in';
 
-      modal.innerHTML = `
+  const tenantId = session.tenantId;
+  const categories = categoryRepository.getAll(tenantId);
+  const uomList = uomRepository.getAll();
+  const storageLocs = offlineStore.getCollection('storage_locations', tenantId) || [];
+  const suppliersList = supplierRepository.getAll(tenantId);
+
+  const uomOptions = uomList.map(u => `<option value="${u.uomCode}">${u.uomCode} (${u.uomName})</option>`).join('');
+  const locationOptions = storageLocs.map(l => `<option value="${l.locationCode}">${l.locationName} (${l.locationCode})</option>`).join('');
+  const supplierOptions = suppliersList.map(s => `<option value="${s.supplierCode}">${s.supplierName} (${s.supplierCode})</option>`).join('');
+
+  modal.innerHTML = `
         <div class="card modal-card" style="background:var(--bg-surface-1); padding:24px; max-width:760px; max-height:92vh; overflow-y:auto;">
           <h3 style="margin-top:0;">+ Add Master Inventory Item</h3>
           <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:16px;">Section 1 (Identity), Section 2 (Units), Section 3 (Storage), Section 4 (Purchasing) & Section 5 (Stock Policy).</p>
@@ -7002,265 +7567,265 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
         </div>
       `;
 
-      modalMount.innerHTML = '';
-      modalMount.appendChild(modal);
+  modalMount.innerHTML = '';
+  modalMount.appendChild(modal);
 
-      const updateFamilyPreview = () => {
-        const selectedCatCode = modal.querySelector('#inp-mi-cat').value;
-        const catObj = categoryRepository.getByCode(selectedCatCode, tenantId);
-        const famCode = catObj ? catObj.productFamilyCode : 'FAM-PRODUCE';
-        const famObj = PRODUCT_FAMILIES_REGISTRY[famCode] || { icon: '📦', name: 'General', code: famCode };
-        modal.querySelector('#preview-product-family-box').innerHTML = `${famObj.icon} ${famObj.name} (${famObj.code})`;
-      };
+  const updateFamilyPreview = () => {
+    const selectedCatCode = modal.querySelector('#inp-mi-cat').value;
+    const catObj = categoryRepository.getByCode(selectedCatCode, tenantId);
+    const famCode = catObj ? catObj.productFamilyCode : 'FAM-PRODUCE';
+    const famObj = PRODUCT_FAMILIES_REGISTRY[famCode] || { icon: '📦', name: 'General', code: famCode };
+    modal.querySelector('#preview-product-family-box').innerHTML = `${famObj.icon} ${famObj.name} (${famObj.code})`;
+  };
 
-      const updateUomFormulaPreview = () => {
-        const baseUom = modal.querySelector('#inp-mi-base-uom').value;
-        const purchaseUom = modal.querySelector('#inp-mi-purchase-uom').value || baseUom;
-        const factor = parseFloat(modal.querySelector('#inp-mi-factor').value) || 1;
-        modal.querySelector('#preview-uom-formula').innerHTML = `1 ${purchaseUom} = ${factor} ${baseUom}`;
-      };
+  const updateUomFormulaPreview = () => {
+    const baseUom = modal.querySelector('#inp-mi-base-uom').value;
+    const purchaseUom = modal.querySelector('#inp-mi-purchase-uom').value || baseUom;
+    const factor = parseFloat(modal.querySelector('#inp-mi-factor').value) || 1;
+    modal.querySelector('#preview-uom-formula').innerHTML = `1 ${purchaseUom} = ${factor} ${baseUom}`;
+  };
 
-      const updateStorageOwnershipPreview = () => {
-        const loc = storageLocs.find(l => l.locationCode === modal.querySelector('#inp-mi-def-loc').value);
-        if (loc) modal.querySelector('#preview-storage-ownership-box').innerHTML = `🏬 Receiving at <strong>${loc.locationName}</strong>`;
-      };
+  const updateStorageOwnershipPreview = () => {
+    const loc = storageLocs.find(l => l.locationCode === modal.querySelector('#inp-mi-def-loc').value);
+    if (loc) modal.querySelector('#preview-storage-ownership-box').innerHTML = `🏬 Receiving at <strong>${loc.locationName}</strong>`;
+  };
 
-      const updateCostValuationPreview = () => {
-        const factor = parseFloat(modal.querySelector('#inp-mi-factor').value) || 1;
-        const purPrice = parseFloat(modal.querySelector('#inp-mi-pur-price').value) || 0;
-        const cost = (purPrice / factor).toFixed(2);
-        modal.querySelector('#preview-cost-valuation-box').innerHTML = `Purchase: ₹${purPrice.toFixed(2)} → Unit Cost: ₹${cost}`;
-      };
+  const updateCostValuationPreview = () => {
+    const factor = parseFloat(modal.querySelector('#inp-mi-factor').value) || 1;
+    const purPrice = parseFloat(modal.querySelector('#inp-mi-pur-price').value) || 0;
+    const cost = (purPrice / factor).toFixed(2);
+    modal.querySelector('#preview-cost-valuation-box').innerHTML = `Purchase: ₹${purPrice.toFixed(2)} → Unit Cost: ₹${cost}`;
+  };
 
-      const updateStockPolicyPreview = () => {
-        const b = modal.querySelector('#inp-mi-base-uom').value;
-        const min = modal.querySelector('#inp-mi-min-stock').value;
-        const max = modal.querySelector('#inp-mi-max-stock').value;
-        modal.querySelector('#preview-stock-policy-box').innerHTML = `Min: ${min} ${b} • Max: ${max} ${b}`;
-      };
+  const updateStockPolicyPreview = () => {
+    const b = modal.querySelector('#inp-mi-base-uom').value;
+    const min = modal.querySelector('#inp-mi-min-stock').value;
+    const max = modal.querySelector('#inp-mi-max-stock').value;
+    modal.querySelector('#preview-stock-policy-box').innerHTML = `Min: ${min} ${b} • Max: ${max} ${b}`;
+  };
 
-      const updateYieldFormulaPreview = () => {
-        const baseUom = modal.querySelector('#inp-mi-base-uom').value;
-        const yieldPct = parseFloat(modal.querySelector('#inp-mi-yield-pct').value) || 100;
-        const grossDeduction = (1.0 / (yieldPct / 100.0)).toFixed(3);
-        const previewEl = modal.querySelector('#preview-yield-formula-box');
-        if (previewEl) {
-          previewEl.innerHTML = `Usable Yield: <strong>${yieldPct}%</strong> • Gross Stock Deducted per 1.000 ${baseUom} Net Recipe: <strong>${grossDeduction} ${baseUom}</strong>`;
-        }
-      };
+  const updateYieldFormulaPreview = () => {
+    const baseUom = modal.querySelector('#inp-mi-base-uom').value;
+    const yieldPct = parseFloat(modal.querySelector('#inp-mi-yield-pct').value) || 100;
+    const grossDeduction = (1.0 / (yieldPct / 100.0)).toFixed(3);
+    const previewEl = modal.querySelector('#preview-yield-formula-box');
+    if (previewEl) {
+      previewEl.innerHTML = `Usable Yield: <strong>${yieldPct}%</strong> • Gross Stock Deducted per 1.000 ${baseUom} Net Recipe: <strong>${grossDeduction} ${baseUom}</strong>`;
+    }
+  };
 
-      [modal.querySelector('#inp-mi-cat')].forEach(el => el.addEventListener('change', updateFamilyPreview));
-      [modal.querySelector('#inp-mi-base-uom'), modal.querySelector('#inp-mi-purchase-uom'), modal.querySelector('#inp-mi-factor')].forEach(el => el.addEventListener('change', () => { updateUomFormulaPreview(); updateCostValuationPreview(); updateStockPolicyPreview(); updateYieldFormulaPreview(); }));
-      [modal.querySelector('#inp-mi-pur-price')].forEach(el => el.addEventListener('input', updateCostValuationPreview));
-      [modal.querySelector('#inp-mi-min-stock'), modal.querySelector('#inp-mi-max-stock')].forEach(el => el.addEventListener('input', updateStockPolicyPreview));
-      [modal.querySelector('#inp-mi-yield-pct')].forEach(el => el.addEventListener('input', updateYieldFormulaPreview));
-      modal.querySelector('#inp-mi-def-loc').addEventListener('change', updateStorageOwnershipPreview);
+  [modal.querySelector('#inp-mi-cat')].forEach(el => el.addEventListener('change', updateFamilyPreview));
+  [modal.querySelector('#inp-mi-base-uom'), modal.querySelector('#inp-mi-purchase-uom'), modal.querySelector('#inp-mi-factor')].forEach(el => el.addEventListener('change', () => { updateUomFormulaPreview(); updateCostValuationPreview(); updateStockPolicyPreview(); updateYieldFormulaPreview(); }));
+  [modal.querySelector('#inp-mi-pur-price')].forEach(el => el.addEventListener('input', updateCostValuationPreview));
+  [modal.querySelector('#inp-mi-min-stock'), modal.querySelector('#inp-mi-max-stock')].forEach(el => el.addEventListener('input', updateStockPolicyPreview));
+  [modal.querySelector('#inp-mi-yield-pct')].forEach(el => el.addEventListener('input', updateYieldFormulaPreview));
+  modal.querySelector('#inp-mi-def-loc').addEventListener('change', updateStorageOwnershipPreview);
 
-      updateFamilyPreview(); updateUomFormulaPreview(); updateStorageOwnershipPreview(); updateCostValuationPreview(); updateStockPolicyPreview(); updateYieldFormulaPreview();
+  updateFamilyPreview(); updateUomFormulaPreview(); updateStorageOwnershipPreview(); updateCostValuationPreview(); updateStockPolicyPreview(); updateYieldFormulaPreview();
 
-      modal.querySelector('#btn-mi-cancel').addEventListener('click', () => { modalMount.innerHTML = ''; });
-      modal.querySelector('#btn-mi-save').addEventListener('click', () => {
-        const itemCode = modal.querySelector('#inp-mi-code').value.trim();
-        const itemName = modal.querySelector('#inp-mi-name').value.trim();
-        const itemType = modal.querySelector('#inp-mi-type').value;
-        const categoryCode = modal.querySelector('#inp-mi-cat').value;
-        const status = modal.querySelector('#inp-mi-status').value;
-        const baseUom = modal.querySelector('#inp-mi-base-uom').value;
-        const purchaseUomRaw = modal.querySelector('#inp-mi-purchase-uom').value;
-        const purchaseUom = purchaseUomRaw || baseUom;
-        const conversionFactor = parseFloat(modal.querySelector('#inp-mi-factor').value) || 1;
-        const defaultLocationCode = modal.querySelector('#inp-mi-def-loc').value;
-        const isTransferAllowed = modal.querySelector('#chk-mi-transfer').checked;
-        const preferredSupplierCode = modal.querySelector('#inp-mi-pref-sup').value;
-        const supplierItemCode = modal.querySelector('#inp-mi-sup-sku').value.trim();
-        const lastPurchasePrice = parseFloat(modal.querySelector('#inp-mi-pur-price').value) || 0;
-        const purchaseTaxProfile = modal.querySelector('#inp-mi-pur-tax').value;
-        const minimumOrderQuantity = parseFloat(modal.querySelector('#inp-mi-moq').value) || 1;
-        const purchaseLeadTimeDays = parseInt(modal.querySelector('#inp-mi-lead-time').value) || 1;
+  modal.querySelector('#btn-mi-cancel').addEventListener('click', () => { modalMount.innerHTML = ''; });
+  modal.querySelector('#btn-mi-save').addEventListener('click', () => {
+    const itemCode = modal.querySelector('#inp-mi-code').value.trim();
+    const itemName = modal.querySelector('#inp-mi-name').value.trim();
+    const itemType = modal.querySelector('#inp-mi-type').value;
+    const categoryCode = modal.querySelector('#inp-mi-cat').value;
+    const status = modal.querySelector('#inp-mi-status').value;
+    const baseUom = modal.querySelector('#inp-mi-base-uom').value;
+    const purchaseUomRaw = modal.querySelector('#inp-mi-purchase-uom').value;
+    const purchaseUom = purchaseUomRaw || baseUom;
+    const conversionFactor = parseFloat(modal.querySelector('#inp-mi-factor').value) || 1;
+    const defaultLocationCode = modal.querySelector('#inp-mi-def-loc').value;
+    const isTransferAllowed = modal.querySelector('#chk-mi-transfer').checked;
+    const preferredSupplierCode = modal.querySelector('#inp-mi-pref-sup').value;
+    const supplierItemCode = modal.querySelector('#inp-mi-sup-sku').value.trim();
+    const lastPurchasePrice = parseFloat(modal.querySelector('#inp-mi-pur-price').value) || 0;
+    const purchaseTaxProfile = modal.querySelector('#inp-mi-pur-tax').value;
+    const minimumOrderQuantity = parseFloat(modal.querySelector('#inp-mi-moq').value) || 1;
+    const purchaseLeadTimeDays = parseInt(modal.querySelector('#inp-mi-lead-time').value) || 1;
 
-        const reorderLevel = parseFloat(modal.querySelector('#inp-mi-reorder-lvl').value) || 0;
-        const minimumStockLevel = parseFloat(modal.querySelector('#inp-mi-min-stock').value) || 0;
-        const maximumStockLevel = parseFloat(modal.querySelector('#inp-mi-max-stock').value) || 0;
-        const reorderQuantity = parseFloat(modal.querySelector('#inp-mi-reorder-qty').value) || 1;
-        const cycleCountFrequency = modal.querySelector('#inp-mi-cycle-freq').value;
-        const isBatchTracked = modal.querySelector('#chk-mi-batch').checked;
-        const isExpiryTracked = modal.querySelector('#chk-mi-expiry').checked;
-        const allowNegativeStock = modal.querySelector('#chk-mi-neg-stock').checked;
-        const enableLowStockAlerts = modal.querySelector('#chk-mi-low-alerts').checked;
-        const shelfLifeDays = parseInt(modal.querySelector('#inp-mi-shelf-life').value) || 180;
+    const reorderLevel = parseFloat(modal.querySelector('#inp-mi-reorder-lvl').value) || 0;
+    const minimumStockLevel = parseFloat(modal.querySelector('#inp-mi-min-stock').value) || 0;
+    const maximumStockLevel = parseFloat(modal.querySelector('#inp-mi-max-stock').value) || 0;
+    const reorderQuantity = parseFloat(modal.querySelector('#inp-mi-reorder-qty').value) || 1;
+    const cycleCountFrequency = modal.querySelector('#inp-mi-cycle-freq').value;
+    const isBatchTracked = modal.querySelector('#chk-mi-batch').checked;
+    const isExpiryTracked = modal.querySelector('#chk-mi-expiry').checked;
+    const allowNegativeStock = modal.querySelector('#chk-mi-neg-stock').checked;
+    const enableLowStockAlerts = modal.querySelector('#chk-mi-low-alerts').checked;
+    const shelfLifeDays = parseInt(modal.querySelector('#inp-mi-shelf-life').value) || 180;
 
-        const isStockable = modal.querySelector('#chk-mi-stockable').checked;
-        const isRecipeIngredient = modal.querySelector('#chk-mi-ingredient').checked;
-        const autoDeductionEnabled = modal.querySelector('#chk-mi-auto-deduct').checked;
-        const isDirectSale = modal.querySelector('#chk-mi-direct-sale').checked;
-        const isSemiFinished = modal.querySelector('#chk-mi-semi-finished').checked;
-        const allowWastageTracking = modal.querySelector('#chk-mi-wastage').checked;
-        const departmentUsageScope = modal.querySelector('#inp-mi-dept-scope').value;
-        const insufficientStockPolicy = modal.querySelector('#inp-mi-stock-policy').value;
-        const standardYieldPercent = parseFloat(modal.querySelector('#inp-mi-yield-pct').value) || 100.0;
+    const isStockable = modal.querySelector('#chk-mi-stockable').checked;
+    const isRecipeIngredient = modal.querySelector('#chk-mi-ingredient').checked;
+    const autoDeductionEnabled = modal.querySelector('#chk-mi-auto-deduct').checked;
+    const isDirectSale = modal.querySelector('#chk-mi-direct-sale').checked;
+    const isSemiFinished = modal.querySelector('#chk-mi-semi-finished').checked;
+    const allowWastageTracking = modal.querySelector('#chk-mi-wastage').checked;
+    const departmentUsageScope = modal.querySelector('#inp-mi-dept-scope').value;
+    const insufficientStockPolicy = modal.querySelector('#inp-mi-stock-policy').value;
+    const standardYieldPercent = parseFloat(modal.querySelector('#inp-mi-yield-pct').value) || 100.0;
 
-        const chkElements = modal.querySelectorAll('.chk-allowed-loc:checked');
-        const allowedLocationCodes = Array.from(chkElements).map(el => el.value);
-        if (!allowedLocationCodes.includes(defaultLocationCode)) {
-          allowedLocationCodes.push(defaultLocationCode);
-        }
-
-        if (!itemName || !itemCode) {
-          alert('❌ Please enter a valid Item Name and Item Code.');
-          return;
-        }
-
-        const existing = inventoryRepository.getByCode(itemCode, session.tenantId);
-        if (existing) {
-          alert(`❌ Duplicate Item Code "${itemCode}"! Item Code must be unique.`);
-          return;
-        }
-
-        const baseObj = uomConversionEngine.getUom(baseUom);
-        const purObj = uomConversionEngine.getUom(purchaseUom);
-        if (baseObj && purObj && !purObj.isContainer && baseObj.family !== purObj.family) {
-          alert(`❌ Incompatible UOM Families!\nBase UOM (${baseUom}) is ${baseObj.family}, while Purchase UOM (${purchaseUom}) is ${purObj.family}.\nCross-family conversion is not allowed.`);
-          return;
-        }
-
-        const baseUnitCost = conversionFactor > 0 ? (lastPurchasePrice / conversionFactor) : lastPurchasePrice;
-
-        inventoryRepository.create({
-          itemCode,
-          itemName,
-          itemType,
-          categoryCode,
-          baseUom,
-          purchaseUom,
-          conversionFactor,
-          defaultLocationCode,
-          allowedLocationCodes,
-          isTransferAllowed,
-          preferredSupplierCode,
-          defaultSupplierCode: preferredSupplierCode,
-          supplierItemCode,
-          lastPurchasePrice,
-          unitValuation: baseUnitCost,
-          purchaseTaxProfile,
-          minimumOrderQuantity,
-          purchaseLeadTimeDays,
-          costHistory: [{ price: lastPurchasePrice, baseCost: baseUnitCost, date: new Date().toISOString(), supplierCode: preferredSupplierCode }],
-          reorderLevel,
-          minimumStockLevel,
-          maximumStockLevel,
-          reorderQuantity,
-          cycleCountFrequency,
-          isBatchTracked,
-          isExpiryTracked,
-          allowNegativeStock,
-          enableLowStockAlerts,
-          shelfLifeDays,
-          isStockable,
-          isRecipeIngredient,
-          autoDeductionEnabled,
-          isDirectSale,
-          isSemiFinished,
-          allowWastageTracking,
-          departmentUsageScope,
-          insufficientStockPolicy,
-          standardYieldPercent,
-          status
-        }, session);
-
-        alert(`🎉 Master Inventory Item "${itemName}" (${itemCode}) saved successfully!\nAuto-Deduction: ${autoDeductionEnabled ? 'ENABLED' : 'DISABLED'} | Department Scope: ${departmentUsageScope} | Yield: ${standardYieldPercent}%`);
-        modalMount.innerHTML = '';
-        this.render();
-      });
+    const chkElements = modal.querySelectorAll('.chk-allowed-loc:checked');
+    const allowedLocationCodes = Array.from(chkElements).map(el => el.value);
+    if (!allowedLocationCodes.includes(defaultLocationCode)) {
+      allowedLocationCodes.push(defaultLocationCode);
     }
 
-    downloadSampleMasterInventoryTemplate() {
-      const csvHeader = "itemCode,itemName,itemType,categoryCode,baseUom,purchaseUom,conversionFactor,defaultLocationCode,allowedLocationCodes,preferredSupplierCode,supplierItemCode,lastPurchasePrice,purchaseTaxProfile,minimumOrderQuantity,purchaseLeadTimeDays,reorderLevel,minimumStockLevel,maximumStockLevel,reorderQuantity,isBatchTracked,isExpiryTracked,shelfLifeDays,isStockable,isRecipeIngredient,autoDeductionEnabled,isDirectSale,isSemiFinished,allowWastageTracking,departmentUsageScope,insufficientStockPolicy,standardYieldPercent\n";
-      const sampleRows = [
-        "RM0001,Chicken Boneless,Raw Material,CAT-MEAT,KG,KG,1.000,LOC-CHILL,LOC-CHILL|LOC-KITCHEN,SUP-001,CHK-BONE-1KG,280.00,5% GST,5,1,10.0,5.0,50.0,10,true,true,7,true,true,true,false,false,true,KITCHEN,WARN_AND_ALLOW,85.0",
-        "RM0002,Amul Pasteurised Butter,Raw Material,CAT-DAIRY,KG,PACK,0.500,LOC-CHILL,LOC-CHILL|LOC-KITCHEN|LOC-BAR,SUP-001,AMUL-BUT-500G,240.00,12% GST,5,2,10.0,5.0,50.0,10,true,true,180,true,true,true,false,false,true,ALL,WARN_AND_ALLOW,100.0",
-        "SF0001,White Gravy Base Batch,Semi Finished,CAT-PREP,LTR,LTR,1.000,LOC-CHILL,LOC-CHILL|LOC-KITCHEN,SUP-001,,0.00,Exempt,1,1,15.0,5.0,40.0,10,true,true,3,true,true,true,false,true,true,KITCHEN,WARN_AND_ALLOW,100.0",
-        "PKG0001,Takeaway Meal Box 3-Comp,Packaging,CAT-PKG,PCS,BOX,100.000,LOC-MWH,LOC-MWH|LOC-KITCHEN,SUP-002,BOX-3COMP-100,650.00,18% GST,2,3,200.0,50.0,1000.0,200,false,false,365,true,false,true,true,false,false,ALL,WARN_AND_ALLOW,100.0"
-      ].join("\n");
-
-      const blob = new Blob([csvHeader + sampleRows], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.setAttribute("download", "Master_Inventory_Template.csv");
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+    if (!itemName || !itemCode) {
+      alert('❌ Please enter a valid Item Name and Item Code.');
+      return;
     }
 
-    exportMasterInventoryToCSV(session) {
-      const tenantId = session ? session.tenantId : '';
-      const items = inventoryRepository.getAll(tenantId);
-      if (!items || !items.length) {
-        alert('❌ No Master Inventory Items to export.');
-        return;
-      }
-
-      const headers = ["itemCode","itemName","itemType","categoryCode","baseUom","purchaseUom","conversionFactor","defaultLocationCode","allowedLocationCodes","preferredSupplierCode","supplierItemCode","lastPurchasePrice","purchaseTaxProfile","minimumOrderQuantity","purchaseLeadTimeDays","reorderLevel","minimumStockLevel","maximumStockLevel","reorderQuantity","isBatchTracked","isExpiryTracked","shelfLifeDays","isStockable","isRecipeIngredient","autoDeductionEnabled","isDirectSale","isSemiFinished","allowWastageTracking","departmentUsageScope","insufficientStockPolicy","standardYieldPercent","status"];
-      
-      const csvRows = [headers.join(",")];
-      items.forEach(i => {
-        const allowedLocs = (i.allowedLocationCodes || []).join("|");
-        const row = [
-          `"${i.itemCode || ''}"`,
-          `"${(i.itemName || '').replace(/"/g, '""')}"`,
-          `"${i.itemType || 'Raw Material'}"`,
-          `"${i.categoryCode || 'CAT-VEG'}"`,
-          `"${i.baseUom || 'KG'}"`,
-          `"${i.purchaseUom || i.baseUom || 'KG'}"`,
-          i.conversionFactor || 1,
-          `"${i.defaultLocationCode || 'LOC-MWH'}"`,
-          `"${allowedLocs}"`,
-          `"${i.preferredSupplierCode || i.defaultSupplierCode || 'SUP-001'}"`,
-          `"${i.supplierItemCode || ''}"`,
-          i.lastPurchasePrice || 0,
-          `"${i.purchaseTaxProfile || '12% GST'}"`,
-          i.minimumOrderQuantity || 1,
-          i.purchaseLeadTimeDays || 1,
-          i.reorderLevel || 10,
-          i.minimumStockLevel || 5,
-          i.maximumStockLevel || 50,
-          i.reorderQuantity || 10,
-          i.isBatchTracked !== false,
-          i.isExpiryTracked !== false,
-          i.shelfLifeDays || 180,
-          i.isStockable !== false,
-          i.isRecipeIngredient !== false,
-          i.autoDeductionEnabled !== false,
-          !!i.isDirectSale,
-          !!i.isSemiFinished,
-          i.allowWastageTracking !== false,
-          `"${i.departmentUsageScope || 'ALL'}"`,
-          `"${i.insufficientStockPolicy || 'WARN_AND_ALLOW'}"`,
-          i.standardYieldPercent || 100.0,
-          `"${i.status || 'ACTIVE'}"`
-        ];
-        csvRows.push(row.join(","));
-      });
-
-      const blob = new Blob([csvRows.join("\n")], { type: 'text/csv;charset=utf-8;' });
-      const link = document.createElement("a");
-      link.href = URL.createObjectURL(blob);
-      link.setAttribute("download", `Master_Inventory_Export_${new Date().toISOString().substring(0, 10)}.csv`);
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
+    const existing = inventoryRepository.getByCode(itemCode, session.tenantId);
+    if (existing) {
+      alert(`❌ Duplicate Item Code "${itemCode}"! Item Code must be unique.`);
+      return;
     }
 
-    renderMasterItemFormPage(items, categories, uoms, locations, suppliers, session) {
-      const tenantId = session.tenantId;
-      const editingId = this.editingMasterItemId;
-      const itemData = editingId ? inventoryRepository.getById(editingId, tenantId) : null;
-      const isEdit = !!itemData;
+    const baseObj = uomConversionEngine.getUom(baseUom);
+    const purObj = uomConversionEngine.getUom(purchaseUom);
+    if (baseObj && purObj && !purObj.isContainer && baseObj.family !== purObj.family) {
+      alert(`❌ Incompatible UOM Families!\nBase UOM (${baseUom}) is ${baseObj.family}, while Purchase UOM (${purchaseUom}) is ${purObj.family}.\nCross-family conversion is not allowed.`);
+      return;
+    }
 
-      const uomOptions = uoms.map(u => `<option value="${u.uomCode}">${u.uomCode} (${u.uomName})</option>`).join('');
-      const locationOptions = locations.map(l => `<option value="${l.locationCode}">${l.locationName} (${l.locationCode})</option>`).join('');
-      const supplierOptions = suppliers.map(s => `<option value="${s.supplierCode}">${s.supplierName} (${s.supplierCode})</option>`).join('');
+    const baseUnitCost = conversionFactor > 0 ? (lastPurchasePrice / conversionFactor) : lastPurchasePrice;
 
-      return `
+    inventoryRepository.create({
+      itemCode,
+      itemName,
+      itemType,
+      categoryCode,
+      baseUom,
+      purchaseUom,
+      conversionFactor,
+      defaultLocationCode,
+      allowedLocationCodes,
+      isTransferAllowed,
+      preferredSupplierCode,
+      defaultSupplierCode: preferredSupplierCode,
+      supplierItemCode,
+      lastPurchasePrice,
+      unitValuation: baseUnitCost,
+      purchaseTaxProfile,
+      minimumOrderQuantity,
+      purchaseLeadTimeDays,
+      costHistory: [{ price: lastPurchasePrice, baseCost: baseUnitCost, date: new Date().toISOString(), supplierCode: preferredSupplierCode }],
+      reorderLevel,
+      minimumStockLevel,
+      maximumStockLevel,
+      reorderQuantity,
+      cycleCountFrequency,
+      isBatchTracked,
+      isExpiryTracked,
+      allowNegativeStock,
+      enableLowStockAlerts,
+      shelfLifeDays,
+      isStockable,
+      isRecipeIngredient,
+      autoDeductionEnabled,
+      isDirectSale,
+      isSemiFinished,
+      allowWastageTracking,
+      departmentUsageScope,
+      insufficientStockPolicy,
+      standardYieldPercent,
+      status
+    }, session);
+
+    alert(`🎉 Master Inventory Item "${itemName}" (${itemCode}) saved successfully!\nAuto-Deduction: ${autoDeductionEnabled ? 'ENABLED' : 'DISABLED'} | Department Scope: ${departmentUsageScope} | Yield: ${standardYieldPercent}%`);
+    modalMount.innerHTML = '';
+    this.render();
+  });
+}
+
+downloadSampleMasterInventoryTemplate() {
+  const csvHeader = "itemCode,itemName,itemType,categoryCode,baseUom,purchaseUom,conversionFactor,defaultLocationCode,allowedLocationCodes,preferredSupplierCode,supplierItemCode,lastPurchasePrice,purchaseTaxProfile,minimumOrderQuantity,purchaseLeadTimeDays,reorderLevel,minimumStockLevel,maximumStockLevel,reorderQuantity,isBatchTracked,isExpiryTracked,shelfLifeDays,isStockable,isRecipeIngredient,autoDeductionEnabled,isDirectSale,isSemiFinished,allowWastageTracking,departmentUsageScope,insufficientStockPolicy,standardYieldPercent\n";
+  const sampleRows = [
+    "RM0001,Chicken Boneless,Raw Material,CAT-MEAT,KG,KG,1.000,LOC-CHILL,LOC-CHILL|LOC-KITCHEN,SUP-001,CHK-BONE-1KG,280.00,5% GST,5,1,10.0,5.0,50.0,10,true,true,7,true,true,true,false,false,true,KITCHEN,WARN_AND_ALLOW,85.0",
+    "RM0002,Amul Pasteurised Butter,Raw Material,CAT-DAIRY,KG,PACK,0.500,LOC-CHILL,LOC-CHILL|LOC-KITCHEN|LOC-BAR,SUP-001,AMUL-BUT-500G,240.00,12% GST,5,2,10.0,5.0,50.0,10,true,true,180,true,true,true,false,false,true,ALL,WARN_AND_ALLOW,100.0",
+    "SF0001,White Gravy Base Batch,Semi Finished,CAT-PREP,LTR,LTR,1.000,LOC-CHILL,LOC-CHILL|LOC-KITCHEN,SUP-001,,0.00,Exempt,1,1,15.0,5.0,40.0,10,true,true,3,true,true,true,false,true,true,KITCHEN,WARN_AND_ALLOW,100.0",
+    "PKG0001,Takeaway Meal Box 3-Comp,Packaging,CAT-PKG,PCS,BOX,100.000,LOC-MWH,LOC-MWH|LOC-KITCHEN,SUP-002,BOX-3COMP-100,650.00,18% GST,2,3,200.0,50.0,1000.0,200,false,false,365,true,false,true,true,false,false,ALL,WARN_AND_ALLOW,100.0"
+  ].join("\n");
+
+  const blob = new Blob([csvHeader + sampleRows], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.setAttribute("download", "Master_Inventory_Template.csv");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+exportMasterInventoryToCSV(session) {
+  const tenantId = session ? session.tenantId : '';
+  const items = inventoryRepository.getAll(tenantId);
+  if (!items || !items.length) {
+    alert('❌ No Master Inventory Items to export.');
+    return;
+  }
+
+  const headers = ["itemCode", "itemName", "itemType", "categoryCode", "baseUom", "purchaseUom", "conversionFactor", "defaultLocationCode", "allowedLocationCodes", "preferredSupplierCode", "supplierItemCode", "lastPurchasePrice", "purchaseTaxProfile", "minimumOrderQuantity", "purchaseLeadTimeDays", "reorderLevel", "minimumStockLevel", "maximumStockLevel", "reorderQuantity", "isBatchTracked", "isExpiryTracked", "shelfLifeDays", "isStockable", "isRecipeIngredient", "autoDeductionEnabled", "isDirectSale", "isSemiFinished", "allowWastageTracking", "departmentUsageScope", "insufficientStockPolicy", "standardYieldPercent", "status"];
+
+  const csvRows = [headers.join(",")];
+  items.forEach(i => {
+    const allowedLocs = (i.allowedLocationCodes || []).join("|");
+    const row = [
+      `"${i.itemCode || ''}"`,
+      `"${(i.itemName || '').replace(/"/g, '""')}"`,
+      `"${i.itemType || 'Raw Material'}"`,
+      `"${i.categoryCode || 'CAT-VEG'}"`,
+      `"${i.baseUom || 'KG'}"`,
+      `"${i.purchaseUom || i.baseUom || 'KG'}"`,
+      i.conversionFactor || 1,
+      `"${i.defaultLocationCode || 'LOC-MWH'}"`,
+      `"${allowedLocs}"`,
+      `"${i.preferredSupplierCode || i.defaultSupplierCode || 'SUP-001'}"`,
+      `"${i.supplierItemCode || ''}"`,
+      i.lastPurchasePrice || 0,
+      `"${i.purchaseTaxProfile || '12% GST'}"`,
+      i.minimumOrderQuantity || 1,
+      i.purchaseLeadTimeDays || 1,
+      i.reorderLevel || 10,
+      i.minimumStockLevel || 5,
+      i.maximumStockLevel || 50,
+      i.reorderQuantity || 10,
+      i.isBatchTracked !== false,
+      i.isExpiryTracked !== false,
+      i.shelfLifeDays || 180,
+      i.isStockable !== false,
+      i.isRecipeIngredient !== false,
+      i.autoDeductionEnabled !== false,
+      !!i.isDirectSale,
+      !!i.isSemiFinished,
+      i.allowWastageTracking !== false,
+      `"${i.departmentUsageScope || 'ALL'}"`,
+      `"${i.insufficientStockPolicy || 'WARN_AND_ALLOW'}"`,
+      i.standardYieldPercent || 100.0,
+      `"${i.status || 'ACTIVE'}"`
+    ];
+    csvRows.push(row.join(","));
+  });
+
+  const blob = new Blob([csvRows.join("\n")], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.setAttribute("download", `Master_Inventory_Export_${new Date().toISOString().substring(0, 10)}.csv`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
+renderMasterItemFormPage(items, categories, uoms, locations, suppliers, session) {
+  const tenantId = session.tenantId;
+  const editingId = this.editingMasterItemId;
+  const itemData = editingId ? inventoryRepository.getById(editingId, tenantId) : null;
+  const isEdit = !!itemData;
+
+  const uomOptions = uoms.map(u => `<option value="${u.uomCode}">${u.uomCode} (${u.uomName})</option>`).join('');
+  const locationOptions = locations.map(l => `<option value="${l.locationCode}">${l.locationName} (${l.locationCode})</option>`).join('');
+  const supplierOptions = suppliers.map(s => `<option value="${s.supplierCode}">${s.supplierName} (${s.supplierCode})</option>`).join('');
+
+  return `
         <div class="animate-fade-in flex-col gap-md">
           <!-- Navigation Header Bar -->
           <div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface-1); padding:16px 20px; border-radius:8px; border:1px solid var(--border-subtle);">
@@ -7454,125 +8019,125 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
           </div>
         </div>
       `;
-    }
+}
 
-    handleMasterInventoryFileUpload(file, session) {
-      if (!file) return;
+handleMasterInventoryFileUpload(file, session) {
+  if (!file) return;
 
-      const parseCSVLine = (line) => {
-        const result = [];
-        let cur = '';
-        let inQuote = false;
-        for (let i = 0; i < line.length; i++) {
-          const c = line[i];
-          if (c === '"') {
-            if (inQuote && line[i + 1] === '"') {
-              cur += '"';
-              i++;
-            } else {
-              inQuote = !inQuote;
-            }
-          } else if (c === ',' && !inQuote) {
-            result.push(cur.trim());
-            cur = '';
-          } else {
-            cur += c;
-          }
+  const parseCSVLine = (line) => {
+    const result = [];
+    let cur = '';
+    let inQuote = false;
+    for (let i = 0; i < line.length; i++) {
+      const c = line[i];
+      if (c === '"') {
+        if (inQuote && line[i + 1] === '"') {
+          cur += '"';
+          i++;
+        } else {
+          inQuote = !inQuote;
         }
+      } else if (c === ',' && !inQuote) {
         result.push(cur.trim());
-        return result;
-      };
+        cur = '';
+      } else {
+        cur += c;
+      }
+    }
+    result.push(cur.trim());
+    return result;
+  };
 
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const text = e.target.result;
-        const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
-        if (lines.length < 2) {
-          alert('❌ File is empty or missing headers.');
-          return;
-        }
-
-        const tenantId = session ? session.tenantId : '';
-        const existingItems = inventoryRepository.getAll(tenantId);
-        const existingCodes = new Set(existingItems.map(i => i.itemCode));
-
-        const staged = [];
-
-        for (let idx = 1; idx < lines.length; idx++) {
-          const rowText = lines[idx];
-          if (!rowText) continue;
-
-          const cleanCols = parseCSVLine(rowText);
-
-          const rawCode = cleanCols[0] || ('RM' + (1000 + idx));
-          const rawName = cleanCols[1] || ('Item #' + idx);
-          const rawType = cleanCols[2] || 'Raw Material';
-          const rawCat = cleanCols[3] || 'CAT-VEG';
-          const rawBaseUom = (cleanCols[4] || 'KG').toUpperCase();
-          const rawPurUom = (cleanCols[5] || rawBaseUom).toUpperCase();
-          const factor = parseFloat(cleanCols[6]) || 1.0;
-          const purPrice = parseFloat(cleanCols[10]) || 0;
-
-          let baseUom = rawBaseUom;
-          let purUom = rawPurUom;
-          if (baseUom === 'PIECE') baseUom = 'PCS';
-          if (purUom === 'PIECE') purUom = 'PCS';
-
-          let statusFlag = 'READY';
-          let warningNote = '';
-
-          if (existingCodes.has(rawCode)) {
-            statusFlag = 'DUPLICATE';
-            warningNote = `Code ${rawCode} already exists in DB`;
-          }
-
-          const uomObj = uomConversionEngine.getUom(purUom);
-          if (!uomObj) {
-            statusFlag = 'NEEDS_MAPPING';
-            warningNote = `Unrecognized Purchase UOM "${purUom}"`;
-          } else if (factor <= 0) {
-            statusFlag = 'NEEDS_MAPPING';
-            warningNote = `Invalid conversion factor ${factor}`;
-          }
-
-          staged.push({
-            rowNum: idx,
-            itemCode: rawCode,
-            itemName: rawName,
-            itemType: rawType,
-            categoryCode: rawCat,
-            baseUom: baseUom,
-            purchaseUom: purUom,
-            conversionFactor: factor,
-            defaultLocationCode: cleanCols[7] || 'LOC-MWH',
-            preferredSupplierCode: cleanCols[8] || 'SUP-001',
-            supplierItemCode: cleanCols[9] || '',
-            lastPurchasePrice: purPrice,
-            unitValuation: factor > 0 ? (purPrice / factor) : purPrice,
-            statusFlag,
-            warningNote
-          });
-        }
-
-        this.stagedMasterItems = staged;
-        this.stagedImportFileName = file.name;
-        this.activeSubView = 'inv-master-import-preview';
-        this.render();
-      };
-
-      reader.readAsText(file);
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    const text = e.target.result;
+    const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+    if (lines.length < 2) {
+      alert('❌ File is empty or missing headers.');
+      return;
     }
 
-    renderMasterInventoryImportPreview(session) {
-      const staged = this.stagedMasterItems || [];
-      const fileName = this.stagedImportFileName || 'Uploaded_Inventory_Master.csv';
+    const tenantId = session ? session.tenantId : '';
+    const existingItems = inventoryRepository.getAll(tenantId);
+    const existingCodes = new Set(existingItems.map(i => i.itemCode));
 
-      const totalRows = staged.length;
-      const readyRows = staged.filter(s => s.statusFlag === 'READY').length;
-      const mappingRows = staged.filter(s => s.statusFlag === 'NEEDS_MAPPING').length;
-      const dupRows = staged.filter(s => s.statusFlag === 'DUPLICATE').length;
+    const staged = [];
 
-      return `
+    for (let idx = 1; idx < lines.length; idx++) {
+      const rowText = lines[idx];
+      if (!rowText) continue;
+
+      const cleanCols = parseCSVLine(rowText);
+
+      const rawCode = cleanCols[0] || ('RM' + (1000 + idx));
+      const rawName = cleanCols[1] || ('Item #' + idx);
+      const rawType = cleanCols[2] || 'Raw Material';
+      const rawCat = cleanCols[3] || 'CAT-VEG';
+      const rawBaseUom = (cleanCols[4] || 'KG').toUpperCase();
+      const rawPurUom = (cleanCols[5] || rawBaseUom).toUpperCase();
+      const factor = parseFloat(cleanCols[6]) || 1.0;
+      const purPrice = parseFloat(cleanCols[10]) || 0;
+
+      let baseUom = rawBaseUom;
+      let purUom = rawPurUom;
+      if (baseUom === 'PIECE') baseUom = 'PCS';
+      if (purUom === 'PIECE') purUom = 'PCS';
+
+      let statusFlag = 'READY';
+      let warningNote = '';
+
+      if (existingCodes.has(rawCode)) {
+        statusFlag = 'DUPLICATE';
+        warningNote = `Code ${rawCode} already exists in DB`;
+      }
+
+      const uomObj = uomConversionEngine.getUom(purUom);
+      if (!uomObj) {
+        statusFlag = 'NEEDS_MAPPING';
+        warningNote = `Unrecognized Purchase UOM "${purUom}"`;
+      } else if (factor <= 0) {
+        statusFlag = 'NEEDS_MAPPING';
+        warningNote = `Invalid conversion factor ${factor}`;
+      }
+
+      staged.push({
+        rowNum: idx,
+        itemCode: rawCode,
+        itemName: rawName,
+        itemType: rawType,
+        categoryCode: rawCat,
+        baseUom: baseUom,
+        purchaseUom: purUom,
+        conversionFactor: factor,
+        defaultLocationCode: cleanCols[7] || 'LOC-MWH',
+        preferredSupplierCode: cleanCols[8] || 'SUP-001',
+        supplierItemCode: cleanCols[9] || '',
+        lastPurchasePrice: purPrice,
+        unitValuation: factor > 0 ? (purPrice / factor) : purPrice,
+        statusFlag,
+        warningNote
+      });
+    }
+
+    this.stagedMasterItems = staged;
+    this.stagedImportFileName = file.name;
+    this.activeSubView = 'inv-master-import-preview';
+    this.render();
+  };
+
+  reader.readAsText(file);
+}
+
+renderMasterInventoryImportPreview(session) {
+  const staged = this.stagedMasterItems || [];
+  const fileName = this.stagedImportFileName || 'Uploaded_Inventory_Master.csv';
+
+  const totalRows = staged.length;
+  const readyRows = staged.filter(s => s.statusFlag === 'READY').length;
+  const mappingRows = staged.filter(s => s.statusFlag === 'NEEDS_MAPPING').length;
+  const dupRows = staged.filter(s => s.statusFlag === 'DUPLICATE').length;
+
+  return `
         <div class="animate-fade-in flex-col gap-md">
           <!-- Top Navigation Header -->
           <div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface-1); padding:16px 20px; border-radius:8px; border:1px solid var(--border-subtle);">
@@ -7655,69 +8220,69 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
           </div>
         </div>
       `;
-    }
+}
 
-    commitStagedMasterItems(session) {
-      const staged = this.stagedMasterItems || [];
-      if (!staged.length) {
-        alert('❌ No staged items to commit.');
-        return;
-      }
+commitStagedMasterItems(session) {
+  const staged = this.stagedMasterItems || [];
+  if (!staged.length) {
+    alert('❌ No staged items to commit.');
+    return;
+  }
 
-      let importedCount = 0;
-      staged.forEach(s => {
-        inventoryRepository.create({
-          itemCode: s.itemCode,
-          itemName: s.itemName,
-          itemType: s.itemType,
-          categoryCode: s.categoryCode,
-          baseUom: s.baseUom,
-          purchaseUom: s.purchaseUom,
-          conversionFactor: s.conversionFactor,
-          defaultLocationCode: s.defaultLocationCode,
-          allowedLocationCodes: [s.defaultLocationCode],
-          isTransferAllowed: true,
-          preferredSupplierCode: s.preferredSupplierCode,
-          defaultSupplierCode: s.preferredSupplierCode,
-          lastPurchasePrice: s.lastPurchasePrice,
-          unitValuation: s.unitValuation,
-          purchaseTaxProfile: '12% GST',
-          minimumOrderQuantity: 1,
-          purchaseLeadTimeDays: 1,
-          reorderLevel: 10,
-          minimumStockLevel: 5,
-          maximumStockLevel: 50,
-          isStockable: true,
-          isRecipeIngredient: true,
-          autoDeductionEnabled: true,
-          standardYieldPercent: 100.0,
-          status: 'ACTIVE'
-        }, session);
-        importedCount++;
-      });
+  let importedCount = 0;
+  staged.forEach(s => {
+    inventoryRepository.create({
+      itemCode: s.itemCode,
+      itemName: s.itemName,
+      itemType: s.itemType,
+      categoryCode: s.categoryCode,
+      baseUom: s.baseUom,
+      purchaseUom: s.purchaseUom,
+      conversionFactor: s.conversionFactor,
+      defaultLocationCode: s.defaultLocationCode,
+      allowedLocationCodes: [s.defaultLocationCode],
+      isTransferAllowed: true,
+      preferredSupplierCode: s.preferredSupplierCode,
+      defaultSupplierCode: s.preferredSupplierCode,
+      lastPurchasePrice: s.lastPurchasePrice,
+      unitValuation: s.unitValuation,
+      purchaseTaxProfile: '12% GST',
+      minimumOrderQuantity: 1,
+      purchaseLeadTimeDays: 1,
+      reorderLevel: 10,
+      minimumStockLevel: 5,
+      maximumStockLevel: 50,
+      isStockable: true,
+      isRecipeIngredient: true,
+      autoDeductionEnabled: true,
+      standardYieldPercent: 100.0,
+      status: 'ACTIVE'
+    }, session);
+    importedCount++;
+  });
 
-      alert(`🎉 Successfully committed ${importedCount} Master Inventory Items to Database & Supabase!`);
-      this.stagedMasterItems = null;
-      this.activeSubView = 'inv-master';
-      this.render();
-    }
+  alert(`🎉 Successfully committed ${importedCount} Master Inventory Items to Database & Supabase!`);
+  this.stagedMasterItems = null;
+  this.activeSubView = 'inv-master';
+  this.render();
+}
 
-    renderPurchaseOrdersPage(session) {
-      const tenantId = session ? session.tenantId : '';
-      const pos = purchaseOrderRepository.getAll(tenantId);
-      const filter = this.poStatusFilter || 'ALL';
+renderPurchaseOrdersPage(session) {
+  const tenantId = session ? session.tenantId : '';
+  const pos = purchaseOrderRepository.getAll(tenantId);
+  const filter = this.poStatusFilter || 'ALL';
 
-      const filteredPos = pos.filter(p => {
-        if (filter !== 'ALL' && p.status !== filter) return false;
-        return true;
-      });
+  const filteredPos = pos.filter(p => {
+    if (filter !== 'ALL' && p.status !== filter) return false;
+    return true;
+  });
 
-      const draftCount = pos.filter(p => p.status === 'DRAFT').length;
-      const submittedCount = pos.filter(p => p.status === 'SUBMITTED').length;
-      const approvedCount = pos.filter(p => p.status === 'APPROVED').length;
-      const receivedCount = pos.filter(p => p.status === 'FULLY_RECEIVED' || p.status === 'PARTIALLY_RECEIVED').length;
+  const draftCount = pos.filter(p => p.status === 'DRAFT').length;
+  const submittedCount = pos.filter(p => p.status === 'SUBMITTED').length;
+  const approvedCount = pos.filter(p => p.status === 'APPROVED').length;
+  const receivedCount = pos.filter(p => p.status === 'FULLY_RECEIVED' || p.status === 'PARTIALLY_RECEIVED').length;
 
-      return `
+  return `
         <div class="animate-fade-in flex-col gap-md">
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
             <div>
@@ -7816,18 +8381,18 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
           `}
         </div>
       `;
-    }
+}
 
-    renderCreatePoFormPage(items, suppliers, locations, session) {
-      const activeSuppliers = (suppliers && suppliers.length) ? suppliers : supplierRepository.getAll(session ? session.tenantId : null);
-      const supplierOpts = activeSuppliers.map(s => {
-        const code = s.supplierCode || s.id || s.supplierName;
-        return `<option value="${code}">${s.supplierName} (${code})</option>`;
-      }).join('');
-      const locationOpts = locations.map(l => `<option value="${l.locationCode}">${l.locationName} (${l.locationCode})</option>`).join('');
-      const itemOpts = items.map(i => `<option value="${i.itemCode}">${i.itemName} (${i.itemCode}) — ₹${(i.lastPurchasePrice || 0).toFixed(2)}/${i.purchaseUom || i.baseUom || 'KG'}</option>`).join('');
+renderCreatePoFormPage(items, suppliers, locations, session) {
+  const activeSuppliers = (suppliers && suppliers.length) ? suppliers : supplierRepository.getAll(session ? session.tenantId : null);
+  const supplierOpts = activeSuppliers.map(s => {
+    const code = s.supplierCode || s.id || s.supplierName;
+    return `<option value="${code}">${s.supplierName} (${code})</option>`;
+  }).join('');
+  const locationOpts = locations.map(l => `<option value="${l.locationCode}">${l.locationName} (${l.locationCode})</option>`).join('');
+  const itemOpts = items.map(i => `<option value="${i.itemCode}">${i.itemName} (${i.itemCode}) — ₹${(i.lastPurchasePrice || 0).toFixed(2)}/${i.purchaseUom || i.baseUom || 'KG'}</option>`).join('');
 
-      return `
+  return `
         <div class="animate-fade-in flex-col gap-md">
           <div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface-1); padding:16px 20px; border-radius:8px; border:1px solid var(--border-subtle); flex-wrap:wrap; gap:12px;">
             <div>
@@ -7865,7 +8430,7 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
             <div class="grid grid-cols-2 gap-md" style="margin-top:12px;">
               <div>
                 <label style="display:block; font-size:0.8rem; margin-bottom:4px; font-weight:600;">Expected Delivery Date</label>
-                <input type="date" id="inp-po-del-date" value="${new Date(Date.now() + 86400000*2).toISOString().split('T')[0]}" style="width:100%; font-size:0.85rem; padding:8px;">
+                <input type="date" id="inp-po-del-date" value="${new Date(Date.now() + 86400000 * 2).toISOString().split('T')[0]}" style="width:100%; font-size:0.85rem; padding:8px;">
               </div>
               <div>
                 <label style="display:block; font-size:0.8rem; margin-bottom:4px; font-weight:600;">Payment Terms</label>
@@ -7926,15 +8491,15 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
           </div>
         </div>
       `;
-    }
+}
 
-    renderGoodsReceivingPage(session) {
-      const tenantId = session ? session.tenantId : '';
-      const grns = goodsReceiptRepository.getAll(tenantId);
-      const pos = purchaseOrderRepository.getAll(tenantId);
-      const pendingPos = pos.filter(p => p.status === 'APPROVED' || p.status === 'PARTIALLY_RECEIVED');
+renderGoodsReceivingPage(session) {
+  const tenantId = session ? session.tenantId : '';
+  const grns = goodsReceiptRepository.getAll(tenantId);
+  const pos = purchaseOrderRepository.getAll(tenantId);
+  const pendingPos = pos.filter(p => p.status === 'APPROVED' || p.status === 'PARTIALLY_RECEIVED');
 
-      return `
+  return `
         <div class="animate-fade-in flex-col gap-md">
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
             <div>
@@ -8021,43 +8586,43 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
           </div>
         </div>
       `;
-    }
+}
 
-    renderReceiveGoodsGrnStudioPage(session) {
-      const tenantId = session ? session.tenantId : '';
-      const isOpening = this.grnDocumentType === 'OPENING_STOCK';
-      const poNum = this.selectedPoForGrn;
-      const po = poNum ? purchaseOrderRepository.getByPoNumber(poNum, tenantId) : null;
-      const items = inventoryRepository.getAll(tenantId);
-      const locations = offlineStore.getCollection('storage_locations', tenantId) || [];
+renderReceiveGoodsGrnStudioPage(session) {
+  const tenantId = session ? session.tenantId : '';
+  const isOpening = this.grnDocumentType === 'OPENING_STOCK';
+  const poNum = this.selectedPoForGrn;
+  const po = poNum ? purchaseOrderRepository.getByPoNumber(poNum, tenantId) : null;
+  const items = inventoryRepository.getAll(tenantId);
+  const locations = offlineStore.getCollection('storage_locations', tenantId) || [];
 
-      const locOpts = locations.map(l => `<option value="${l.locationCode}" ${po && po.destinationLocationCode === l.locationCode ? 'selected' : ''}>${l.locationName} (${l.locationCode})</option>`).join('');
+  const locOpts = locations.map(l => `<option value="${l.locationCode}" ${po && po.destinationLocationCode === l.locationCode ? 'selected' : ''}>${l.locationName} (${l.locationCode})</option>`).join('');
 
-      let initialLines = [];
-      if (po && po.items) {
-        initialLines = po.items.map(pi => {
-          const masterItem = inventoryRepository.getByCode(pi.itemCode, tenantId) || {};
-          return {
-            itemCode: pi.itemCode,
-            itemName: pi.itemName,
-            purchaseUom: pi.purchaseUom || masterItem.purchaseUom || 'KG',
-            baseUom: masterItem.baseUom || 'KG',
-            conversionFactor: masterItem.conversionFactor || 1,
-            orderedQty: pi.orderedQuantity || 0,
-            receivedQty: pi.orderedQuantity || 0,
-            acceptedQty: pi.orderedQuantity || 0,
-            rejectedQty: 0,
-            rejectionReason: 'None',
-            batchNumber: `BATCH-${new Date().toISOString().slice(0,10).replace(/-/g,'')}`,
-            expiryDate: new Date(Date.now() + 86400000*7).toISOString().split('T')[0],
-            actualPurchaseUnitPrice: pi.purchaseUnitPrice || masterItem.lastPurchasePrice || 0
-          };
-        });
-      }
+  let initialLines = [];
+  if (po && po.items) {
+    initialLines = po.items.map(pi => {
+      const masterItem = inventoryRepository.getByCode(pi.itemCode, tenantId) || {};
+      return {
+        itemCode: pi.itemCode,
+        itemName: pi.itemName,
+        purchaseUom: pi.purchaseUom || masterItem.purchaseUom || 'KG',
+        baseUom: masterItem.baseUom || 'KG',
+        conversionFactor: masterItem.conversionFactor || 1,
+        orderedQty: pi.orderedQuantity || 0,
+        receivedQty: pi.orderedQuantity || 0,
+        acceptedQty: pi.orderedQuantity || 0,
+        rejectedQty: 0,
+        rejectionReason: 'None',
+        batchNumber: `BATCH-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}`,
+        expiryDate: new Date(Date.now() + 86400000 * 7).toISOString().split('T')[0],
+        actualPurchaseUnitPrice: pi.purchaseUnitPrice || masterItem.lastPurchasePrice || 0
+      };
+    });
+  }
 
-      this.currentGrnLines = initialLines;
+  this.currentGrnLines = initialLines;
 
-      return `
+  return `
         <div class="animate-fade-in flex-col gap-md">
           <div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface-1); padding:16px 20px; border-radius:8px; border:1px solid var(--border-subtle); flex-wrap:wrap; gap:12px;">
             <div>
@@ -8131,18 +8696,18 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
           </div>
         </div>
       `;
-    }
+}
 
-    renderStockTransfersPage(session) {
-      const tenantId = session ? session.tenantId : '';
-      const transfers = stockTransferRepository.getAll(tenantId);
-      const items = inventoryRepository.getAll(tenantId);
-      const locations = offlineStore.getCollection('storage_locations', tenantId) || [];
+renderStockTransfersPage(session) {
+  const tenantId = session ? session.tenantId : '';
+  const transfers = stockTransferRepository.getAll(tenantId);
+  const items = inventoryRepository.getAll(tenantId);
+  const locations = offlineStore.getCollection('storage_locations', tenantId) || [];
 
-      const locOpts = locations.map(l => `<option value="${l.locationCode}">${l.locationName} (${l.locationCode})</option>`).join('');
-      const itemOpts = items.map(i => `<option value="${i.itemCode}">${i.itemName} (${i.itemCode})</option>`).join('');
+  const locOpts = locations.map(l => `<option value="${l.locationCode}">${l.locationName} (${l.locationCode})</option>`).join('');
+  const itemOpts = items.map(i => `<option value="${i.itemCode}">${i.itemName} (${i.itemCode})</option>`).join('');
 
-      return `
+  return `
         <div class="animate-fade-in flex-col gap-md">
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
             <div>
@@ -8245,18 +8810,18 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
           </div>
         </div>
       `;
-    }
+}
 
-    renderStockIssuesPage(session) {
-      const tenantId = session ? session.tenantId : '';
-      const issues = stockIssueRepository.getAll(tenantId);
-      const items = inventoryRepository.getAll(tenantId);
-      const locations = offlineStore.getCollection('storage_locations', tenantId) || [];
+renderStockIssuesPage(session) {
+  const tenantId = session ? session.tenantId : '';
+  const issues = stockIssueRepository.getAll(tenantId);
+  const items = inventoryRepository.getAll(tenantId);
+  const locations = offlineStore.getCollection('storage_locations', tenantId) || [];
 
-      const locOpts = locations.map(l => `<option value="${l.locationCode}">${l.locationName} (${l.locationCode})</option>`).join('');
-      const itemOpts = items.map(i => `<option value="${i.itemCode}">${i.itemName} (${i.itemCode})</option>`).join('');
+  const locOpts = locations.map(l => `<option value="${l.locationCode}">${l.locationName} (${l.locationCode})</option>`).join('');
+  const itemOpts = items.map(i => `<option value="${i.itemCode}">${i.itemName} (${i.itemCode})</option>`).join('');
 
-      return `
+  return `
         <div class="animate-fade-in flex-col gap-md">
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
             <div>
@@ -8364,18 +8929,18 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
           </div>
         </div>
       `;
-    }
+}
 
-    renderStockAdjustmentsPage(session) {
-      const tenantId = session ? session.tenantId : '';
-      const adjustments = stockAdjustmentRepository.getAll(tenantId);
-      const items = inventoryRepository.getAll(tenantId);
-      const locations = offlineStore.getCollection('storage_locations', tenantId) || [];
+renderStockAdjustmentsPage(session) {
+  const tenantId = session ? session.tenantId : '';
+  const adjustments = stockAdjustmentRepository.getAll(tenantId);
+  const items = inventoryRepository.getAll(tenantId);
+  const locations = offlineStore.getCollection('storage_locations', tenantId) || [];
 
-      const locOpts = locations.map(l => `<option value="${l.locationCode}">${l.locationName} (${l.locationCode})</option>`).join('');
-      const itemOpts = items.map(i => `<option value="${i.itemCode}">${i.itemName} (${i.itemCode})</option>`).join('');
+  const locOpts = locations.map(l => `<option value="${l.locationCode}">${l.locationName} (${l.locationCode})</option>`).join('');
+  const itemOpts = items.map(i => `<option value="${i.itemCode}">${i.itemName} (${i.itemCode})</option>`).join('');
 
-      return `
+  return `
         <div class="animate-fade-in flex-col gap-md">
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
             <div>
@@ -8491,16 +9056,16 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
           </div>
         </div>
       `;
-    }
+}
 
-    renderStockCountsPage(session) {
-      const tenantId = session ? session.tenantId : '';
-      const counts = stockCountRepository.getAll(tenantId);
-      const items = inventoryRepository.getAll(tenantId);
-      const locations = offlineStore.getCollection('storage_locations', tenantId) || [];
-      const locOpts = locations.map(l => `<option value="${l.locationCode}">${l.locationName} (${l.locationCode})</option>`).join('');
+renderStockCountsPage(session) {
+  const tenantId = session ? session.tenantId : '';
+  const counts = stockCountRepository.getAll(tenantId);
+  const items = inventoryRepository.getAll(tenantId);
+  const locations = offlineStore.getCollection('storage_locations', tenantId) || [];
+  const locOpts = locations.map(l => `<option value="${l.locationCode}">${l.locationName} (${l.locationCode})</option>`).join('');
 
-      return `
+  return `
         <div class="animate-fade-in flex-col gap-md">
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
             <div>
@@ -8583,36 +9148,36 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
           </div>
         </div>
       `;
-    }
+}
 
-    renderLowStockAlertsPage(session) {
-      const tenantId = session ? session.tenantId : '';
-      const items = inventoryRepository.getAll(tenantId);
-      const locations = offlineStore.getCollection('storage_locations', tenantId) || [];
-      const balances = offlineStore.getCollection('stock_balances', tenantId) || [];
+renderLowStockAlertsPage(session) {
+  const tenantId = session ? session.tenantId : '';
+  const items = inventoryRepository.getAll(tenantId);
+  const locations = offlineStore.getCollection('storage_locations', tenantId) || [];
+  const balances = offlineStore.getCollection('stock_balances', tenantId) || [];
 
-      const alerts = [];
-      items.forEach(i => {
-        const reorder = parseFloat(i.reorderLevel) || 0;
-        locations.forEach(l => {
-          const bal = balances.find(b => b.itemCode === i.itemCode && b.locationCode === l.locationCode && (!tenantId || b.tenantId === tenantId));
-          const currentQty = bal ? (parseFloat(bal.quantity) || 0) : 0;
-          if (currentQty <= reorder) {
-            alerts.push({
-              itemCode: i.itemCode,
-              itemName: i.itemName,
-              supplierCode: i.preferredSupplierCode || i.defaultSupplierCode || 'SUP-001',
-              locationCode: l.locationCode,
-              locationName: l.locationName,
-              currentQty,
-              reorderLevel: reorder,
-              baseUom: i.baseUom || 'KG'
-            });
-          }
+  const alerts = [];
+  items.forEach(i => {
+    const reorder = parseFloat(i.reorderLevel) || 0;
+    locations.forEach(l => {
+      const bal = balances.find(b => b.itemCode === i.itemCode && b.locationCode === l.locationCode && (!tenantId || b.tenantId === tenantId));
+      const currentQty = bal ? (parseFloat(bal.quantity) || 0) : 0;
+      if (currentQty <= reorder) {
+        alerts.push({
+          itemCode: i.itemCode,
+          itemName: i.itemName,
+          supplierCode: i.preferredSupplierCode || i.defaultSupplierCode || 'SUP-001',
+          locationCode: l.locationCode,
+          locationName: l.locationName,
+          currentQty,
+          reorderLevel: reorder,
+          baseUom: i.baseUom || 'KG'
         });
-      });
+      }
+    });
+  });
 
-      return `
+  return `
         <div class="animate-fade-in flex-col gap-md">
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <div>
@@ -8657,21 +9222,21 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
           </div>
         </div>
       `;
-    }
+}
 
-    renderStockLedgerExplorerPage(session) {
-      const tenantId = session ? session.tenantId : '';
-      const ledger = offlineStore.getCollection('stock_ledger', tenantId) || [];
-      const filterLoc = this.ledgerFilterLoc || 'ALL';
-      const filterType = this.ledgerFilterType || 'ALL';
+renderStockLedgerExplorerPage(session) {
+  const tenantId = session ? session.tenantId : '';
+  const ledger = offlineStore.getCollection('stock_ledger', tenantId) || [];
+  const filterLoc = this.ledgerFilterLoc || 'ALL';
+  const filterType = this.ledgerFilterType || 'ALL';
 
-      const filteredLedger = ledger.filter(l => {
-        if (filterLoc !== 'ALL' && l.locationCode !== filterLoc) return false;
-        if (filterType !== 'ALL' && l.transactionType !== filterType) return false;
-        return true;
-      });
+  const filteredLedger = ledger.filter(l => {
+    if (filterLoc !== 'ALL' && l.locationCode !== filterLoc) return false;
+    if (filterType !== 'ALL' && l.transactionType !== filterType) return false;
+    return true;
+  });
 
-      return `
+  return `
         <div class="animate-fade-in flex-col gap-md">
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
             <div>
@@ -8688,14 +9253,14 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
             <div>
               <label style="font-size:0.75rem; margin-right:4px;">Transaction Type</label>
               <select id="inp-ledger-filter-type" style="font-size:0.8rem; padding:4px;">
-                <option value="ALL" ${filterType==='ALL'?'selected':''}>All Transaction Types</option>
-                <option value="GOODS_RECEIPT_INBOUND" ${filterType==='GOODS_RECEIPT_INBOUND'?'selected':''}>GOODS_RECEIPT_INBOUND</option>
-                <option value="OPENING_STOCK_INBOUND" ${filterType==='OPENING_STOCK_INBOUND'?'selected':''}>OPENING_STOCK_INBOUND</option>
-                <option value="TRANSFER_OUT" ${filterType==='TRANSFER_OUT'?'selected':''}>TRANSFER_OUT</option>
-                <option value="TRANSFER_IN" ${filterType==='TRANSFER_IN'?'selected':''}>TRANSFER_IN</option>
-                <option value="ISSUE_OUT" ${filterType==='ISSUE_OUT'?'selected':''}>ISSUE_OUT</option>
-                <option value="ADJUSTMENT_OUT" ${filterType==='ADJUSTMENT_OUT'?'selected':''}>ADJUSTMENT_OUT</option>
-                <option value="ADJUSTMENT_IN" ${filterType==='ADJUSTMENT_IN'?'selected':''}>ADJUSTMENT_IN</option>
+                <option value="ALL" ${filterType === 'ALL' ? 'selected' : ''}>All Transaction Types</option>
+                <option value="GOODS_RECEIPT_INBOUND" ${filterType === 'GOODS_RECEIPT_INBOUND' ? 'selected' : ''}>GOODS_RECEIPT_INBOUND</option>
+                <option value="OPENING_STOCK_INBOUND" ${filterType === 'OPENING_STOCK_INBOUND' ? 'selected' : ''}>OPENING_STOCK_INBOUND</option>
+                <option value="TRANSFER_OUT" ${filterType === 'TRANSFER_OUT' ? 'selected' : ''}>TRANSFER_OUT</option>
+                <option value="TRANSFER_IN" ${filterType === 'TRANSFER_IN' ? 'selected' : ''}>TRANSFER_IN</option>
+                <option value="ISSUE_OUT" ${filterType === 'ISSUE_OUT' ? 'selected' : ''}>ISSUE_OUT</option>
+                <option value="ADJUSTMENT_OUT" ${filterType === 'ADJUSTMENT_OUT' ? 'selected' : ''}>ADJUSTMENT_OUT</option>
+                <option value="ADJUSTMENT_IN" ${filterType === 'ADJUSTMENT_IN' ? 'selected' : ''}>ADJUSTMENT_IN</option>
               </select>
             </div>
           </div>
@@ -8740,69 +9305,69 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
           </div>
         </div>
       `;
-    }
+}
 
-    renderMasterItemDetailPage(session) {
-      const tenantId = session ? session.tenantId : '';
-      const code = this.selectedMasterItemCode;
-      const item = inventoryRepository.getByCode(code, tenantId) || inventoryRepository.getById(code, tenantId);
+renderMasterItemDetailPage(session) {
+  const tenantId = session ? session.tenantId : '';
+  const code = this.selectedMasterItemCode;
+  const item = inventoryRepository.getByCode(code, tenantId) || inventoryRepository.getById(code, tenantId);
 
-      if (!item) {
-        return `
+  if (!item) {
+    return `
           <div class="animate-fade-in card" style="padding:30px; text-align:center;">
             <h3>❌ Master Item Not Found</h3>
             <p style="color:var(--text-muted);">The requested inventory item "${code}" could not be located.</p>
             <button class="btn-secondary" id="btn-back-from-detail">← Back to Master Catalog</button>
           </div>
         `;
-      }
+  }
 
-      const purUom = item.purchaseUom || item.baseUom || 'KG';
-      const factor = parseFloat(item.conversionFactor) || 1;
-      const purPrice = parseFloat(item.lastPurchasePrice) || 0;
-      const baseCost = parseFloat(item.unitValuation) || (factor > 0 ? (purPrice / factor) : purPrice);
-      const yieldPct = item.standardYieldPercent !== undefined ? item.standardYieldPercent : 100.0;
-      const deptScope = item.departmentUsageScope || 'ALL';
-      const catObj = categoryRepository.getByCode(item.categoryCode, tenantId);
-      const catName = catObj ? catObj.categoryName : (item.categoryName || item.categoryCode);
-      const famCode = catObj ? catObj.productFamilyCode : (item.productFamilyCode || 'FAM-PRODUCE');
-      const famObj = PRODUCT_FAMILIES_REGISTRY[famCode] || { icon: '📦', name: 'General', code: famCode };
+  const purUom = item.purchaseUom || item.baseUom || 'KG';
+  const factor = parseFloat(item.conversionFactor) || 1;
+  const purPrice = parseFloat(item.lastPurchasePrice) || 0;
+  const baseCost = parseFloat(item.unitValuation) || (factor > 0 ? (purPrice / factor) : purPrice);
+  const yieldPct = item.standardYieldPercent !== undefined ? item.standardYieldPercent : 100.0;
+  const deptScope = item.departmentUsageScope || 'ALL';
+  const catObj = categoryRepository.getByCode(item.categoryCode, tenantId);
+  const catName = catObj ? catObj.categoryName : (item.categoryName || item.categoryCode);
+  const famCode = catObj ? catObj.productFamilyCode : (item.productFamilyCode || 'FAM-PRODUCE');
+  const famObj = PRODUCT_FAMILIES_REGISTRY[famCode] || { icon: '📦', name: 'General', code: famCode };
 
-      const locations = offlineStore.getCollection('storage_locations', tenantId) || [];
-      const balances = offlineStore.getCollection('stock_balances', tenantId) || [];
-      const itemBalances = balances.filter(b => b.itemCode === item.itemCode || b.itemId === item.id);
+  const locations = offlineStore.getCollection('storage_locations', tenantId) || [];
+  const balances = offlineStore.getCollection('stock_balances', tenantId) || [];
+  const itemBalances = balances.filter(b => b.itemCode === item.itemCode || b.itemId === item.id);
 
-      let locStockMap = [];
-      if (itemBalances.length > 0) {
-        locStockMap = itemBalances.map(b => {
-          const loc = locations.find(l => l.locationCode === b.locationCode) || { locationName: b.locationCode, locationType: 'Store' };
-          return {
-            locationCode: b.locationCode,
-            locationName: loc.locationName,
-            locationType: loc.locationType || 'Store',
-            quantity: parseFloat(b.quantity) || 0
-          };
-        });
-      } else {
-        const allowedLocs = item.allowedLocationCodes || [item.defaultLocationCode || 'LOC-MWH'];
-        const totalStock = parseFloat(item.currentStock !== undefined ? item.currentStock : (item.openingStock !== undefined ? item.openingStock : (item.reorderQuantity || 10)));
-        
-        allowedLocs.forEach((locCode, idx) => {
-          const loc = locations.find(l => l.locationCode === locCode) || { locationName: locCode, locationType: 'Store' };
-          const qty = allowedLocs.length === 1 ? totalStock : (idx === 0 ? Math.round(totalStock * 0.7 * 1000) / 1000 : Math.round((totalStock * 0.3 / (allowedLocs.length - 1)) * 1000) / 1000);
-          locStockMap.push({
-            locationCode: locCode,
-            locationName: loc.locationName,
-            locationType: loc.locationType || 'Store',
-            quantity: qty
-          });
-        });
-      }
+  let locStockMap = [];
+  if (itemBalances.length > 0) {
+    locStockMap = itemBalances.map(b => {
+      const loc = locations.find(l => l.locationCode === b.locationCode) || { locationName: b.locationCode, locationType: 'Store' };
+      return {
+        locationCode: b.locationCode,
+        locationName: loc.locationName,
+        locationType: loc.locationType || 'Store',
+        quantity: parseFloat(b.quantity) || 0
+      };
+    });
+  } else {
+    const allowedLocs = item.allowedLocationCodes || [item.defaultLocationCode || 'LOC-MWH'];
+    const totalStock = parseFloat(item.currentStock !== undefined ? item.currentStock : (item.openingStock !== undefined ? item.openingStock : (item.reorderQuantity || 10)));
 
-      const totalCombinedStock = locStockMap.reduce((sum, l) => sum + l.quantity, 0);
-      const totalCombinedValuation = totalCombinedStock * baseCost;
+    allowedLocs.forEach((locCode, idx) => {
+      const loc = locations.find(l => l.locationCode === locCode) || { locationName: locCode, locationType: 'Store' };
+      const qty = allowedLocs.length === 1 ? totalStock : (idx === 0 ? Math.round(totalStock * 0.7 * 1000) / 1000 : Math.round((totalStock * 0.3 / (allowedLocs.length - 1)) * 1000) / 1000);
+      locStockMap.push({
+        locationCode: locCode,
+        locationName: loc.locationName,
+        locationType: loc.locationType || 'Store',
+        quantity: qty
+      });
+    });
+  }
 
-      return `
+  const totalCombinedStock = locStockMap.reduce((sum, l) => sum + l.quantity, 0);
+  const totalCombinedValuation = totalCombinedStock * baseCost;
+
+  return `
         <div class="animate-fade-in flex-col gap-md">
           <!-- Top Navigation Header -->
           <div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface-1); padding:16px 20px; border-radius:8px; border:1px solid var(--border-subtle);">
@@ -8872,8 +9437,8 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
               </thead>
               <tbody>
                 ${locStockMap.map(l => {
-                  const val = l.quantity * baseCost;
-                  return `
+    const val = l.quantity * baseCost;
+    return `
                     <tr style="border-bottom:1px solid var(--border-subtle);">
                       <td style="padding:10px; font-weight:700; font-family:monospace; color:var(--accent-primary);">${l.locationCode}</td>
                       <td style="padding:10px; font-weight:600;">${l.locationName}</td>
@@ -8883,7 +9448,7 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
                       <td style="padding:10px;"><span class="badge badge-success">Active Store Balance</span></td>
                     </tr>
                   `;
-                }).join('')}
+  }).join('')}
               </tbody>
             </table>
           </div>
@@ -8958,20 +9523,20 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
           </div>
         </div>
       `;
-    }
+}
 
-    // 🏛️ Card 2: Dining Areas Configuration View (PD-019 & PD-019B)
-    renderConfigAreas(mount, session) {
-      const tenantId = session.tenantId;
-      const areas = offlineStore.getCollection('dining_areas', tenantId) || [];
-      const tables = tableRepository.getAll(tenantId);
-      const activeAreas = areas.filter(a => a.status !== 'ARCHIVED');
-      const totalSeats = activeAreas.reduce((sum, a) => {
-        const areaTables = tables.filter(t => t.areaId === a.id && t.status !== 'ARCHIVED');
-        return sum + areaTables.reduce((ts, t) => ts + (t.seats || 0), 0);
-      }, 0);
+// 🏛️ Card 2: Dining Areas Configuration View (PD-019 & PD-019B)
+renderConfigAreas(mount, session) {
+  const tenantId = session.tenantId;
+  const areas = offlineStore.getCollection('dining_areas', tenantId) || [];
+  const tables = tableRepository.getAll(tenantId);
+  const activeAreas = areas.filter(a => a.status !== 'ARCHIVED');
+  const totalSeats = activeAreas.reduce((sum, a) => {
+    const areaTables = tables.filter(t => t.areaId === a.id && t.status !== 'ARCHIVED');
+    return sum + areaTables.reduce((ts, t) => ts + (t.seats || 0), 0);
+  }, 0);
 
-      mount.innerHTML = `
+  mount.innerHTML = `
         <div class="animate-fade-in" style="display:flex; flex-direction:column; gap:20px;">
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <div>
@@ -9009,9 +9574,9 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
                 </thead>
                 <tbody>
                   ${activeAreas.map(a => {
-                    const areaTables = tables.filter(t => t.areaId === a.id && t.status !== 'ARCHIVED');
-                    const areaSeats = areaTables.reduce((sum, t) => sum + (t.seats || 0), 0);
-                    return `
+    const areaTables = tables.filter(t => t.areaId === a.id && t.status !== 'ARCHIVED');
+    const areaSeats = areaTables.reduce((sum, t) => sum + (t.seats || 0), 0);
+    return `
                       <tr style="border-bottom:1px solid var(--border-subtle);">
                         <td style="padding:10px; font-weight:700;">${a.areaCode}</td>
                         <td style="padding:10px; font-weight:600;">${a.areaName}</td>
@@ -9024,7 +9589,7 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
                         </td>
                       </tr>
                     `;
-                  }).join('')}
+  }).join('')}
                 </tbody>
               </table>
             ` : `
@@ -9036,30 +9601,30 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
         </div>
       `;
 
-      mount.querySelector('#btn-add-area-modal').addEventListener('click', () => this.openAddAreaModal(session));
-      mount.querySelectorAll('.btn-archive-area').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const areaId = btn.dataset.id;
-          const assigned = tables.filter(t => t.areaId === areaId && t.status !== 'ARCHIVED');
-          if (assigned.length > 0) {
-            alert(`❌ Cannot archive area! ${assigned.length} table(s) are assigned to this area. Reassign tables first.`);
-            return;
-          }
-          if (confirm('Archive this dining area?')) {
-            offlineStore.updateItem('dining_areas', 'id', areaId, { status: 'ARCHIVED' });
-            alert('Area archived!');
-            this.renderConfigAreas(mount, session);
-          }
-        });
-      });
-    }
+  mount.querySelector('#btn-add-area-modal').addEventListener('click', () => this.openAddAreaModal(session));
+  mount.querySelectorAll('.btn-archive-area').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const areaId = btn.dataset.id;
+      const assigned = tables.filter(t => t.areaId === areaId && t.status !== 'ARCHIVED');
+      if (assigned.length > 0) {
+        alert(`❌ Cannot archive area! ${assigned.length} table(s) are assigned to this area. Reassign tables first.`);
+        return;
+      }
+      if (confirm('Archive this dining area?')) {
+        offlineStore.updateItem('dining_areas', 'id', areaId, { status: 'ARCHIVED' });
+        alert('Area archived!');
+        this.renderConfigAreas(mount, session);
+      }
+    });
+  });
+}
 
-    openAddAreaModal(session) {
-      const modalMount = this.appEl.querySelector('#modal-container-mount');
-      const modal = document.createElement('div');
-      modal.className = 'lock-screen-overlay animate-fade-in';
+openAddAreaModal(session) {
+  const modalMount = this.appEl.querySelector('#modal-container-mount');
+  const modal = document.createElement('div');
+  modal.className = 'lock-screen-overlay animate-fade-in';
 
-      modal.innerHTML = `
+  modal.innerHTML = `
         <div class="card" style="width:480px; background:var(--bg-surface-1); padding:24px;">
           <h3>+ Add Dining Area</h3>
           <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:16px;">Define a physical dining zone (PD-019 Specification).</p>
@@ -9100,49 +9665,49 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
         </div>
       `;
 
-      modalMount.innerHTML = '';
-      modalMount.appendChild(modal);
+  modalMount.innerHTML = '';
+  modalMount.appendChild(modal);
 
-      modal.querySelector('#btn-area-cancel').addEventListener('click', () => { modalMount.innerHTML = ''; });
-      modal.querySelector('#btn-area-save').addEventListener('click', () => {
-        const areaName = modal.querySelector('#inp-area-name').value.trim();
-        const areaCode = modal.querySelector('#inp-area-code').value.trim().toUpperCase();
-        const areaType = modal.querySelector('#inp-area-type').value;
-        const reservationPolicy = modal.querySelector('#inp-area-policy').value;
+  modal.querySelector('#btn-area-cancel').addEventListener('click', () => { modalMount.innerHTML = ''; });
+  modal.querySelector('#btn-area-save').addEventListener('click', () => {
+    const areaName = modal.querySelector('#inp-area-name').value.trim();
+    const areaCode = modal.querySelector('#inp-area-code').value.trim().toUpperCase();
+    const areaType = modal.querySelector('#inp-area-type').value;
+    const reservationPolicy = modal.querySelector('#inp-area-policy').value;
 
-        if (!areaName || !areaCode) {
-          alert('❌ Please enter an Area Name and Area Code Prefix.');
-          return;
-        }
-
-        const newArea = {
-          id: 'area-' + Math.random().toString(36).substring(2, 7),
-          tenantId: session.tenantId,
-          areaCode,
-          areaName,
-          areaType,
-          reservationPolicy,
-          status: 'OPEN'
-        };
-
-        offlineStore.appendItem('dining_areas', newArea);
-        offlineJournal.createSyncJob('CREATE_DINING_AREA', session.tenantId, 'dining_areas', newArea, session);
-        logAudit(session.employeeName, `Created Dining Area "${areaName}" (${areaCode})`, session.tenantId);
-
-        alert(`🎉 Dining Area "${areaName}" created successfully!`);
-        modalMount.innerHTML = '';
-        this.renderConfigAreas(this.appEl.querySelector('#main-mount'), session);
-      });
+    if (!areaName || !areaCode) {
+      alert('❌ Please enter an Area Name and Area Code Prefix.');
+      return;
     }
 
-    // 🍽️ Card 3: Dining Tables & Assets Configuration View (PD-020 & PD-021)
-    renderConfigTables(mount, session) {
-      const tenantId = session.tenantId;
-      const areas = offlineStore.getCollection('dining_areas', tenantId) || [];
-      const tables = tableRepository.getAll(tenantId);
-      const activeTables = tables.filter(t => t.status !== 'ARCHIVED');
+    const newArea = {
+      id: 'area-' + Math.random().toString(36).substring(2, 7),
+      tenantId: session.tenantId,
+      areaCode,
+      areaName,
+      areaType,
+      reservationPolicy,
+      status: 'OPEN'
+    };
 
-      mount.innerHTML = `
+    offlineStore.appendItem('dining_areas', newArea);
+    offlineJournal.createSyncJob('CREATE_DINING_AREA', session.tenantId, 'dining_areas', newArea, session);
+    logAudit(session.employeeName, `Created Dining Area "${areaName}" (${areaCode})`, session.tenantId);
+
+    alert(`🎉 Dining Area "${areaName}" created successfully!`);
+    modalMount.innerHTML = '';
+    this.renderConfigAreas(this.appEl.querySelector('#main-mount'), session);
+  });
+}
+
+// 🍽️ Card 3: Dining Tables & Assets Configuration View (PD-020 & PD-021)
+renderConfigTables(mount, session) {
+  const tenantId = session.tenantId;
+  const areas = offlineStore.getCollection('dining_areas', tenantId) || [];
+  const tables = tableRepository.getAll(tenantId);
+  const activeTables = tables.filter(t => t.status !== 'ARCHIVED');
+
+  mount.innerHTML = `
         <div class="animate-fade-in" style="display:flex; flex-direction:column; gap:20px;">
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <div>
@@ -9182,8 +9747,8 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
                 </thead>
                 <tbody>
                   ${activeTables.map(t => {
-                    const area = areas.find(a => a.id === t.areaId);
-                    return `
+    const area = areas.find(a => a.id === t.areaId);
+    return `
                       <tr style="border-bottom:1px solid var(--border-subtle);">
                         <td style="padding:10px; font-weight:700;">${t.tableCode}</td>
                         <td style="padding:10px; font-weight:600;">${area ? area.areaName : 'Unassigned'}</td>
@@ -9196,7 +9761,7 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
                         </td>
                       </tr>
                     `;
-                  }).join('')}
+  }).join('')}
                 </tbody>
               </table>
             ` : `
@@ -9208,31 +9773,31 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
         </div>
       `;
 
-      mount.querySelector('#btn-add-table-modal').addEventListener('click', () => this.openAddTableModal(session));
-      mount.querySelector('#btn-bulk-table-modal').addEventListener('click', () => this.openBulkGenerateTablesModal(session));
+  mount.querySelector('#btn-add-table-modal').addEventListener('click', () => this.openAddTableModal(session));
+  mount.querySelector('#btn-bulk-table-modal').addEventListener('click', () => this.openBulkGenerateTablesModal(session));
 
-      mount.querySelectorAll('.btn-archive-table').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const tid = btn.dataset.id;
-          if (confirm('Archive this table asset?')) {
-            offlineStore.updateItem('tables_master', 'id', tid, { status: 'ARCHIVED' });
-            alert('Table archived!');
-            this.renderConfigTables(mount, session);
-          }
-        });
-      });
-    }
+  mount.querySelectorAll('.btn-archive-table').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tid = btn.dataset.id;
+      if (confirm('Archive this table asset?')) {
+        offlineStore.updateItem('tables_master', 'id', tid, { status: 'ARCHIVED' });
+        alert('Table archived!');
+        this.renderConfigTables(mount, session);
+      }
+    });
+  });
+}
 
-    openBulkGenerateTablesModal(session) {
-      const modalMount = this.appEl.querySelector('#modal-container-mount');
-      const modal = document.createElement('div');
-      modal.className = 'lock-screen-overlay animate-fade-in';
+openBulkGenerateTablesModal(session) {
+  const modalMount = this.appEl.querySelector('#modal-container-mount');
+  const modal = document.createElement('div');
+  modal.className = 'lock-screen-overlay animate-fade-in';
 
-      const tenantId = session.tenantId;
-      const areas = offlineStore.getCollection('dining_areas', tenantId) || [];
-      const activeAreas = areas.filter(a => a.status !== 'ARCHIVED');
+  const tenantId = session.tenantId;
+  const areas = offlineStore.getCollection('dining_areas', tenantId) || [];
+  const activeAreas = areas.filter(a => a.status !== 'ARCHIVED');
 
-      modal.innerHTML = `
+  modal.innerHTML = `
         <div class="card" style="width:540px; background:var(--bg-surface-1); padding:24px;">
           <h3>⚡ Bulk Generate Dining Tables</h3>
           <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:16px;">Quickly generate a sequence of dining table assets for a selected area.</p>
@@ -9290,76 +9855,76 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
         </div>
       `;
 
-      modalMount.innerHTML = '';
-      modalMount.appendChild(modal);
+  modalMount.innerHTML = '';
+  modalMount.appendChild(modal);
 
-      const updatePreview = () => {
-        const areaSel = modal.querySelector('#inp-bulk-area');
-        if (!areaSel || !areaSel.options.length || areaSel.selectedIndex === -1) return;
-        const areaCode = areaSel.options[areaSel.selectedIndex].dataset.code || 'MH';
-        const prefix = modal.querySelector('#inp-bulk-prefix').value.trim().toUpperCase() || 'T';
-        const start = parseInt(modal.querySelector('#inp-bulk-start').value) || 1;
-        const count = parseInt(modal.querySelector('#inp-bulk-count').value) || 1;
-        const seats = parseInt(modal.querySelector('#inp-bulk-seats').value) || 4;
+  const updatePreview = () => {
+    const areaSel = modal.querySelector('#inp-bulk-area');
+    if (!areaSel || !areaSel.options.length || areaSel.selectedIndex === -1) return;
+    const areaCode = areaSel.options[areaSel.selectedIndex].dataset.code || 'MH';
+    const prefix = modal.querySelector('#inp-bulk-prefix').value.trim().toUpperCase() || 'T';
+    const start = parseInt(modal.querySelector('#inp-bulk-start').value) || 1;
+    const count = parseInt(modal.querySelector('#inp-bulk-count').value) || 1;
+    const seats = parseInt(modal.querySelector('#inp-bulk-seats').value) || 4;
 
-        const end = start + count - 1;
-        const startStr = `${areaCode}-${prefix}-${start.toString().padStart(2, '0')}`;
-        const endStr = `${areaCode}-${prefix}-${end.toString().padStart(2, '0')}`;
+    const end = start + count - 1;
+    const startStr = `${areaCode}-${prefix}-${start.toString().padStart(2, '0')}`;
+    const endStr = `${areaCode}-${prefix}-${end.toString().padStart(2, '0')}`;
 
-        modal.querySelector('#bulk-preview-text').textContent = `Will generate ${count} tables: ${startStr} through ${endStr} (${seats} seats each)`;
-      };
+    modal.querySelector('#bulk-preview-text').textContent = `Will generate ${count} tables: ${startStr} through ${endStr} (${seats} seats each)`;
+  };
 
-      modal.querySelectorAll('input, select').forEach(el => el.addEventListener('input', updatePreview));
-      updatePreview();
+  modal.querySelectorAll('input, select').forEach(el => el.addEventListener('input', updatePreview));
+  updatePreview();
 
-      modal.querySelector('#btn-bulk-cancel').addEventListener('click', () => { modalMount.innerHTML = ''; });
-      modal.querySelector('#btn-bulk-save').addEventListener('click', () => {
-        const areaId = modal.querySelector('#inp-bulk-area').value;
-        const prefix = modal.querySelector('#inp-bulk-prefix').value.trim().toUpperCase() || 'T';
-        const start = parseInt(modal.querySelector('#inp-bulk-start').value) || 1;
-        const count = parseInt(modal.querySelector('#inp-bulk-count').value) || 1;
-        const seats = parseInt(modal.querySelector('#inp-bulk-seats').value) || 4;
-        const shape = modal.querySelector('#inp-bulk-shape').value;
+  modal.querySelector('#btn-bulk-cancel').addEventListener('click', () => { modalMount.innerHTML = ''; });
+  modal.querySelector('#btn-bulk-save').addEventListener('click', () => {
+    const areaId = modal.querySelector('#inp-bulk-area').value;
+    const prefix = modal.querySelector('#inp-bulk-prefix').value.trim().toUpperCase() || 'T';
+    const start = parseInt(modal.querySelector('#inp-bulk-start').value) || 1;
+    const count = parseInt(modal.querySelector('#inp-bulk-count').value) || 1;
+    const seats = parseInt(modal.querySelector('#inp-bulk-seats').value) || 4;
+    const shape = modal.querySelector('#inp-bulk-shape').value;
 
-        if (!areaId) {
-          alert('❌ Please select a parent Dining Area.');
-          return;
-        }
-
-        const areaSel = modal.querySelector('#inp-bulk-area');
-        const areaCode = areaSel.options[areaSel.selectedIndex].dataset.code || 'MH';
-
-        let createdCount = 0;
-        for (let i = 0; i < count; i++) {
-          const numStr = (start + i).toString().padStart(2, '0');
-          const tableCode = `${areaCode}-${prefix}-${numStr}`;
-
-          tableRepository.create({
-            areaId,
-            tableCode,
-            seats,
-            shape,
-            isMergeable: true
-          }, session);
-          createdCount++;
-        }
-
-        alert(`⚡ Successfully bulk generated ${createdCount} tables for area ${areaCode} via TableRepository!`);
-        modalMount.innerHTML = '';
-        this.renderConfigTables(this.appEl.querySelector('#main-mount'), session);
-      });
+    if (!areaId) {
+      alert('❌ Please select a parent Dining Area.');
+      return;
     }
 
-    openAddTableModal(session) {
-      const modalMount = this.appEl.querySelector('#modal-container-mount');
-      const modal = document.createElement('div');
-      modal.className = 'lock-screen-overlay animate-fade-in';
+    const areaSel = modal.querySelector('#inp-bulk-area');
+    const areaCode = areaSel.options[areaSel.selectedIndex].dataset.code || 'MH';
 
-      const tenantId = session.tenantId;
-      const areas = offlineStore.getCollection('dining_areas', tenantId) || [];
-      const activeAreas = areas.filter(a => a.status !== 'ARCHIVED');
+    let createdCount = 0;
+    for (let i = 0; i < count; i++) {
+      const numStr = (start + i).toString().padStart(2, '0');
+      const tableCode = `${areaCode}-${prefix}-${numStr}`;
 
-      modal.innerHTML = `
+      tableRepository.create({
+        areaId,
+        tableCode,
+        seats,
+        shape,
+        isMergeable: true
+      }, session);
+      createdCount++;
+    }
+
+    alert(`⚡ Successfully bulk generated ${createdCount} tables for area ${areaCode} via TableRepository!`);
+    modalMount.innerHTML = '';
+    this.renderConfigTables(this.appEl.querySelector('#main-mount'), session);
+  });
+}
+
+openAddTableModal(session) {
+  const modalMount = this.appEl.querySelector('#modal-container-mount');
+  const modal = document.createElement('div');
+  modal.className = 'lock-screen-overlay animate-fade-in';
+
+  const tenantId = session.tenantId;
+  const areas = offlineStore.getCollection('dining_areas', tenantId) || [];
+  const activeAreas = areas.filter(a => a.status !== 'ARCHIVED');
+
+  modal.innerHTML = `
         <div class="card" style="width:500px; background:var(--bg-surface-1); padding:24px;">
           <h3>+ Add Dining Table Asset</h3>
           <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:16px;">Physical seating asset (TableRepository Managed).</p>
@@ -9402,47 +9967,47 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
         </div>
       `;
 
-      modalMount.innerHTML = '';
-      modalMount.appendChild(modal);
+  modalMount.innerHTML = '';
+  modalMount.appendChild(modal);
 
-      modal.querySelector('#btn-tbl-cancel').addEventListener('click', () => { modalMount.innerHTML = ''; });
-      modal.querySelector('#btn-tbl-save').addEventListener('click', () => {
-        const areaId = modal.querySelector('#inp-tbl-area').value;
-        const rawCode = modal.querySelector('#inp-tbl-code').value.trim();
-        const seats = parseInt(modal.querySelector('#inp-tbl-seats').value) || 4;
-        const shape = modal.querySelector('#inp-tbl-shape').value;
-        const isMergeable = modal.querySelector('#chk-tbl-merge').checked;
+  modal.querySelector('#btn-tbl-cancel').addEventListener('click', () => { modalMount.innerHTML = ''; });
+  modal.querySelector('#btn-tbl-save').addEventListener('click', () => {
+    const areaId = modal.querySelector('#inp-tbl-area').value;
+    const rawCode = modal.querySelector('#inp-tbl-code').value.trim();
+    const seats = parseInt(modal.querySelector('#inp-tbl-seats').value) || 4;
+    const shape = modal.querySelector('#inp-tbl-shape').value;
+    const isMergeable = modal.querySelector('#chk-tbl-merge').checked;
 
-        if (!areaId || !rawCode) {
-          alert('❌ Please select a parent Dining Area and enter a Table Code.');
-          return;
-        }
-
-        const areaSel = modal.querySelector('#inp-tbl-area');
-        const areaCode = areaSel.options[areaSel.selectedIndex].dataset.code || 'MH';
-        const tableCode = rawCode.includes('-') ? rawCode : `${areaCode}-${rawCode}`;
-
-        tableRepository.create({
-          areaId,
-          tableCode,
-          seats,
-          shape,
-          isMergeable
-        }, session);
-
-        alert(`🎉 Table Asset "${tableCode}" (${seats} seats) saved via TableRepository!`);
-        modalMount.innerHTML = '';
-        this.renderConfigTables(this.appEl.querySelector('#main-mount'), session);
-      });
+    if (!areaId || !rawCode) {
+      alert('❌ Please select a parent Dining Area and enter a Table Code.');
+      return;
     }
 
-    // 👤 Card 4: Staff & Access Configuration View (PD-022 & PD-023)
-    renderConfigStaff(mount, session) {
-      const tenantId = session.tenantId;
-      const emps = staffRepository.getAll(tenantId);
-      const activeStaff = emps.filter(e => e.status === 'ACTIVE');
+    const areaSel = modal.querySelector('#inp-tbl-area');
+    const areaCode = areaSel.options[areaSel.selectedIndex].dataset.code || 'MH';
+    const tableCode = rawCode.includes('-') ? rawCode : `${areaCode}-${rawCode}`;
 
-      mount.innerHTML = `
+    tableRepository.create({
+      areaId,
+      tableCode,
+      seats,
+      shape,
+      isMergeable
+    }, session);
+
+    alert(`🎉 Table Asset "${tableCode}" (${seats} seats) saved via TableRepository!`);
+    modalMount.innerHTML = '';
+    this.renderConfigTables(this.appEl.querySelector('#main-mount'), session);
+  });
+}
+
+// 👤 Card 4: Staff & Access Configuration View (PD-022 & PD-023)
+renderConfigStaff(mount, session) {
+  const tenantId = session.tenantId;
+  const emps = staffRepository.getAll(tenantId);
+  const activeStaff = emps.filter(e => e.status === 'ACTIVE');
+
+  mount.innerHTML = `
         <div class="animate-fade-in" style="display:flex; flex-direction:column; gap:20px;">
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <div>
@@ -9477,8 +10042,8 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
                 </thead>
                 <tbody>
                   ${activeStaff.map(e => {
-                    const role = ROLE_TEMPLATES[e.roleId] || { name: e.roleId || 'Staff', icon: '👤' };
-                    return `
+    const role = ROLE_TEMPLATES[e.roleId] || { name: e.roleId || 'Staff', icon: '👤' };
+    return `
                       <tr style="border-bottom:1px solid var(--border-subtle);">
                         <td style="padding:10px; font-weight:700;">${e.employeeCode}</td>
                         <td style="padding:10px; font-weight:600;">${e.name}</td>
@@ -9491,7 +10056,7 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
                         </td>
                       </tr>
                     `;
-                  }).join('')}
+  }).join('')}
                 </tbody>
               </table>
             ` : `
@@ -9503,30 +10068,30 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
         </div>
       `;
 
-      mount.querySelector('#btn-add-staff-modal').addEventListener('click', () => this.openAddStaffModal(session));
-      mount.querySelectorAll('.btn-archive-staff').forEach(btn => {
-        btn.addEventListener('click', () => {
-          const eid = btn.dataset.id;
-          if (confirm('Suspend this staff member account?')) {
-            offlineStore.updateItem('employees', 'id', eid, { status: 'SUSPENDED' });
-            alert('Staff member suspended!');
-            this.renderConfigStaff(mount, session);
-          }
-        });
-      });
-    }
+  mount.querySelector('#btn-add-staff-modal').addEventListener('click', () => this.openAddStaffModal(session));
+  mount.querySelectorAll('.btn-archive-staff').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const eid = btn.dataset.id;
+      if (confirm('Suspend this staff member account?')) {
+        offlineStore.updateItem('employees', 'id', eid, { status: 'SUSPENDED' });
+        alert('Staff member suspended!');
+        this.renderConfigStaff(mount, session);
+      }
+    });
+  });
+}
 
-    openAddStaffModal(session) {
-      const modalMount = this.appEl.querySelector('#modal-container-mount');
-      const modal = document.createElement('div');
-      modal.className = 'lock-screen-overlay animate-fade-in';
+openAddStaffModal(session) {
+  const modalMount = this.appEl.querySelector('#modal-container-mount');
+  const modal = document.createElement('div');
+  modal.className = 'lock-screen-overlay animate-fade-in';
 
-      const emps = staffRepository.getAll(session.tenantId);
-      const nextNum = emps.length + 1;
-      const empCode = 'EMP-' + nextNum.toString().padStart(5, '0');
-      const randomPin = Math.floor(100000 + Math.random() * 900000).toString();
+  const emps = staffRepository.getAll(session.tenantId);
+  const nextNum = emps.length + 1;
+  const empCode = 'EMP-' + nextNum.toString().padStart(5, '0');
+  const randomPin = Math.floor(100000 + Math.random() * 900000).toString();
 
-      modal.innerHTML = `
+  modal.innerHTML = `
         <div class="card" style="width:520px; background:var(--bg-surface-1); padding:24px;">
           <h3>+ Add Staff Account (3-Step Wizard)</h3>
           <p style="font-size:0.8rem; color:var(--text-muted); margin-bottom:16px;">PD-022 & PD-023 Role Templates & PIN Security.</p>
@@ -9570,65 +10135,65 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
         </div>
       `;
 
-      modalMount.innerHTML = '';
-      modalMount.appendChild(modal);
+  modalMount.innerHTML = '';
+  modalMount.appendChild(modal);
 
-      modal.querySelector('#btn-gen-pin').addEventListener('click', () => {
-        const newPin = Math.floor(100000 + Math.random() * 900000).toString();
-        modal.querySelector('#inp-emp-pin').value = newPin;
-      });
+  modal.querySelector('#btn-gen-pin').addEventListener('click', () => {
+    const newPin = Math.floor(100000 + Math.random() * 900000).toString();
+    modal.querySelector('#inp-emp-pin').value = newPin;
+  });
 
-      modal.querySelector('#btn-emp-cancel').addEventListener('click', () => { modalMount.innerHTML = ''; });
-      modal.querySelector('#btn-emp-save').addEventListener('click', async () => {
-        const name = modal.querySelector('#inp-emp-name').value.trim();
-        const roleId = modal.querySelector('#inp-emp-role').value;
-        const pin = modal.querySelector('#inp-emp-pin').value.trim();
+  modal.querySelector('#btn-emp-cancel').addEventListener('click', () => { modalMount.innerHTML = ''; });
+  modal.querySelector('#btn-emp-save').addEventListener('click', async () => {
+    const name = modal.querySelector('#inp-emp-name').value.trim();
+    const roleId = modal.querySelector('#inp-emp-role').value;
+    const pin = modal.querySelector('#inp-emp-pin').value.trim();
 
-        if (!name || !pin || pin.length !== 6) {
-          alert('❌ Please enter a valid Full Name and 6-Digit PIN.');
-          return;
-        }
-
-        const role = ROLE_TEMPLATES[roleId] || ROLE_TEMPLATES['role-waiter'];
-        const identityId = 'id-' + Math.random().toString(36).substring(2, 7);
-        const pinHash = await hashPin(pin);
-
-        offlineStore.appendItem('identities', { id: identityId, pinHash, tenantId: session.tenantId, status: 'ACTIVE' });
-
-        staffRepository.create({
-          identityId,
-          employeeCode: empCode,
-          name,
-          roleId,
-          workspaceDefault: role.defaultWorkspace,
-          pinDisplay: pin,
-          status: 'ACTIVE'
-        }, session);
-
-        alert(`🎉 Staff Account "${name}" created with PIN "${pin}"!\nWorkspaces assigned: ${role.name}`);
-        modalMount.innerHTML = '';
-        this.renderConfigStaff(this.appEl.querySelector('#main-mount'), session);
-      });
+    if (!name || !pin || pin.length !== 6) {
+      alert('❌ Please enter a valid Full Name and 6-Digit PIN.');
+      return;
     }
 
-    renderConfigDevices(mount) {
-      mount.innerHTML = `<h2>⚙ Configuration → Devices & Printers</h2><p style="color:var(--text-muted);">Floor Tablets, KDS, BDS, Thermal Printers.</p>`;
-    }
+    const role = ROLE_TEMPLATES[roleId] || ROLE_TEMPLATES['role-waiter'];
+    const identityId = 'id-' + Math.random().toString(36).substring(2, 7);
+    const pinHash = await hashPin(pin);
 
-    renderConfigPayments(mount) {
-      mount.innerHTML = `<h2>⚙ Configuration → Payment Configuration</h2><p style="color:var(--text-muted);">UPI VPA, Cash & Card Terminal Settings.</p>`;
-    }
+    offlineStore.appendItem('identities', { id: identityId, pinHash, tenantId: session.tenantId, status: 'ACTIVE' });
 
-    renderCard1FullPage(mount, session) {
-      const tenant = tenantRepository.getById(session.tenantId) || tenantModel.getPrimaryTenant();
-      if (!tenant) {
-        mount.innerHTML = `<h2>Card 1: Business Profile & Preferences</h2><p>No active tenant found.</p>`;
-        return;
-      }
+    staffRepository.create({
+      identityId,
+      employeeCode: empCode,
+      name,
+      roleId,
+      workspaceDefault: role.defaultWorkspace,
+      pinDisplay: pin,
+      status: 'ACTIVE'
+    }, session);
 
-      const activeTab = this.card1ActiveTab || 'identity';
+    alert(`🎉 Staff Account "${name}" created with PIN "${pin}"!\nWorkspaces assigned: ${role.name}`);
+    modalMount.innerHTML = '';
+    this.renderConfigStaff(this.appEl.querySelector('#main-mount'), session);
+  });
+}
 
-      mount.innerHTML = `
+renderConfigDevices(mount) {
+  mount.innerHTML = `<h2>⚙ Configuration → Devices & Printers</h2><p style="color:var(--text-muted);">Floor Tablets, KDS, BDS, Thermal Printers.</p>`;
+}
+
+renderConfigPayments(mount) {
+  mount.innerHTML = `<h2>⚙ Configuration → Payment Configuration</h2><p style="color:var(--text-muted);">UPI VPA, Cash & Card Terminal Settings.</p>`;
+}
+
+renderCard1FullPage(mount, session) {
+  const tenant = tenantRepository.getById(session.tenantId) || tenantModel.getPrimaryTenant();
+  if (!tenant) {
+    mount.innerHTML = `<h2>Card 1: Business Profile & Preferences</h2><p>No active tenant found.</p>`;
+    return;
+  }
+
+  const activeTab = this.card1ActiveTab || 'identity';
+
+  mount.innerHTML = `
         <div class="animate-fade-in" style="display:flex; flex-direction:column; gap:20px;">
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <div>
@@ -9662,20 +10227,20 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
         </div>
       `;
 
-      mount.querySelectorAll('.card1-tab-btn').forEach(btn => {
-        btn.addEventListener('click', () => {
-          this.card1ActiveTab = btn.dataset.t;
-          this.renderCard1FullPage(mount, session);
-        });
-      });
+  mount.querySelectorAll('.card1-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      this.card1ActiveTab = btn.dataset.t;
+      this.renderCard1FullPage(mount, session);
+    });
+  });
 
-      this.bindCard1FormEvents(mount, activeTab, tenant, session);
-    }
+  this.bindCard1FormEvents(mount, activeTab, tenant, session);
+}
 
-    renderCard1SectionBody(tabKey, tenant, session) {
-      if (tabKey === 'identity') {
-        const idData = tenant.identity || {};
-        return `
+renderCard1SectionBody(tabKey, tenant, session) {
+  if (tabKey === 'identity') {
+    const idData = tenant.identity || {};
+    return `
           <h3>🏢 Business Identity</h3>
           <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:16px;">Core legal and operational identity of the restaurant.</p>
           <div class="flex-col gap-md" style="max-width:600px;">
@@ -9696,11 +10261,11 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
             </button>
           </div>
         `;
-      }
+  }
 
-      if (tabKey === 'contact') {
-        const c = tenant.contact || {};
-        return `
+  if (tabKey === 'contact') {
+    const c = tenant.contact || {};
+    return `
           <h3>📞 Contact Information</h3>
           <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:16px;">Customer and vendor communication channels.</p>
           <div class="grid grid-cols-2 gap-md" style="max-width:700px;">
@@ -9731,11 +10296,11 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
             </div>
           </div>
         `;
-      }
+  }
 
-      if (tabKey === 'address') {
-        const a = tenant.address || {};
-        return `
+  if (tabKey === 'address') {
+    const a = tenant.address || {};
+    return `
           <h3>📍 Structured Address</h3>
           <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:16px;">Physical location details used for invoices & delivery.</p>
           <div class="flex-col gap-sm" style="max-width:650px;">
@@ -9766,11 +10331,11 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
             </button>
           </div>
         `;
-      }
+  }
 
-      if (tabKey === 'compliance') {
-        const comp = tenant.compliance || {};
-        return `
+  if (tabKey === 'compliance') {
+    const comp = tenant.compliance || {};
+    return `
           <h3>📜 Compliance & Licences</h3>
           <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:16px;">Legal tax numbers and statutory food safety licences.</p>
           <div class="grid grid-cols-2 gap-md" style="max-width:700px;">
@@ -9797,11 +10362,11 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
             </div>
           </div>
         `;
-      }
+  }
 
-      if (tabKey === 'regional') {
-        const r = tenant.regional || {};
-        return `
+  if (tabKey === 'regional') {
+    const r = tenant.regional || {};
+    return `
           <h3>🌐 Regional Settings</h3>
           <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:16px;">Currency, timezone, and date formatting options.</p>
           <div class="grid grid-cols-2 gap-md" style="max-width:600px;">
@@ -9840,11 +10405,11 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
             </div>
           </div>
         `;
-      }
+  }
 
-      if (tabKey === 'branding') {
-        const b = tenant.branding || {};
-        return `
+  if (tabKey === 'branding') {
+    const b = tenant.branding || {};
+    return `
           <h3>🎨 Branding & Colors</h3>
           <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:16px;">Logos and UI theme tokens.</p>
           <div class="flex-col gap-sm" style="max-width:600px;">
@@ -9867,11 +10432,11 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
             </button>
           </div>
         `;
-      }
+  }
 
-      if (tabKey === 'preferences') {
-        const pref = tenant.businessPreferences || {};
-        return `
+  if (tabKey === 'preferences') {
+    const pref = tenant.businessPreferences || {};
+    return `
           <h3>⚙ Business Preferences</h3>
           <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:16px;">Service modes and dining features.</p>
           <div class="flex-col gap-sm" style="max-width:500px;">
@@ -9894,11 +10459,11 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
             </button>
           </div>
         `;
-      }
+  }
 
-      if (tabKey === 'billing') {
-        const bill = tenant.billingDefaults || {};
-        return `
+  if (tabKey === 'billing') {
+    const bill = tenant.billingDefaults || {};
+    return `
           <h3>💰 Billing Defaults</h3>
           <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:16px;">Tax profiles, service charge %, and rounding configuration.</p>
           <div class="grid grid-cols-2 gap-md" style="max-width:600px;">
@@ -9921,11 +10486,11 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
             </div>
           </div>
         `;
-      }
+  }
 
-      if (tabKey === 'receipts') {
-        const rec = tenant.receiptDefaults || {};
-        return `
+  if (tabKey === 'receipts') {
+    const rec = tenant.receiptDefaults || {};
+    return `
           <h3>🧾 Receipt Defaults</h3>
           <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:16px;">Thermal print receipt headers, footers, and template toggles.</p>
           <div class="flex-col gap-sm" style="max-width:600px;">
@@ -9942,156 +10507,156 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
             </button>
           </div>
         `;
-      }
+  }
 
-      return `<div>Select a tab above to edit section details.</div>`;
-    }
+  return `<div>Select a tab above to edit section details.</div>`;
+}
 
-    bindCard1FormEvents(mount, activeTab, tenant, session) {
-      const tenantId = session.tenantId;
+bindCard1FormEvents(mount, activeTab, tenant, session) {
+  const tenantId = session.tenantId;
 
-      const saveIdentity = mount.querySelector('#btn-save-c1-identity');
-      if (saveIdentity) {
-        saveIdentity.addEventListener('click', () => {
-          const name = mount.querySelector('#inp-c1-name').value.trim();
-          const legalName = mount.querySelector('#inp-c1-legal').value.trim();
-          const shortDesc = mount.querySelector('#inp-c1-desc').value.trim();
+  const saveIdentity = mount.querySelector('#btn-save-c1-identity');
+  if (saveIdentity) {
+    saveIdentity.addEventListener('click', () => {
+      const name = mount.querySelector('#inp-c1-name').value.trim();
+      const legalName = mount.querySelector('#inp-c1-legal').value.trim();
+      const shortDesc = mount.querySelector('#inp-c1-desc').value.trim();
 
-          if (!name) { alert('❌ Restaurant name cannot be empty.'); return; }
-          tenantModel.updateSection(tenantId, 'identity', { shortDesc });
-          tenantModel.updateSection(tenantId, 'name', name);
-          tenantModel.updateSection(tenantId, 'legalName', legalName);
-          alert('✔ Business Identity saved via TenantRepository!');
-          this.renderCard1FullPage(mount, session);
-        });
-      }
+      if (!name) { alert('❌ Restaurant name cannot be empty.'); return; }
+      tenantModel.updateSection(tenantId, 'identity', { shortDesc });
+      tenantModel.updateSection(tenantId, 'name', name);
+      tenantModel.updateSection(tenantId, 'legalName', legalName);
+      alert('✔ Business Identity saved via TenantRepository!');
+      this.renderCard1FullPage(mount, session);
+    });
+  }
 
-      const saveContact = mount.querySelector('#btn-save-c1-contact');
-      if (saveContact) {
-        saveContact.addEventListener('click', () => {
-          const primaryPhone = mount.querySelector('#inp-c1-phone').value.trim();
-          const secondaryPhone = mount.querySelector('#inp-c1-phone2').value.trim();
-          const email = mount.querySelector('#inp-c1-email').value.trim();
-          const whatsapp = mount.querySelector('#inp-c1-wa').value.trim();
-          const website = mount.querySelector('#inp-c1-web').value.trim();
+  const saveContact = mount.querySelector('#btn-save-c1-contact');
+  if (saveContact) {
+    saveContact.addEventListener('click', () => {
+      const primaryPhone = mount.querySelector('#inp-c1-phone').value.trim();
+      const secondaryPhone = mount.querySelector('#inp-c1-phone2').value.trim();
+      const email = mount.querySelector('#inp-c1-email').value.trim();
+      const whatsapp = mount.querySelector('#inp-c1-wa').value.trim();
+      const website = mount.querySelector('#inp-c1-web').value.trim();
 
-          tenantModel.updateSection(tenantId, 'contact', { primaryPhone, secondaryPhone, email, whatsapp, website });
-          alert('✔ Contact Information saved via TenantRepository!');
-          this.renderCard1FullPage(mount, session);
-        });
-      }
+      tenantModel.updateSection(tenantId, 'contact', { primaryPhone, secondaryPhone, email, whatsapp, website });
+      alert('✔ Contact Information saved via TenantRepository!');
+      this.renderCard1FullPage(mount, session);
+    });
+  }
 
-      const saveAddress = mount.querySelector('#btn-save-c1-address');
-      if (saveAddress) {
-        saveAddress.addEventListener('click', () => {
-          const line1 = mount.querySelector('#inp-c1-addr1').value.trim();
-          const line2 = mount.querySelector('#inp-c1-addr2').value.trim();
-          const city = mount.querySelector('#inp-c1-city').value.trim();
-          const state = mount.querySelector('#inp-c1-state').value.trim();
-          const pinCode = mount.querySelector('#inp-c1-pin').value.trim();
+  const saveAddress = mount.querySelector('#btn-save-c1-address');
+  if (saveAddress) {
+    saveAddress.addEventListener('click', () => {
+      const line1 = mount.querySelector('#inp-c1-addr1').value.trim();
+      const line2 = mount.querySelector('#inp-c1-addr2').value.trim();
+      const city = mount.querySelector('#inp-c1-city').value.trim();
+      const state = mount.querySelector('#inp-c1-state').value.trim();
+      const pinCode = mount.querySelector('#inp-c1-pin').value.trim();
 
-          tenantModel.updateSection(tenantId, 'address', { line1, line2, city, state, pinCode });
-          alert('✔ Structured Address saved via TenantRepository!');
-          this.renderCard1FullPage(mount, session);
-        });
-      }
+      tenantModel.updateSection(tenantId, 'address', { line1, line2, city, state, pinCode });
+      alert('✔ Structured Address saved via TenantRepository!');
+      this.renderCard1FullPage(mount, session);
+    });
+  }
 
-      const saveCompliance = mount.querySelector('#btn-save-c1-compliance');
-      if (saveCompliance) {
-        saveCompliance.addEventListener('click', () => {
-          const gstin = mount.querySelector('#inp-c1-gstin').value.trim();
-          const fssai = mount.querySelector('#inp-c1-fssai').value.trim();
-          const pan = mount.querySelector('#inp-c1-pan').value.trim();
-          const liquorLicence = mount.querySelector('#inp-c1-liquor').value.trim();
+  const saveCompliance = mount.querySelector('#btn-save-c1-compliance');
+  if (saveCompliance) {
+    saveCompliance.addEventListener('click', () => {
+      const gstin = mount.querySelector('#inp-c1-gstin').value.trim();
+      const fssai = mount.querySelector('#inp-c1-fssai').value.trim();
+      const pan = mount.querySelector('#inp-c1-pan').value.trim();
+      const liquorLicence = mount.querySelector('#inp-c1-liquor').value.trim();
 
-          tenantModel.updateSection(tenantId, 'compliance', { gstin, fssai, pan, liquorLicence });
-          alert('✔ Compliance details saved via TenantRepository!');
-          this.renderCard1FullPage(mount, session);
-        });
-      }
+      tenantModel.updateSection(tenantId, 'compliance', { gstin, fssai, pan, liquorLicence });
+      alert('✔ Compliance details saved via TenantRepository!');
+      this.renderCard1FullPage(mount, session);
+    });
+  }
 
-      const saveRegional = mount.querySelector('#btn-save-c1-regional');
-      if (saveRegional) {
-        saveRegional.addEventListener('click', () => {
-          const currency = mount.querySelector('#inp-c1-curr').value;
-          const timezone = mount.querySelector('#inp-c1-tz').value;
-          const dateFormat = mount.querySelector('#inp-c1-datefmt').value;
-          const timeFormat = mount.querySelector('#inp-c1-timefmt').value;
+  const saveRegional = mount.querySelector('#btn-save-c1-regional');
+  if (saveRegional) {
+    saveRegional.addEventListener('click', () => {
+      const currency = mount.querySelector('#inp-c1-curr').value;
+      const timezone = mount.querySelector('#inp-c1-tz').value;
+      const dateFormat = mount.querySelector('#inp-c1-datefmt').value;
+      const timeFormat = mount.querySelector('#inp-c1-timefmt').value;
 
-          tenantModel.updateSection(tenantId, 'regional', { currency, currencySymbol: currency === 'INR' ? '₹' : '$', timezone, dateFormat, timeFormat });
-          alert('✔ Regional Settings saved via TenantRepository!');
-          this.renderCard1FullPage(mount, session);
-        });
-      }
+      tenantModel.updateSection(tenantId, 'regional', { currency, currencySymbol: currency === 'INR' ? '₹' : '$', timezone, dateFormat, timeFormat });
+      alert('✔ Regional Settings saved via TenantRepository!');
+      this.renderCard1FullPage(mount, session);
+    });
+  }
 
-      const saveBranding = mount.querySelector('#btn-save-c1-branding');
-      if (saveBranding) {
-        saveBranding.addEventListener('click', () => {
-          const logo = mount.querySelector('#inp-c1-logo').value.trim();
-          const primaryColor = mount.querySelector('#inp-c1-pcolor').value;
-          const accentColor = mount.querySelector('#inp-c1-acolor').value;
+  const saveBranding = mount.querySelector('#btn-save-c1-branding');
+  if (saveBranding) {
+    saveBranding.addEventListener('click', () => {
+      const logo = mount.querySelector('#inp-c1-logo').value.trim();
+      const primaryColor = mount.querySelector('#inp-c1-pcolor').value;
+      const accentColor = mount.querySelector('#inp-c1-acolor').value;
 
-          tenantModel.updateSection(tenantId, 'branding', { logo, primaryColor, accentColor });
-          alert('✔ Branding tokens saved via TenantRepository!');
-          this.renderCard1FullPage(mount, session);
-        });
-      }
+      tenantModel.updateSection(tenantId, 'branding', { logo, primaryColor, accentColor });
+      alert('✔ Branding tokens saved via TenantRepository!');
+      this.renderCard1FullPage(mount, session);
+    });
+  }
 
-      const savePref = mount.querySelector('#btn-save-c1-pref');
-      if (savePref) {
-        savePref.addEventListener('click', () => {
-          const restaurantType = mount.querySelector('#inp-c1-type').value;
-          const isVeg = mount.querySelector('#chk-c1-veg').checked;
-          const isAlcoholServed = mount.querySelector('#chk-c1-alcohol').checked;
-          const isPetFriendly = mount.querySelector('#chk-c1-pet').checked;
+  const savePref = mount.querySelector('#btn-save-c1-pref');
+  if (savePref) {
+    savePref.addEventListener('click', () => {
+      const restaurantType = mount.querySelector('#inp-c1-type').value;
+      const isVeg = mount.querySelector('#chk-c1-veg').checked;
+      const isAlcoholServed = mount.querySelector('#chk-c1-alcohol').checked;
+      const isPetFriendly = mount.querySelector('#chk-c1-pet').checked;
 
-          tenantModel.updateSection(tenantId, 'businessPreferences', { restaurantType, isVeg, isAlcoholServed, isPetFriendly });
-          alert('✔ Business Preferences saved via TenantRepository!');
-          this.renderCard1FullPage(mount, session);
-        });
-      }
+      tenantModel.updateSection(tenantId, 'businessPreferences', { restaurantType, isVeg, isAlcoholServed, isPetFriendly });
+      alert('✔ Business Preferences saved via TenantRepository!');
+      this.renderCard1FullPage(mount, session);
+    });
+  }
 
-      const saveBilling = mount.querySelector('#btn-save-c1-billing');
-      if (saveBilling) {
-        saveBilling.addEventListener('click', () => {
-          const defaultTaxProfile = mount.querySelector('#inp-c1-taxprof').value;
-          const serviceChargePercent = parseFloat(mount.querySelector('#inp-c1-svc').value) || 0;
+  const saveBilling = mount.querySelector('#btn-save-c1-billing');
+  if (saveBilling) {
+    saveBilling.addEventListener('click', () => {
+      const defaultTaxProfile = mount.querySelector('#inp-c1-taxprof').value;
+      const serviceChargePercent = parseFloat(mount.querySelector('#inp-c1-svc').value) || 0;
 
-          tenantModel.updateSection(tenantId, 'billingDefaults', { defaultTaxProfile, serviceChargePercent });
-          alert('✔ Billing Defaults saved via TenantRepository!');
-          this.renderCard1FullPage(mount, session);
-        });
-      }
+      tenantModel.updateSection(tenantId, 'billingDefaults', { defaultTaxProfile, serviceChargePercent });
+      alert('✔ Billing Defaults saved via TenantRepository!');
+      this.renderCard1FullPage(mount, session);
+    });
+  }
 
-      const saveReceipts = mount.querySelector('#btn-save-c1-receipts');
-      if (saveReceipts) {
-        saveReceipts.addEventListener('click', () => {
-          const header = mount.querySelector('#inp-c1-rheader').value.trim();
-          const thankYouMessage = mount.querySelector('#inp-c1-rfooter').value.trim();
+  const saveReceipts = mount.querySelector('#btn-save-c1-receipts');
+  if (saveReceipts) {
+    saveReceipts.addEventListener('click', () => {
+      const header = mount.querySelector('#inp-c1-rheader').value.trim();
+      const thankYouMessage = mount.querySelector('#inp-c1-rfooter').value.trim();
 
-          tenantModel.updateSection(tenantId, 'receiptDefaults', { header, thankYouMessage });
-          alert('✔ Receipt Defaults saved via TenantRepository!');
-          this.renderCard1FullPage(mount, session);
-        });
-      }
-    }
+      tenantModel.updateSection(tenantId, 'receiptDefaults', { header, thankYouMessage });
+      alert('✔ Receipt Defaults saved via TenantRepository!');
+      this.renderCard1FullPage(mount, session);
+    });
+  }
+}
 
-    renderWaiterWorkspace(mount, session) {
-      const tenantId = session.tenantId;
-      const tables = tableRepository.getAll(tenantId) || [];
-      const sampleTables = tables.length > 0 ? tables : [
-        { id: 't-1', tableCode: 'T-01', tableName: 'Table 01', capacity: 4, status: 'OCCUPIED', areaId: 'da-1', activeOrder: { id: 'ord-101', itemsCount: 3, totalAmount: 850 } },
-        { id: 't-2', tableCode: 'T-02', tableName: 'Table 02', capacity: 2, status: 'AVAILABLE', areaId: 'da-1' },
-        { id: 't-3', tableCode: 'T-03', tableName: 'Table 03', capacity: 6, status: 'RESERVED', areaId: 'da-1' },
-        { id: 't-4', tableCode: 'T-04', tableName: 'Table 04', capacity: 4, status: 'OCCUPIED', areaId: 'da-1', activeOrder: { id: 'ord-102', itemsCount: 5, totalAmount: 1420 } },
-        { id: 't-5', tableCode: 'T-05', tableName: 'Table 05', capacity: 2, status: 'AVAILABLE', areaId: 'da-2' },
-        { id: 't-6', tableCode: 'T-06', tableName: 'Table 06', capacity: 8, status: 'OCCUPIED', areaId: 'da-2', activeOrder: { id: 'ord-103', itemsCount: 4, totalAmount: 1980 } }
-      ];
+renderWaiterWorkspace(mount, session) {
+  const tenantId = session.tenantId;
+  const tables = tableRepository.getAll(tenantId) || [];
+  const sampleTables = tables.length > 0 ? tables : [
+    { id: 't-1', tableCode: 'T-01', tableName: 'Table 01', capacity: 4, status: 'OCCUPIED', areaId: 'da-1', activeOrder: { id: 'ord-101', itemsCount: 3, totalAmount: 850 } },
+    { id: 't-2', tableCode: 'T-02', tableName: 'Table 02', capacity: 2, status: 'AVAILABLE', areaId: 'da-1' },
+    { id: 't-3', tableCode: 'T-03', tableName: 'Table 03', capacity: 6, status: 'RESERVED', areaId: 'da-1' },
+    { id: 't-4', tableCode: 'T-04', tableName: 'Table 04', capacity: 4, status: 'OCCUPIED', areaId: 'da-1', activeOrder: { id: 'ord-102', itemsCount: 5, totalAmount: 1420 } },
+    { id: 't-5', tableCode: 'T-05', tableName: 'Table 05', capacity: 2, status: 'AVAILABLE', areaId: 'da-2' },
+    { id: 't-6', tableCode: 'T-06', tableName: 'Table 06', capacity: 8, status: 'OCCUPIED', areaId: 'da-2', activeOrder: { id: 'ord-103', itemsCount: 4, totalAmount: 1980 } }
+  ];
 
-      const occupiedCount = sampleTables.filter(t => t.status === 'OCCUPIED').length;
-      const availCount = sampleTables.filter(t => t.status === 'AVAILABLE').length;
+  const occupiedCount = sampleTables.filter(t => t.status === 'OCCUPIED').length;
+  const availCount = sampleTables.filter(t => t.status === 'AVAILABLE').length;
 
-      mount.innerHTML = `
+  mount.innerHTML = `
         <div class="animate-fade-in" style="display:flex; flex-direction:column; gap:20px;">
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
             <div>
@@ -10136,9 +10701,9 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
 
             <div class="grid grid-cols-3 gap-md">
               ${sampleTables.map(t => {
-                const statusBg = t.status === 'AVAILABLE' ? 'rgba(16,185,129,0.1)' : (t.status === 'OCCUPIED' ? 'rgba(245,158,11,0.15)' : 'rgba(59,130,246,0.15)');
-                const statusBorder = t.status === 'AVAILABLE' ? 'var(--status-success)' : (t.status === 'OCCUPIED' ? 'var(--status-warning)' : 'var(--accent-primary)');
-                return `
+    const statusBg = t.status === 'AVAILABLE' ? 'rgba(16,185,129,0.1)' : (t.status === 'OCCUPIED' ? 'rgba(245,158,11,0.15)' : 'rgba(59,130,246,0.15)');
+    const statusBorder = t.status === 'AVAILABLE' ? 'var(--status-success)' : (t.status === 'OCCUPIED' ? 'var(--status-warning)' : 'var(--accent-primary)');
+    return `
                   <div class="card" style="background:${statusBg}; border-left:4px solid ${statusBorder}; padding:14px; position:relative;">
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                       <strong style="font-size:1.1rem;">${t.tableCode || t.tableName}</strong>
@@ -10158,30 +10723,30 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
                     </div>
                   </div>
                 `;
-              }).join('')}
+  }).join('')}
             </div>
           </div>
         </div>
       `;
 
-      mount.querySelector('#btn-waiter-new-kot').addEventListener('click', () => {
-        alert('📝 New KOT Order Ticket Drawer opened. Select items from menu catalog.');
-      });
-      mount.querySelectorAll('.btn-table-action').forEach(btn => {
-        btn.addEventListener('click', () => {
-          alert(`📝 Taking order for ${btn.dataset.code}...`);
-        });
-      });
-    }
+  mount.querySelector('#btn-waiter-new-kot').addEventListener('click', () => {
+    alert('📝 New KOT Order Ticket Drawer opened. Select items from menu catalog.');
+  });
+  mount.querySelectorAll('.btn-table-action').forEach(btn => {
+    btn.addEventListener('click', () => {
+      alert(`📝 Taking order for ${btn.dataset.code}...`);
+    });
+  });
+}
 
-    renderKitchenWorkspace(mount, session) {
-      const tickets = [
-        { id: 'KOT-101', table: 'T-01', time: '5 mins ago', status: 'NEW', items: [{ name: 'Paneer Butter Masala', qty: 2, note: 'Less spicy' }, { name: 'Butter Naan', qty: 4, note: 'Extra butter' }] },
-        { id: 'KOT-102', table: 'T-04', time: '12 mins ago', status: 'PREPARING', items: [{ name: 'Chicken Biryani (Handi)', qty: 1, note: 'Double Raita' }, { name: 'Garlic Naan', qty: 2, note: '' }] },
-        { id: 'KOT-103', table: 'T-06', time: '20 mins ago', status: 'READY', items: [{ name: 'Dal Makhani', qty: 1, note: '' }, { name: 'Jeera Rice', qty: 2, note: '' }] }
-      ];
+renderKitchenWorkspace(mount, session) {
+  const tickets = [
+    { id: 'KOT-101', table: 'T-01', time: '5 mins ago', status: 'NEW', items: [{ name: 'Paneer Butter Masala', qty: 2, note: 'Less spicy' }, { name: 'Butter Naan', qty: 4, note: 'Extra butter' }] },
+    { id: 'KOT-102', table: 'T-04', time: '12 mins ago', status: 'PREPARING', items: [{ name: 'Chicken Biryani (Handi)', qty: 1, note: 'Double Raita' }, { name: 'Garlic Naan', qty: 2, note: '' }] },
+    { id: 'KOT-103', table: 'T-06', time: '20 mins ago', status: 'READY', items: [{ name: 'Dal Makhani', qty: 1, note: '' }, { name: 'Jeera Rice', qty: 2, note: '' }] }
+  ];
 
-      mount.innerHTML = `
+  mount.innerHTML = `
         <div class="animate-fade-in" style="display:flex; flex-direction:column; gap:20px;">
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <div>
@@ -10195,9 +10760,9 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
 
           <div class="grid grid-cols-3 gap-md">
             ${tickets.map(t => {
-              const borderCol = t.status === 'NEW' ? 'var(--status-danger)' : (t.status === 'PREPARING' ? 'var(--status-warning)' : 'var(--status-success)');
-              const badgeCls = t.status === 'NEW' ? 'badge-warning' : (t.status === 'PREPARING' ? 'badge-info' : 'badge-success');
-              return `
+    const borderCol = t.status === 'NEW' ? 'var(--status-danger)' : (t.status === 'PREPARING' ? 'var(--status-warning)' : 'var(--status-success)');
+    const badgeCls = t.status === 'NEW' ? 'badge-warning' : (t.status === 'PREPARING' ? 'badge-info' : 'badge-success');
+    return `
                 <div class="card" style="background:var(--bg-surface-1); border-top:4px solid ${borderCol}; display:flex; flex-direction:column; justify-content:space-between;">
                   <div>
                     <div style="display:flex; justify-content:space-between; align-items:center;">
@@ -10227,25 +10792,25 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
                   </div>
                 </div>
               `;
-            }).join('')}
+  }).join('')}
           </div>
         </div>
       `;
 
-      mount.querySelectorAll('.btn-kot-state').forEach(b => {
-        b.addEventListener('click', () => {
-          alert(`✔ KOT ${b.dataset.id} status updated to ${b.dataset.state}!`);
-        });
-      });
-    }
+  mount.querySelectorAll('.btn-kot-state').forEach(b => {
+    b.addEventListener('click', () => {
+      alert(`✔ KOT ${b.dataset.id} status updated to ${b.dataset.state}!`);
+    });
+  });
+}
 
-    renderBarWorkspace(mount, session) {
-      const tickets = [
-        { id: 'BOT-201', table: 'T-06', time: '3 mins ago', status: 'QUEUED', items: [{ name: 'Mojito (Classic)', qty: 2, note: 'Extra mint' }, { name: 'Kingfisher Premium 650ml', qty: 2, note: 'Chilled' }] },
-        { id: 'BOT-202', table: 'T-01', time: '8 mins ago', status: 'MIXING', items: [{ name: 'Old Fashioned', qty: 1, note: 'Single malt' }] }
-      ];
+renderBarWorkspace(mount, session) {
+  const tickets = [
+    { id: 'BOT-201', table: 'T-06', time: '3 mins ago', status: 'QUEUED', items: [{ name: 'Mojito (Classic)', qty: 2, note: 'Extra mint' }, { name: 'Kingfisher Premium 650ml', qty: 2, note: 'Chilled' }] },
+    { id: 'BOT-202', table: 'T-01', time: '8 mins ago', status: 'MIXING', items: [{ name: 'Old Fashioned', qty: 1, note: 'Single malt' }] }
+  ];
 
-      mount.innerHTML = `
+  mount.innerHTML = `
         <div class="animate-fade-in" style="display:flex; flex-direction:column; gap:20px;">
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <div>
@@ -10284,21 +10849,21 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
         </div>
       `;
 
-      mount.querySelectorAll('.btn-bot-done').forEach(b => {
-        b.addEventListener('click', () => {
-          alert(`🍸 Bar Ticket ${b.dataset.id} marked READY for server pick-up!`);
-        });
-      });
-    }
+  mount.querySelectorAll('.btn-bot-done').forEach(b => {
+    b.addEventListener('click', () => {
+      alert(`🍸 Bar Ticket ${b.dataset.id} marked READY for server pick-up!`);
+    });
+  });
+}
 
-    renderCashierWorkspace(mount, session) {
-      const openBills = [
-        { table: 'T-01', waiter: 'Rahul Sharma', subtotal: 850, gst: 42.50, serviceCharge: 42.50, total: 935 },
-        { table: 'T-04', waiter: 'Amit Patel', subtotal: 1420, gst: 71.00, serviceCharge: 71.00, total: 1562 },
-        { table: 'T-06', waiter: 'Rahul Sharma', subtotal: 1980, gst: 99.00, serviceCharge: 99.00, total: 2178 }
-      ];
+renderCashierWorkspace(mount, session) {
+  const openBills = [
+    { table: 'T-01', waiter: 'Rahul Sharma', subtotal: 850, gst: 42.50, serviceCharge: 42.50, total: 935 },
+    { table: 'T-04', waiter: 'Amit Patel', subtotal: 1420, gst: 71.00, serviceCharge: 71.00, total: 1562 },
+    { table: 'T-06', waiter: 'Rahul Sharma', subtotal: 1980, gst: 99.00, serviceCharge: 99.00, total: 2178 }
+  ];
 
-      mount.innerHTML = `
+  mount.innerHTML = `
         <div class="animate-fade-in" style="display:flex; flex-direction:column; gap:20px;">
           <div style="display:flex; justify-content:space-between; align-items:center;">
             <div>
@@ -10354,29 +10919,29 @@ CAT-SPICES,Whole Spices,FAM-SPICES,KG,Whole aromatic spices`;
         </div>
       `;
 
-      mount.querySelectorAll('.btn-settle-table').forEach(b => {
-        b.addEventListener('click', () => {
-          alert(`🧾 Ready to settle Table ${b.dataset.table} for ₹${b.dataset.total}. Choose payment mode.`);
-        });
-      });
-      mount.querySelector('#btn-cashier-print').addEventListener('click', () => {
-        alert('✔ GST Tax Invoice Printed & Table status reset to AVAILABLE!');
-      });
-    }
+  mount.querySelectorAll('.btn-settle-table').forEach(b => {
+    b.addEventListener('click', () => {
+      alert(`🧾 Ready to settle Table ${b.dataset.table} for ₹${b.dataset.total}. Choose payment mode.`);
+    });
+  });
+  mount.querySelector('#btn-cashier-print').addEventListener('click', () => {
+    alert('✔ GST Tax Invoice Printed & Table status reset to AVAILABLE!');
+  });
+}
   }
 
-  function startApp() {
-    try {
-      const app = new ApplicationShell();
-      app.init();
-    } catch (e) {
-      console.error('App initialization error:', e);
-    }
+function startApp() {
+  try {
+    const app = new ApplicationShell();
+    app.init();
+  } catch (e) {
+    console.error('App initialization error:', e);
   }
+}
 
-  if (document.readyState === 'complete' || document.readyState === 'interactive') {
-    startApp();
-  } else {
-    document.addEventListener('DOMContentLoaded', startApp);
-  }
-})();
+if (document.readyState === 'complete' || document.readyState === 'interactive') {
+  startApp();
+} else {
+  document.addEventListener('DOMContentLoaded', startApp);
+}
+}) ();
