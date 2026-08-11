@@ -623,6 +623,63 @@
           offlineStore.setCollection('inventory_uoms', cloudUoms);
         }
 
+        const resInventory = await supabaseClient.fetchTableData('inventory');
+        if (resInventory.success && Array.isArray(resInventory.data) && resInventory.data.length > 0) {
+          const cloudInventory = resInventory.data.map(r => {
+            if (r.data && typeof r.data === 'object' && Object.keys(r.data).length > 0) {
+              return r.data;
+            }
+            return {
+              uuid: r.uuid || r.id,
+              id: r.uuid || r.id,
+              tenantId: r.tenant_id,
+              itemCode: r.item_code,
+              itemName: r.item_name,
+              itemType: r.item_type || 'Raw Material',
+              categoryCode: r.category_code || 'GENERAL',
+              baseUom: r.base_uom || 'KG',
+              openingStock: parseFloat(r.opening_stock) || 0,
+              currentStock: parseFloat(r.opening_stock) || 0,
+              reorderLevel: parseFloat(r.reorder_level) || 0,
+              unitValuation: parseFloat(r.unit_valuation) || 0,
+              defaultLocationCode: r.default_location_code || 'LOC-MWH',
+              defaultSupplierCode: r.default_supplier_code || 'SUP-001',
+              status: r.status || 'ACTIVE'
+            };
+          });
+          offlineStore.setCollection('inventory', cloudInventory);
+        }
+
+        const resCategories = await supabaseClient.fetchTableData('inventory_categories');
+        if (resCategories.success && Array.isArray(resCategories.data) && resCategories.data.length > 0) {
+          const cloudCategories = resCategories.data.map(r => r.data || {
+            id: r.id,
+            tenantId: r.tenant_id,
+            categoryCode: r.category_code,
+            categoryName: r.category_name,
+            productFamilyCode: r.product_family_code
+          });
+          offlineStore.setCollection('inventory_categories', cloudCategories);
+        }
+
+        const resIdentities = await supabaseClient.fetchTableData('identities');
+        if (resIdentities.success && Array.isArray(resIdentities.data) && resIdentities.data.length > 0) {
+          const cloudIdentities = resIdentities.data.map(r => r.data || {
+            id: r.id,
+            pinHash: r.pin_hash,
+            tenantId: r.tenant_id,
+            status: r.status
+          });
+          const localIdentities = offlineStore.getCollection('identities') || [];
+          const mergedIdentities = [...localIdentities];
+          cloudIdentities.forEach(ci => {
+            if (!mergedIdentities.some(li => li.id === ci.id || li.pinHash === ci.pinHash)) {
+              mergedIdentities.push(ci);
+            }
+          });
+          offlineStore.setCollection('identities', mergedIdentities);
+        }
+
         this.ensureAllLocationsSynced();
         window.dispatchEvent(new CustomEvent('ros_sync_updated'));
       } catch (e) {
