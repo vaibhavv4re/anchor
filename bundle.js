@@ -3579,27 +3579,206 @@
         });
       });
 
-      // Master Item Actions
+      // Master Item Actions & Bulk Import
+      const btnTriggerImportMaster = mount.querySelector('#btn-trigger-import-master');
+      const inputImportMaster = mount.querySelector('#file-import-master-inventory');
+      if (btnTriggerImportMaster && inputImportMaster) {
+        btnTriggerImportMaster.addEventListener('click', (e) => {
+          e.preventDefault();
+          inputImportMaster.click();
+        });
+        inputImportMaster.addEventListener('change', (e) => {
+          e.preventDefault();
+          if (e.target.files && e.target.files[0]) {
+            this.handleMasterInventoryFileUpload(e.target.files[0], session);
+            e.target.value = '';
+          }
+        });
+      }
+
+      const btnCancelImport = mount.querySelector('#btn-cancel-import');
+      const btnConfirmImport = mount.querySelector('#btn-confirm-commit-import');
+      if (btnCancelImport) {
+        btnCancelImport.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.stagedMasterItems = null;
+          this.activeSubView = 'inv-master';
+          this.render();
+        });
+      }
+      if (btnConfirmImport) {
+        btnConfirmImport.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.commitStagedMasterItems(session);
+        });
+      }
+
+      const btnOpenForm = mount.querySelector('#btn-open-master-form');
+      if (btnOpenForm) {
+        btnOpenForm.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.editingMasterItemId = null;
+          this.activeSubView = 'inv-master-form';
+          this.render();
+        });
+      }
+
+      const btnDlSample = mount.querySelector('#btn-dl-sample-template');
+      if (btnDlSample) {
+        btnDlSample.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.downloadSampleMasterInventoryTemplate();
+        });
+      }
+
+      const btnExportCsv = mount.querySelector('#btn-export-master-csv');
+      if (btnExportCsv) {
+        btnExportCsv.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.exportMasterInventoryToCSV(session);
+        });
+      }
+
+      const btnBackCat = mount.querySelector('#btn-back-to-catalog');
+      const btnFormCancel = mount.querySelector('#btn-form-cancel');
+      const btnFormSave = mount.querySelector('#btn-form-save');
+
+      if (btnBackCat) {
+        btnBackCat.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.activeSubView = 'inv-master';
+          this.render();
+        });
+      }
+
+      mount.querySelectorAll('.master-item-row').forEach(row => {
+        row.addEventListener('click', (e) => {
+          if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
+          e.preventDefault();
+          this.selectedMasterItemCode = row.dataset.code;
+          this.activeSubView = 'inv-master-detail';
+          this.render();
+        });
+      });
+
       mount.querySelectorAll('.btn-view-master-detail').forEach(btn => {
-        btn.addEventListener('click', () => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
           this.selectedMasterItemCode = btn.dataset.code;
-          this.navigateToSubView('inv-master-detail');
+          this.activeSubView = 'inv-master-detail';
+          this.render();
+        });
+      });
+
+      mount.querySelectorAll('.btn-edit-master-item').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.editingMasterItemId = btn.dataset.id;
+          this.activeSubView = 'inv-master-form';
+          this.render();
         });
       });
 
       const btnBackDetail = mount.querySelector('#btn-back-from-detail');
       if (btnBackDetail) {
-        btnBackDetail.addEventListener('click', () => {
-          this.navigateToSubView('inv-master');
+        btnBackDetail.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.activeSubView = 'inv-master';
+          this.render();
+        });
+      }
+
+      const btnEditDetail = mount.querySelector('#btn-edit-from-detail');
+      if (btnEditDetail) {
+        btnEditDetail.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.editingMasterItemId = btnEditDetail.dataset.id;
+          this.activeSubView = 'inv-master-form';
+          this.render();
+        });
+      }
+
+      if (btnFormCancel) {
+        btnFormCancel.addEventListener('click', (e) => {
+          e.preventDefault();
+          this.activeSubView = 'inv-master';
+          this.render();
+        });
+      }
+
+      if (btnFormSave) {
+        btnFormSave.addEventListener('click', (e) => {
+          e.preventDefault();
+          const itemCode = mount.querySelector('#inp-pg-code').value.trim();
+          const itemName = mount.querySelector('#inp-pg-name').value.trim();
+          const itemType = mount.querySelector('#inp-pg-type').value;
+          const categoryCode = mount.querySelector('#inp-pg-cat').value;
+          const baseUom = mount.querySelector('#inp-pg-base-uom').value;
+          const purchaseUomRaw = mount.querySelector('#inp-pg-purchase-uom').value;
+          const purchaseUom = purchaseUomRaw || baseUom;
+          const conversionFactor = parseFloat(mount.querySelector('#inp-pg-factor').value) || 1;
+          const defaultLocationCode = mount.querySelector('#inp-pg-def-loc').value;
+          const initialStockQty = parseFloat(mount.querySelector('#inp-pg-init-stock') ? mount.querySelector('#inp-pg-init-stock').value : 0) || 0;
+          const preferredSupplierCode = mount.querySelector('#inp-pg-pref-sup') ? mount.querySelector('#inp-pg-pref-sup').value : '';
+          const lastPurchasePrice = parseFloat(mount.querySelector('#inp-pg-pur-price') ? mount.querySelector('#inp-pg-pur-price').value : 0) || 0;
+          const reorderLevel = parseFloat(mount.querySelector('#inp-pg-reorder-lvl') ? mount.querySelector('#inp-pg-reorder-lvl').value : 0) || 0;
+
+          if (!itemName || !itemCode) {
+            alert('❌ Please enter a valid Item Name and Item Code.');
+            return;
+          }
+
+          const baseUnitCost = conversionFactor > 0 ? (lastPurchasePrice / conversionFactor) : lastPurchasePrice;
+
+          const itemPayload = {
+            itemCode,
+            itemName,
+            itemType,
+            categoryCode,
+            baseUom,
+            purchaseUom,
+            conversionFactor,
+            defaultLocationCode,
+            allowedLocationCodes: [defaultLocationCode],
+            openingStock: initialStockQty,
+            currentStock: initialStockQty,
+            preferredSupplierCode,
+            defaultSupplierCode: preferredSupplierCode,
+            lastPurchasePrice,
+            unitValuation: baseUnitCost,
+            reorderLevel,
+            status: 'ACTIVE'
+          };
+
+          if (this.editingMasterItemId) {
+            inventoryRepository.update(this.editingMasterItemId, itemPayload, session);
+            alert(`🎉 Master Inventory Item "${itemName}" (${itemCode}) updated successfully!`);
+          } else {
+            const existing = inventoryRepository.getByCode(itemCode, session.tenantId);
+            if (existing) {
+              alert(`❌ Duplicate Item Code "${itemCode}"! Item Code must be unique.`);
+              return;
+            }
+            inventoryRepository.create(itemPayload, session);
+            alert(`🎉 Master Inventory Item "${itemName}" (${itemCode}) created successfully!`);
+          }
+
+          this.editingMasterItemId = null;
+          this.activeSubView = 'inv-master';
+          this.render();
         });
       }
 
       // PO Actions
       const btnOpenPoForm = mount.querySelector('#btn-open-po-form');
       if (btnOpenPoForm) {
-        btnOpenPoForm.addEventListener('click', () => {
+        btnOpenPoForm.addEventListener('click', (e) => {
+          e.preventDefault();
           this.poDraftLines = [];
-          this.navigateToSubView('inv-po-form');
+          this.activeSubView = 'inv-po-form';
+          this.render();
         });
       }
 
@@ -5035,232 +5214,6 @@
       return `<h3>${tabKey.toUpperCase()}</h3><p style="color:var(--text-muted); font-size:0.85rem;">Operational module view.</p>`;
     }
 
-    bindInventoryTabEvents(mount, session) {
-      // 0. Subtab Navigation Listener
-      mount.querySelectorAll('.btn-subtab').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          this.activeSubView = btn.dataset.subtab;
-          this.renderInventoryWorkspace(mount, session);
-        });
-      });
-
-      // Bulk Import Trigger & File Change Listeners
-      const btnTriggerImportMaster = mount.querySelector('#btn-trigger-import-master');
-      const inputImportMaster = mount.querySelector('#file-import-master-inventory');
-      if (btnTriggerImportMaster && inputImportMaster) {
-        btnTriggerImportMaster.addEventListener('click', (e) => {
-          e.preventDefault();
-          inputImportMaster.click();
-        });
-        inputImportMaster.addEventListener('change', (e) => {
-          e.preventDefault();
-          if (e.target.files && e.target.files[0]) {
-            this.handleMasterInventoryFileUpload(e.target.files[0], session);
-            e.target.value = '';
-          }
-        });
-      }
-
-      // Pre-Import Review Studio Actions
-      const btnCancelImport = mount.querySelector('#btn-cancel-import');
-      const btnConfirmImport = mount.querySelector('#btn-confirm-commit-import');
-      if (btnCancelImport) {
-        btnCancelImport.addEventListener('click', (e) => {
-          e.preventDefault();
-          this.stagedMasterItems = null;
-          this.activeSubView = 'inv-master';
-          this.render();
-        });
-      }
-      if (btnConfirmImport) {
-        btnConfirmImport.addEventListener('click', (e) => {
-          e.preventDefault();
-          this.commitStagedMasterItems(session);
-        });
-      }
-
-      // Master Item Dedicated Page & CSV Action Listeners
-      const btnOpenForm = mount.querySelector('#btn-open-master-form');
-      if (btnOpenForm) {
-        btnOpenForm.addEventListener('click', (e) => {
-          e.preventDefault();
-          this.editingMasterItemId = null;
-          this.activeSubView = 'inv-master-form';
-          this.render();
-        });
-      }
-
-      const btnDlSample = mount.querySelector('#btn-dl-sample-template');
-      if (btnDlSample) {
-        btnDlSample.addEventListener('click', (e) => {
-          e.preventDefault();
-          this.downloadSampleMasterInventoryTemplate();
-        });
-      }
-
-      const btnExportCsv = mount.querySelector('#btn-export-master-csv');
-      if (btnExportCsv) {
-        btnExportCsv.addEventListener('click', (e) => {
-          e.preventDefault();
-          this.exportMasterInventoryToCSV(session);
-        });
-      }
-
-      // Dedicated Form Page Action Listeners
-      const btnBackCat = mount.querySelector('#btn-back-to-catalog');
-      const btnFormCancel = mount.querySelector('#btn-form-cancel');
-      const btnFormSave = mount.querySelector('#btn-form-save');
-
-      if (btnBackCat) {
-        btnBackCat.addEventListener('click', (e) => {
-          e.preventDefault();
-          this.activeSubView = 'inv-master';
-          this.render();
-        });
-      }
-
-      // Item Detail Inspector Actions
-      const btnBackDetail = mount.querySelector('#btn-back-from-detail');
-      if (btnBackDetail) {
-        btnBackDetail.addEventListener('click', (e) => {
-          e.preventDefault();
-          this.activeSubView = 'inv-master';
-          this.render();
-        });
-      }
-
-      const btnEditDetail = mount.querySelector('#btn-edit-from-detail');
-      if (btnEditDetail) {
-        btnEditDetail.addEventListener('click', (e) => {
-          e.preventDefault();
-          this.editingMasterItemId = btnEditDetail.dataset.id;
-          this.activeSubView = 'inv-master-form';
-          this.render();
-        });
-      }
-
-      // Master Item Table Row & Action Listeners
-      mount.querySelectorAll('.master-item-row').forEach(row => {
-        row.addEventListener('click', (e) => {
-          if (e.target.tagName === 'BUTTON' || e.target.closest('button')) return;
-          e.preventDefault();
-          this.selectedMasterItemCode = row.dataset.code;
-          this.activeSubView = 'inv-master-detail';
-          this.render();
-        });
-      });
-
-      mount.querySelectorAll('.btn-view-master-detail').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          this.selectedMasterItemCode = btn.dataset.code;
-          this.activeSubView = 'inv-master-detail';
-          this.render();
-        });
-      });
-
-      mount.querySelectorAll('.btn-edit-master-item').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          this.editingMasterItemId = btn.dataset.id;
-          this.activeSubView = 'inv-master-form';
-          this.render();
-        });
-      });
-      if (btnFormCancel) {
-        btnFormCancel.addEventListener('click', (e) => {
-          e.preventDefault();
-          this.activeSubView = 'inv-master';
-          this.render();
-        });
-      }
-      if (btnFormSave) {
-        btnFormSave.addEventListener('click', (e) => {
-          e.preventDefault();
-          const itemCode = mount.querySelector('#inp-pg-code').value.trim();
-          const itemName = mount.querySelector('#inp-pg-name').value.trim();
-          const itemType = mount.querySelector('#inp-pg-type').value;
-          const categoryCode = mount.querySelector('#inp-pg-cat').value;
-          const baseUom = mount.querySelector('#inp-pg-base-uom').value;
-          const purchaseUomRaw = mount.querySelector('#inp-pg-purchase-uom').value;
-          const purchaseUom = purchaseUomRaw || baseUom;
-          const conversionFactor = parseFloat(mount.querySelector('#inp-pg-factor').value) || 1;
-          const defaultLocationCode = mount.querySelector('#inp-pg-def-loc').value;
-          const isTransferAllowed = mount.querySelector('#chk-pg-transfer').checked;
-          const initialStockQty = parseFloat(mount.querySelector('#inp-pg-init-stock') ? mount.querySelector('#inp-pg-init-stock').value : 0) || 0;
-          const preferredSupplierCode = mount.querySelector('#inp-pg-pref-sup').value;
-          const supplierItemCode = mount.querySelector('#inp-pg-sup-sku').value.trim();
-          const lastPurchasePrice = parseFloat(mount.querySelector('#inp-pg-pur-price').value) || 0;
-          const purchaseTaxProfile = mount.querySelector('#inp-pg-pur-tax').value;
-
-          const reorderLevel = parseFloat(mount.querySelector('#inp-pg-reorder-lvl').value) || 0;
-          const minimumStockLevel = parseFloat(mount.querySelector('#inp-pg-min-stock').value) || 0;
-          const maximumStockLevel = parseFloat(mount.querySelector('#inp-pg-max-stock').value) || 0;
-
-          const isStockable = mount.querySelector('#chk-pg-stockable').checked;
-          const isRecipeIngredient = mount.querySelector('#chk-pg-ingredient').checked;
-          const autoDeductionEnabled = mount.querySelector('#chk-pg-auto-deduct').checked;
-          const isDirectSale = mount.querySelector('#chk-pg-direct-sale').checked;
-          const standardYieldPercent = parseFloat(mount.querySelector('#inp-pg-yield-pct').value) || 100.0;
-
-          if (!itemName || !itemCode) {
-            alert('❌ Please enter a valid Item Name and Item Code.');
-            return;
-          }
-
-          const baseUnitCost = conversionFactor > 0 ? (lastPurchasePrice / conversionFactor) : lastPurchasePrice;
-
-          const itemPayload = {
-            itemCode,
-            itemName,
-            itemType,
-            categoryCode,
-            baseUom,
-            purchaseUom,
-            conversionFactor,
-            defaultLocationCode,
-            allowedLocationCodes: [defaultLocationCode],
-            isTransferAllowed,
-            openingStock: initialStockQty,
-            currentStock: initialStockQty,
-            preferredSupplierCode,
-            defaultSupplierCode: preferredSupplierCode,
-            supplierItemCode,
-            lastPurchasePrice,
-            unitValuation: baseUnitCost,
-            purchaseTaxProfile,
-            reorderLevel,
-            minimumStockLevel,
-            maximumStockLevel,
-            isStockable,
-            isRecipeIngredient,
-            autoDeductionEnabled,
-            isDirectSale,
-            standardYieldPercent,
-            status: 'ACTIVE'
-          };
-
-          if (this.editingMasterItemId) {
-            inventoryRepository.update(this.editingMasterItemId, itemPayload, session);
-            alert(`🎉 Master Inventory Item "${itemName}" (${itemCode}) updated successfully!`);
-          } else {
-            const existing = inventoryRepository.getByCode(itemCode, session.tenantId);
-            if (existing) {
-              alert(`❌ Duplicate Item Code "${itemCode}"! Item Code must be unique.`);
-              return;
-            }
-            inventoryRepository.create(itemPayload, session);
-            alert(`🎉 Master Inventory Item "${itemName}" (${itemCode}) created successfully!`);
-          }
-
-          this.editingMasterItemId = null;
-          this.activeSubView = 'inv-master';
-          this.render();
-        });
-      }
 
       // 1. Download Sample Supplier Template
       const btnSample = mount.querySelector('#btn-download-supplier-sample');
