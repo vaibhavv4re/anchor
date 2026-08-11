@@ -49,6 +49,7 @@ export class UserManagementView {
       `;
     }).join('');
 
+    this.container.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--space-md); margin-bottom:var(--space-lg);">
         <div>
           <h2 style="font-size:1.5rem;">User & Staff Management</h2>
