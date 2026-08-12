@@ -125,10 +125,71 @@ CREATE TABLE IF NOT EXISTS inventory (
   default_location_code TEXT,
   default_supplier_code TEXT,
   version INT DEFAULT 1,
-  status TEXT DEFAULT 'ACTIVE',
   data JSONB,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS kitchen_menu_items (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT,
+  item_code TEXT NOT NULL,
+  item_name TEXT NOT NULL,
+  category TEXT DEFAULT 'GENERAL',
+  description TEXT,
+  selling_price NUMERIC DEFAULT 0,
+  tax_profile TEXT DEFAULT 'GST_5',
+  dietary_type TEXT DEFAULT 'VEG',
+  portion_size TEXT DEFAULT '1 Portion',
+  availability_status TEXT DEFAULT 'AVAILABLE',
+  lifecycle_status TEXT DEFAULT 'ACTIVE',
+  recipe_id TEXT,
+  routing TEXT DEFAULT 'KITCHEN_LINE',
+  recipe_notes TEXT,
+  spiciness_level TEXT,
+  region TEXT,
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 📖 Production Recipes & BOM Tables (K-03)
+CREATE TABLE IF NOT EXISTS recipes (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT,
+  recipe_code TEXT NOT NULL,
+  recipe_name TEXT NOT NULL,
+  menu_item_id TEXT,
+  version TEXT DEFAULT 'v1.0',
+  status TEXT DEFAULT 'DRAFT',
+  yield_quantity NUMERIC DEFAULT 1,
+  yield_uom TEXT DEFAULT 'PORTION',
+  portion_count INT DEFAULT 1,
+  prep_time_minutes INT DEFAULT 15,
+  cook_time_minutes INT DEFAULT 15,
+  total_cost NUMERIC DEFAULT 0,
+  cost_per_portion NUMERIC DEFAULT 0,
+  cost_snapshot_at_approval JSONB,
+  instructions TEXT,
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS recipe_ingredients (
+  id TEXT PRIMARY KEY,
+  recipe_id TEXT NOT NULL,
+  tenant_id TEXT,
+  inventory_item_code TEXT NOT NULL,
+  inventory_item_name TEXT NOT NULL,
+  item_type TEXT DEFAULT 'RAW_MATERIAL',
+  quantity NUMERIC DEFAULT 0,
+  uom TEXT DEFAULT 'KG',
+  recipe_wastage_percent NUMERIC DEFAULT 0,
+  unit_cost_snapshot NUMERIC DEFAULT 0,
+  line_cost NUMERIC DEFAULT 0,
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- 📑 5. Inventory Transaction Tables (Purchase Orders, GRN, Transfers, Issues, Adjustments, Counts, Balances, Requests)
@@ -258,6 +319,9 @@ ALTER TABLE inventory_uoms DISABLE ROW LEVEL SECURITY;
 ALTER TABLE storage_locations DISABLE ROW LEVEL SECURITY;
 ALTER TABLE suppliers DISABLE ROW LEVEL SECURITY;
 ALTER TABLE inventory DISABLE ROW LEVEL SECURITY;
+ALTER TABLE kitchen_menu_items DISABLE ROW LEVEL SECURITY;
+ALTER TABLE recipes DISABLE ROW LEVEL SECURITY;
+ALTER TABLE recipe_ingredients DISABLE ROW LEVEL SECURITY;
 ALTER TABLE purchase_orders DISABLE ROW LEVEL SECURITY;
 ALTER TABLE goods_receipt_notes DISABLE ROW LEVEL SECURITY;
 ALTER TABLE stock_transfers DISABLE ROW LEVEL SECURITY;
@@ -299,6 +363,15 @@ CREATE POLICY "Anon Access Suppliers" ON suppliers FOR ALL USING (true) WITH CHE
 
 DROP POLICY IF EXISTS "Anon Access Inventory" ON inventory;
 CREATE POLICY "Anon Access Inventory" ON inventory FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Anon Access Kitchen Menu Items" ON kitchen_menu_items;
+CREATE POLICY "Anon Access Kitchen Menu Items" ON kitchen_menu_items FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Anon Access Recipes" ON recipes;
+CREATE POLICY "Anon Access Recipes" ON recipes FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Anon Access Recipe Ingredients" ON recipe_ingredients;
+CREATE POLICY "Anon Access Recipe Ingredients" ON recipe_ingredients FOR ALL USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Anon Access Purchase Orders" ON purchase_orders;
 CREATE POLICY "Anon Access Purchase Orders" ON purchase_orders FOR ALL USING (true) WITH CHECK (true);
