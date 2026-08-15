@@ -4,11 +4,12 @@ import { attachStandardMetadata } from '../metadata/entityMetadata.js';
  * StockTransferRepository domain persistence abstraction.
  *
  * Atomic & Idempotent Paired Ledger Posting Engine (TRANSFER_OUT & TRANSFER_IN).
- * Supports constructor dependency injection while remaining
- * fully backward-compatible with legacy global platform instances.
+ * Supports constructor dependency injection (DataGateway, OfflineStore, OfflineJournal, AuditLogger, InventoryRepository)
+ * while remaining fully backward-compatible with legacy global platform instances.
  */
 export class StockTransferRepository {
   constructor(deps = {}) {
+    this.dataGateway = deps.dataGateway || null;
     this.offlineStore = deps.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
     this.offlineJournal = deps.offlineJournal || (typeof offlineJournal !== 'undefined' ? offlineJournal : null);
     this.auditLogger = deps.auditLogger || null;
@@ -17,15 +18,24 @@ export class StockTransferRepository {
   }
 
   getAll(tenantId = null) {
+    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+      return this.dataGateway.getCachedCollection('stock_transfers', tenantId) || [];
+    }
     const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
     return store ? store.getCollection('stock_transfers', tenantId) || [] : [];
   }
 
   getByTransferNo(transferNo, tenantId = null) {
-    return this.getAll(tenantId).find(t => t.transferNo === transferNo) || null;
+    if (this.dataGateway && typeof this.dataGateway.getCachedById === 'function') {
+      return this.dataGateway.getCachedById('stock_transfers', transferNo, tenantId);
+    }
+    return this.getAll(tenantId).find(t => t.transferNo === transferNo || t.id === transferNo) || null;
   }
 
   getById(id, tenantId = null) {
+    if (this.dataGateway && typeof this.dataGateway.getCachedById === 'function') {
+      return this.dataGateway.getCachedById('stock_transfers', id, tenantId);
+    }
     return this.getAll(tenantId).find(t => t.id === id || t.transferNo === id) || null;
   }
 
@@ -44,8 +54,16 @@ export class StockTransferRepository {
     const toLoc = data.toLocationCode;
     if (fromLoc === toLoc) return { success: false, error: 'Source and destination locations cannot be identical.' };
 
-    const balanceList = store ? (store.getCollection('stock_balances', tenantId) || []) : [];
-    const ledgerList = store ? (store.getCollection('stock_ledger', tenantId) || []) : [];
+    let balanceList = [];
+    let ledgerList = [];
+
+    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+      balanceList = this.dataGateway.getCachedCollection('stock_balances', tenantId) || [];
+      ledgerList = this.dataGateway.getCachedCollection('stock_ledger', tenantId) || [];
+    } else if (store) {
+      balanceList = store.getCollection('stock_balances', tenantId) || [];
+      ledgerList = store.getCollection('stock_ledger', tenantId) || [];
+    }
 
     // 1. Negative Stock Enforcement
     for (const line of data.lines) {
@@ -89,7 +107,7 @@ export class StockTransferRepository {
       const val = qty * unitCost;
 
       // OUT Entry
-      ledgerList.push({
+      const outLedger = {
         ledgerId: `LEDGER-${new Date().toISOString().slice(0, 10)}-TRFOUT-${idx + 1}`,
         tenantId,
         transactionType: 'TRANSFER_OUT',
@@ -104,10 +122,10 @@ export class StockTransferRepository {
         totalValuation: -val,
         postedBy: trfRecord.postedBy,
         timestamp: new Date().toISOString()
-      });
+      };
 
       // IN Entry
-      ledgerList.push({
+      const inLedger = {
         ledgerId: `LEDGER-${new Date().toISOString().slice(0, 10)}-TRFIN-${idx + 1}`,
         tenantId,
         transactionType: 'TRANSFER_IN',
@@ -122,24 +140,48 @@ export class StockTransferRepository {
         totalValuation: val,
         postedBy: trfRecord.postedBy,
         timestamp: new Date().toISOString()
-      });
+      };
+
+      if (this.dataGateway && typeof this.dataGateway.create === 'function') {
+        this.dataGateway.create('stock_ledger', outLedger, session);
+        this.dataGateway.create('stock_ledger', inLedger, session);
+      } else {
+        ledgerList.push(outLedger);
+        ledgerList.push(inLedger);
+      }
 
       // Update Source Balance
       let srcIdx = balanceList.findIndex(b => b.itemCode === line.itemCode && b.locationCode === fromLoc && (!tenantId || b.tenantId === tenantId));
       if (srcIdx !== -1) {
-        balanceList[srcIdx].quantity = (parseFloat(balanceList[srcIdx].quantity) || 0) - qty;
-        balanceList[srcIdx].valuation = Math.max(0, (parseFloat(balanceList[srcIdx].valuation) || 0) - val);
-        balanceList[srcIdx].lastUpdatedAt = new Date().toISOString();
+        const updatedSrc = {
+          ...balanceList[srcIdx],
+          quantity: (parseFloat(balanceList[srcIdx].quantity) || 0) - qty,
+          valuation: Math.max(0, (parseFloat(balanceList[srcIdx].valuation) || 0) - val),
+          lastUpdatedAt: new Date().toISOString()
+        };
+        if (this.dataGateway && typeof this.dataGateway.update === 'function') {
+          this.dataGateway.update('stock_balances', balanceList[srcIdx].id || balanceList[srcIdx].itemCode, updatedSrc, session);
+        } else {
+          balanceList[srcIdx] = updatedSrc;
+        }
       }
 
       // Update Destination Balance
       let dstIdx = balanceList.findIndex(b => b.itemCode === line.itemCode && b.locationCode === toLoc && (!tenantId || b.tenantId === tenantId));
       if (dstIdx !== -1) {
-        balanceList[dstIdx].quantity = (parseFloat(balanceList[dstIdx].quantity) || 0) + qty;
-        balanceList[dstIdx].valuation = (parseFloat(balanceList[dstIdx].valuation) || 0) + val;
-        balanceList[dstIdx].lastUpdatedAt = new Date().toISOString();
+        const updatedDst = {
+          ...balanceList[dstIdx],
+          quantity: (parseFloat(balanceList[dstIdx].quantity) || 0) + qty,
+          valuation: (parseFloat(balanceList[dstIdx].valuation) || 0) + val,
+          lastUpdatedAt: new Date().toISOString()
+        };
+        if (this.dataGateway && typeof this.dataGateway.update === 'function') {
+          this.dataGateway.update('stock_balances', balanceList[dstIdx].id || balanceList[dstIdx].itemCode, updatedDst, session);
+        } else {
+          balanceList[dstIdx] = updatedDst;
+        }
       } else {
-        balanceList.push({
+        const newDst = {
           id: 'bal-' + Math.random().toString(36).substring(2, 7),
           tenantId,
           itemCode: line.itemCode,
@@ -148,11 +190,16 @@ export class StockTransferRepository {
           baseUom: uom,
           valuation: val,
           lastUpdatedAt: new Date().toISOString()
-        });
+        };
+        if (this.dataGateway && typeof this.dataGateway.create === 'function') {
+          this.dataGateway.create('stock_balances', newDst, session);
+        } else {
+          balanceList.push(newDst);
+        }
       }
     });
 
-    if (store) {
+    if (!this.dataGateway && store) {
       store.setCollection('stock_ledger', ledgerList);
       store.setCollection('stock_balances', balanceList);
     }
@@ -163,14 +210,18 @@ export class StockTransferRepository {
       trfRecord = attachStandardMetadata(trfRecord, tenantId, session);
     }
 
-    if (store) {
+    if (this.dataGateway && typeof this.dataGateway.create === 'function') {
+      this.dataGateway.create('stock_transfers', trfRecord, session);
+    } else if (store) {
       store.appendItem('stock_transfers', trfRecord);
     }
 
-    if (journal && typeof journal.createSyncJob === 'function') {
-      journal.createSyncJob('UPLOAD_EVENT', tenantId, 'stock_transfers', { commandType: 'POST_STOCK_TRANSFER', eventType: 'StockTransferPosted', ...trfRecord }, session);
-    } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
-      offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, 'stock_transfers', { commandType: 'POST_STOCK_TRANSFER', eventType: 'StockTransferPosted', ...trfRecord }, session);
+    if (!this.dataGateway) {
+      if (journal && typeof journal.createSyncJob === 'function') {
+        journal.createSyncJob('UPLOAD_EVENT', tenantId, 'stock_transfers', { commandType: 'POST_STOCK_TRANSFER', eventType: 'StockTransferPosted', ...trfRecord }, session);
+      } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
+        offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, 'stock_transfers', { commandType: 'POST_STOCK_TRANSFER', eventType: 'StockTransferPosted', ...trfRecord }, session);
+      }
     }
 
     const actor = session ? session.employeeName : 'Admin';

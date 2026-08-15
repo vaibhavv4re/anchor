@@ -4,11 +4,12 @@ import { attachStandardMetadata } from '../metadata/entityMetadata.js';
  * StockAdjustmentRepository domain persistence abstraction.
  *
  * Controlled Wastage, Spoilage & Reconciliation Adjustment Engine (ADJUSTMENT_IN & ADJUSTMENT_OUT).
- * Supports constructor dependency injection while remaining
- * fully backward-compatible with legacy global platform instances.
+ * Supports constructor dependency injection (DataGateway, OfflineStore, OfflineJournal, AuditLogger, InventoryRepository)
+ * while remaining fully backward-compatible with legacy global platform instances.
  */
 export class StockAdjustmentRepository {
   constructor(deps = {}) {
+    this.dataGateway = deps.dataGateway || null;
     this.offlineStore = deps.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
     this.offlineJournal = deps.offlineJournal || (typeof offlineJournal !== 'undefined' ? offlineJournal : null);
     this.auditLogger = deps.auditLogger || null;
@@ -17,15 +18,24 @@ export class StockAdjustmentRepository {
   }
 
   getAll(tenantId = null) {
+    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+      return this.dataGateway.getCachedCollection('stock_adjustments', tenantId) || [];
+    }
     const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
     return store ? store.getCollection('stock_adjustments', tenantId) || [] : [];
   }
 
   getByAdjustmentNo(adjustmentNo, tenantId = null) {
-    return this.getAll(tenantId).find(a => a.adjustmentNo === adjustmentNo) || null;
+    if (this.dataGateway && typeof this.dataGateway.getCachedById === 'function') {
+      return this.dataGateway.getCachedById('stock_adjustments', adjustmentNo, tenantId);
+    }
+    return this.getAll(tenantId).find(a => a.adjustmentNo === adjustmentNo || a.id === adjustmentNo) || null;
   }
 
   getById(id, tenantId = null) {
+    if (this.dataGateway && typeof this.dataGateway.getCachedById === 'function') {
+      return this.dataGateway.getCachedById('stock_adjustments', id, tenantId);
+    }
     return this.getAll(tenantId).find(a => a.id === id || a.adjustmentNo === id) || null;
   }
 
@@ -42,8 +52,22 @@ export class StockAdjustmentRepository {
 
     const locCode = data.locationCode;
     const reason = data.reasonCode || 'SPOILAGE';
-    const balanceList = store ? (store.getCollection('stock_balances', tenantId) || []) : [];
-    const ledgerList = store ? (store.getCollection('stock_ledger', tenantId) || []) : [];
+
+    const validReasons = ['SPOILAGE', 'EXPIRY', 'DAMAGE', 'BREAKAGE', 'STOCK_AUDIT_CORRECTION', 'OTHER_APPROVED'];
+    if (!validReasons.includes(reason)) {
+      return { success: false, error: `❌ Invalid adjustment reason code "${reason}". Allowed reasons: ${validReasons.join(', ')}.` };
+    }
+
+    let balanceList = [];
+    let ledgerList = [];
+
+    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+      balanceList = this.dataGateway.getCachedCollection('stock_balances', tenantId) || [];
+      ledgerList = this.dataGateway.getCachedCollection('stock_ledger', tenantId) || [];
+    } else if (store) {
+      balanceList = store.getCollection('stock_balances', tenantId) || [];
+      ledgerList = store.getCollection('stock_ledger', tenantId) || [];
+    }
 
     const count = existing.length + 1;
     const adjNo = data.adjustmentNo || `ADJ-2026-${String(count).padStart(4, '0')}`;
@@ -72,7 +96,7 @@ export class StockAdjustmentRepository {
       const unitCost = parseFloat(masterItem.unitValuation) || parseFloat(masterItem.lastPurchasePrice) || 0;
       const val = netQty * unitCost;
 
-      ledgerList.push({
+      const ledgerEntry = {
         ledgerId: `LEDGER-${new Date().toISOString().slice(0, 10)}-ADJ-${idx + 1}`,
         tenantId,
         transactionType: isDecrease ? 'ADJUSTMENT_OUT' : 'ADJUSTMENT_IN',
@@ -87,15 +111,29 @@ export class StockAdjustmentRepository {
         reasonCode: reason,
         postedBy: adjRecord.postedBy,
         timestamp: new Date().toISOString()
-      });
+      };
+
+      if (this.dataGateway && typeof this.dataGateway.create === 'function') {
+        this.dataGateway.create('stock_ledger', ledgerEntry, session);
+      } else {
+        ledgerList.push(ledgerEntry);
+      }
 
       let balIdx = balanceList.findIndex(b => b.itemCode === line.itemCode && b.locationCode === locCode && (!tenantId || b.tenantId === tenantId));
       if (balIdx !== -1) {
-        balanceList[balIdx].quantity = (parseFloat(balanceList[balIdx].quantity) || 0) + netQty;
-        balanceList[balIdx].valuation = Math.max(0, (parseFloat(balanceList[balIdx].valuation) || 0) + val);
-        balanceList[balIdx].lastUpdatedAt = new Date().toISOString();
+        const updatedBal = {
+          ...balanceList[balIdx],
+          quantity: (parseFloat(balanceList[balIdx].quantity) || 0) + netQty,
+          valuation: Math.max(0, (parseFloat(balanceList[balIdx].valuation) || 0) + val),
+          lastUpdatedAt: new Date().toISOString()
+        };
+        if (this.dataGateway && typeof this.dataGateway.update === 'function') {
+          this.dataGateway.update('stock_balances', balanceList[balIdx].id || balanceList[balIdx].itemCode, updatedBal, session);
+        } else {
+          balanceList[balIdx] = updatedBal;
+        }
       } else if (!isDecrease) {
-        balanceList.push({
+        const newBal = {
           id: 'bal-' + Math.random().toString(36).substring(2, 7),
           tenantId,
           itemCode: line.itemCode,
@@ -104,11 +142,16 @@ export class StockAdjustmentRepository {
           baseUom: uom,
           valuation: val,
           lastUpdatedAt: new Date().toISOString()
-        });
+        };
+        if (this.dataGateway && typeof this.dataGateway.create === 'function') {
+          this.dataGateway.create('stock_balances', newBal, session);
+        } else {
+          balanceList.push(newBal);
+        }
       }
     });
 
-    if (store) {
+    if (!this.dataGateway && store) {
       store.setCollection('stock_ledger', ledgerList);
       store.setCollection('stock_balances', balanceList);
     }
@@ -119,14 +162,18 @@ export class StockAdjustmentRepository {
       adjRecord = attachStandardMetadata(adjRecord, tenantId, session);
     }
 
-    if (store) {
+    if (this.dataGateway && typeof this.dataGateway.create === 'function') {
+      this.dataGateway.create('stock_adjustments', adjRecord, session);
+    } else if (store) {
       store.appendItem('stock_adjustments', adjRecord);
     }
 
-    if (journal && typeof journal.createSyncJob === 'function') {
-      journal.createSyncJob('UPLOAD_EVENT', tenantId, 'stock_adjustments', { commandType: 'POST_STOCK_ADJUSTMENT', eventType: 'StockAdjustmentPosted', ...adjRecord }, session);
-    } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
-      offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, 'stock_adjustments', { commandType: 'POST_STOCK_ADJUSTMENT', eventType: 'StockAdjustmentPosted', ...adjRecord }, session);
+    if (!this.dataGateway) {
+      if (journal && typeof journal.createSyncJob === 'function') {
+        journal.createSyncJob('UPLOAD_EVENT', tenantId, 'stock_adjustments', { commandType: 'POST_STOCK_ADJUSTMENT', eventType: 'StockAdjustmentPosted', ...adjRecord }, session);
+      } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
+        offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, 'stock_adjustments', { commandType: 'POST_STOCK_ADJUSTMENT', eventType: 'StockAdjustmentPosted', ...adjRecord }, session);
+      }
     }
 
     const actor = session ? session.employeeName : 'Admin';

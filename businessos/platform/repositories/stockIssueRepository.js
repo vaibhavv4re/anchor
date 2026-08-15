@@ -4,11 +4,12 @@ import { attachStandardMetadata } from '../metadata/entityMetadata.js';
  * StockIssueRepository domain persistence abstraction.
  *
  * Operational consumption stock issue engine (ISSUE_OUT).
- * Supports constructor dependency injection while remaining
- * fully backward-compatible with legacy global platform instances.
+ * Supports constructor dependency injection (DataGateway, OfflineStore, OfflineJournal, AuditLogger, InventoryRepository)
+ * while remaining fully backward-compatible with legacy global platform instances.
  */
 export class StockIssueRepository {
   constructor(deps = {}) {
+    this.dataGateway = deps.dataGateway || null;
     this.offlineStore = deps.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
     this.offlineJournal = deps.offlineJournal || (typeof offlineJournal !== 'undefined' ? offlineJournal : null);
     this.auditLogger = deps.auditLogger || null;
@@ -17,15 +18,24 @@ export class StockIssueRepository {
   }
 
   getAll(tenantId = null) {
+    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+      return this.dataGateway.getCachedCollection('stock_issues', tenantId) || [];
+    }
     const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
     return store ? store.getCollection('stock_issues', tenantId) || [] : [];
   }
 
   getByIssueNo(issueNo, tenantId = null) {
-    return this.getAll(tenantId).find(i => i.issueNo === issueNo) || null;
+    if (this.dataGateway && typeof this.dataGateway.getCachedById === 'function') {
+      return this.dataGateway.getCachedById('stock_issues', issueNo, tenantId);
+    }
+    return this.getAll(tenantId).find(i => i.issueNo === issueNo || i.id === issueNo) || null;
   }
 
   getById(id, tenantId = null) {
+    if (this.dataGateway && typeof this.dataGateway.getCachedById === 'function') {
+      return this.dataGateway.getCachedById('stock_issues', id, tenantId);
+    }
     return this.getAll(tenantId).find(i => i.id === id || i.issueNo === id) || null;
   }
 
@@ -41,8 +51,16 @@ export class StockIssueRepository {
     if (alreadyPosted) return { success: true, issue: alreadyPosted, idempotentRetry: true };
 
     const fromLoc = data.fromLocationCode;
-    const balanceList = store ? (store.getCollection('stock_balances', tenantId) || []) : [];
-    const ledgerList = store ? (store.getCollection('stock_ledger', tenantId) || []) : [];
+    let balanceList = [];
+    let ledgerList = [];
+
+    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+      balanceList = this.dataGateway.getCachedCollection('stock_balances', tenantId) || [];
+      ledgerList = this.dataGateway.getCachedCollection('stock_ledger', tenantId) || [];
+    } else if (store) {
+      balanceList = store.getCollection('stock_balances', tenantId) || [];
+      ledgerList = store.getCollection('stock_ledger', tenantId) || [];
+    }
 
     // Negative Stock Enforcement
     for (const line of data.lines) {
@@ -83,7 +101,7 @@ export class StockIssueRepository {
       const unitCost = parseFloat(masterItem.unitValuation) || parseFloat(masterItem.lastPurchasePrice) || 0;
       const val = qty * unitCost;
 
-      ledgerList.push({
+      const ledgerEntry = {
         ledgerId: `LEDGER-${new Date().toISOString().slice(0, 10)}-ISSOUT-${idx + 1}`,
         tenantId,
         transactionType: 'ISSUE_OUT',
@@ -97,17 +115,31 @@ export class StockIssueRepository {
         totalValuation: -val,
         postedBy: issRecord.postedBy,
         timestamp: new Date().toISOString()
-      });
+      };
+
+      if (this.dataGateway && typeof this.dataGateway.create === 'function') {
+        this.dataGateway.create('stock_ledger', ledgerEntry, session);
+      } else {
+        ledgerList.push(ledgerEntry);
+      }
 
       let srcIdx = balanceList.findIndex(b => b.itemCode === line.itemCode && b.locationCode === fromLoc && (!tenantId || b.tenantId === tenantId));
       if (srcIdx !== -1) {
-        balanceList[srcIdx].quantity = (parseFloat(balanceList[srcIdx].quantity) || 0) - qty;
-        balanceList[srcIdx].valuation = Math.max(0, (parseFloat(balanceList[srcIdx].valuation) || 0) - val);
-        balanceList[srcIdx].lastUpdatedAt = new Date().toISOString();
+        const updatedBal = {
+          ...balanceList[srcIdx],
+          quantity: (parseFloat(balanceList[srcIdx].quantity) || 0) - qty,
+          valuation: Math.max(0, (parseFloat(balanceList[srcIdx].valuation) || 0) - val),
+          lastUpdatedAt: new Date().toISOString()
+        };
+        if (this.dataGateway && typeof this.dataGateway.update === 'function') {
+          this.dataGateway.update('stock_balances', balanceList[srcIdx].id || balanceList[srcIdx].itemCode, updatedBal, session);
+        } else {
+          balanceList[srcIdx] = updatedBal;
+        }
       }
     });
 
-    if (store) {
+    if (!this.dataGateway && store) {
       store.setCollection('stock_ledger', ledgerList);
       store.setCollection('stock_balances', balanceList);
     }
@@ -118,14 +150,18 @@ export class StockIssueRepository {
       issRecord = attachStandardMetadata(issRecord, tenantId, session);
     }
 
-    if (store) {
+    if (this.dataGateway && typeof this.dataGateway.create === 'function') {
+      this.dataGateway.create('stock_issues', issRecord, session);
+    } else if (store) {
       store.appendItem('stock_issues', issRecord);
     }
 
-    if (journal && typeof journal.createSyncJob === 'function') {
-      journal.createSyncJob('UPLOAD_EVENT', tenantId, 'stock_issues', { commandType: 'POST_STOCK_ISSUE', eventType: 'StockIssuePosted', ...issRecord }, session);
-    } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
-      offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, 'stock_issues', { commandType: 'POST_STOCK_ISSUE', eventType: 'StockIssuePosted', ...issRecord }, session);
+    if (!this.dataGateway) {
+      if (journal && typeof journal.createSyncJob === 'function') {
+        journal.createSyncJob('UPLOAD_EVENT', tenantId, 'stock_issues', { commandType: 'POST_STOCK_ISSUE', eventType: 'StockIssuePosted', ...issRecord }, session);
+      } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
+        offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, 'stock_issues', { commandType: 'POST_STOCK_ISSUE', eventType: 'StockIssuePosted', ...issRecord }, session);
+      }
     }
 
     const actor = session ? session.employeeName : 'Admin';

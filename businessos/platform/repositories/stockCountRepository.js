@@ -4,11 +4,12 @@ import { attachStandardMetadata } from '../metadata/entityMetadata.js';
  * StockCountRepository domain persistence abstraction.
  *
  * Physical Stock Count & Reconciliation Engine (System vs Physical Variance Calculation).
- * Supports constructor dependency injection while remaining
- * fully backward-compatible with legacy global platform instances.
+ * Supports constructor dependency injection (DataGateway, OfflineStore, AuditLogger, StockAdjustmentRepository)
+ * while remaining fully backward-compatible with legacy global platform instances.
  */
 export class StockCountRepository {
   constructor(deps = {}) {
+    this.dataGateway = deps.dataGateway || null;
     this.offlineStore = deps.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
     this.auditLogger = deps.auditLogger || null;
     this.entityMetadata = deps.entityMetadata || { attachStandardMetadata };
@@ -16,8 +17,25 @@ export class StockCountRepository {
   }
 
   getAll(tenantId = null) {
+    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+      return this.dataGateway.getCachedCollection('stock_counts', tenantId) || [];
+    }
     const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
     return store ? store.getCollection('stock_counts', tenantId) || [] : [];
+  }
+
+  getByCountNo(countNo, tenantId = null) {
+    if (this.dataGateway && typeof this.dataGateway.getCachedById === 'function') {
+      return this.dataGateway.getCachedById('stock_counts', countNo, tenantId);
+    }
+    return this.getAll(tenantId).find(c => c.countNo === countNo || c.id === countNo) || null;
+  }
+
+  getById(id, tenantId = null) {
+    if (this.dataGateway && typeof this.dataGateway.getCachedById === 'function') {
+      return this.dataGateway.getCachedById('stock_counts', id, tenantId);
+    }
+    return this.getAll(tenantId).find(c => c.id === id || c.countNo === id) || null;
   }
 
   reconcileCount(data, session) {
@@ -83,7 +101,9 @@ export class StockCountRepository {
       countRecord = attachStandardMetadata(countRecord, tenantId, session);
     }
 
-    if (store) {
+    if (this.dataGateway && typeof this.dataGateway.create === 'function') {
+      this.dataGateway.create('stock_counts', countRecord, session);
+    } else if (store) {
       store.appendItem('stock_counts', countRecord);
     }
 
