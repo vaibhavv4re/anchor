@@ -5,11 +5,12 @@ import { attachStandardMetadata } from '../metadata/entityMetadata.js';
  * CategoryRepository domain persistence abstraction.
  *
  * Manages inventory categories, product family associations, multi-entity archive validation, and default pre-seeding.
- * Supports constructor dependency injection while remaining
+ * Supports constructor dependency injection (DataGateway, OfflineStore, OfflineJournal, AuditLogger) while remaining
  * fully backward-compatible with legacy global platform instances.
  */
 export class CategoryRepository {
   constructor(deps = {}) {
+    this.dataGateway = deps.dataGateway || null;
     this.offlineStore = deps.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
     this.offlineJournal = deps.offlineJournal || (typeof offlineJournal !== 'undefined' ? offlineJournal : null);
     this.auditLogger = deps.auditLogger || null;
@@ -18,11 +19,17 @@ export class CategoryRepository {
   }
 
   getAll(tenantId = null) {
-    const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
-    let list = store ? store.getCollection('inventory_categories', tenantId) : [];
-    if (!list || list.length === 0) {
-      list = store ? store.getCollection('inventory_categories') : [];
+    let list = [];
+    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+      list = this.dataGateway.getCachedCollection('inventory_categories', tenantId) || [];
+    } else {
+      const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+      list = store ? store.getCollection('inventory_categories', tenantId) || [] : [];
+      if (!list || list.length === 0) {
+        list = store ? store.getCollection('inventory_categories') || [] : [];
+      }
     }
+
     if (!list || list.length === 0) {
       return this.initDefaultCategories(tenantId || 'ros-tenant-master');
     }
@@ -34,6 +41,9 @@ export class CategoryRepository {
   }
 
   getById(id, tenantId = null) {
+    if (this.dataGateway && typeof this.dataGateway.getCachedById === 'function') {
+      return this.dataGateway.getCachedById('inventory_categories', id, tenantId);
+    }
     return this.getAll(tenantId).find(c => c.id === id || c.categoryCode === id) || null;
   }
 
@@ -63,14 +73,18 @@ export class CategoryRepository {
       newCat = attachStandardMetadata(newCat, tenantId, session);
     }
 
-    if (store) {
-      store.appendItem('inventory_categories', newCat);
-    }
+    if (this.dataGateway && typeof this.dataGateway.create === 'function') {
+      this.dataGateway.create('inventory_categories', newCat, session);
+    } else {
+      if (store) {
+        store.appendItem('inventory_categories', newCat);
+      }
 
-    if (journal && typeof journal.createSyncJob === 'function') {
-      journal.createSyncJob('UPLOAD_EVENT', tenantId, 'inventory_categories', { commandType: 'CREATE_CATEGORY', eventType: 'CategoryCreated', ...newCat }, session);
-    } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
-      offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, 'inventory_categories', { commandType: 'CREATE_CATEGORY', eventType: 'CategoryCreated', ...newCat }, session);
+      if (journal && typeof journal.createSyncJob === 'function') {
+        journal.createSyncJob('UPLOAD_EVENT', tenantId, 'inventory_categories', { commandType: 'CREATE_CATEGORY', eventType: 'CategoryCreated', ...newCat }, session);
+      } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
+        offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, 'inventory_categories', { commandType: 'CREATE_CATEGORY', eventType: 'CategoryCreated', ...newCat }, session);
+      }
     }
 
     const actor = session ? session.employeeName : 'Admin';
@@ -90,28 +104,36 @@ export class CategoryRepository {
     const journal = this.offlineJournal || (typeof offlineJournal !== 'undefined' ? offlineJournal : null);
     const registry = this.productFamiliesRegistry || PRODUCT_FAMILIES_REGISTRY;
 
-    const list = store ? (store.getCollection('inventory_categories') || []) : [];
-    const idx = list.findIndex(c => (c.id === id || c.categoryCode === id) && (!tenantId || c.tenantId === tenantId));
-    if (idx !== -1) {
+    const existing = this.getById(id, tenantId);
+    if (existing) {
       if (patch.productFamilyCode && registry[patch.productFamilyCode]) {
         patch.productFamilyName = registry[patch.productFamilyCode].name;
       }
       const updated = {
-        ...list[idx],
+        ...existing,
         ...patch,
         modifiedBy: session ? session.employeeName : 'Admin',
         modifiedAt: new Date().toISOString(),
-        version: (list[idx].version || 1) + 1
+        version: (existing.version || 1) + 1
       };
-      list[idx] = updated;
-      if (store) {
-        store.setCollection('inventory_categories', list);
-      }
 
-      if (journal && typeof journal.createSyncJob === 'function') {
-        journal.createSyncJob('UPDATE_CATEGORY', tenantId, 'inventory_categories', { id: updated.id, patch }, session);
-      } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
-        offlineJournal.createSyncJob('UPDATE_CATEGORY', tenantId, 'inventory_categories', { id: updated.id, patch }, session);
+      if (this.dataGateway && typeof this.dataGateway.update === 'function') {
+        this.dataGateway.update('inventory_categories', id, patch, session);
+      } else {
+        const list = store ? (store.getCollection('inventory_categories') || []) : [];
+        const idx = list.findIndex(c => (c.id === id || c.categoryCode === id) && (!tenantId || c.tenantId === tenantId));
+        if (idx !== -1) {
+          list[idx] = updated;
+          if (store) {
+            store.setCollection('inventory_categories', list);
+          }
+        }
+
+        if (journal && typeof journal.createSyncJob === 'function') {
+          journal.createSyncJob('UPDATE_CATEGORY', tenantId, 'inventory_categories', { id: updated.id, patch }, session);
+        } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
+          offlineJournal.createSyncJob('UPDATE_CATEGORY', tenantId, 'inventory_categories', { id: updated.id, patch }, session);
+        }
       }
 
       const actor = session ? session.employeeName : 'Admin';
@@ -186,10 +208,14 @@ export class CategoryRepository {
       { id: 'cat-15-' + tid, tenantId: tid, categoryCode: 'CAT-TAKEAWAY', categoryName: 'Takeaway Packaging', productFamilyCode: 'FAM-PACKAGING', productFamilyName: 'Packaging', description: 'Meal boxes, paper bags, plastic containers, cutlery', defaultUom: 'PCS', status: 'ACTIVE' }
     ];
 
-    const existing = store ? (store.getCollection('inventory_categories') || []) : [];
-    const merged = [...existing, ...defaultList];
-    if (store) {
-      store.setCollection('inventory_categories', merged);
+    if (this.dataGateway && typeof this.dataGateway.create === 'function') {
+      defaultList.forEach(c => this.dataGateway.create('inventory_categories', c));
+    } else {
+      const existing = store ? (store.getCollection('inventory_categories') || []) : [];
+      const merged = [...existing, ...defaultList];
+      if (store) {
+        store.setCollection('inventory_categories', merged);
+      }
     }
 
     return defaultList;

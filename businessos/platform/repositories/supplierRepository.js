@@ -3,11 +3,12 @@ import { attachStandardMetadata } from '../metadata/entityMetadata.js';
 /**
  * SupplierRepository domain persistence abstraction.
  *
- * Supports constructor dependency injection while remaining
- * fully backward-compatible with legacy global platform instances.
+ * Supports constructor dependency injection (DataGateway, OfflineStore, OfflineJournal, AuditLogger)
+ * while remaining fully backward-compatible with legacy global platform instances.
  */
 export class SupplierRepository {
   constructor(deps = {}) {
+    this.dataGateway = deps.dataGateway || null;
     this.offlineStore = deps.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
     this.offlineJournal = deps.offlineJournal || (typeof offlineJournal !== 'undefined' ? offlineJournal : null);
     this.auditLogger = deps.auditLogger || null;
@@ -15,8 +16,14 @@ export class SupplierRepository {
   }
 
   getAll(tenantId = null) {
-    const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
-    let sups = store ? store.getCollection('suppliers', tenantId) : [];
+    let sups = [];
+    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+      sups = this.dataGateway.getCachedCollection('suppliers', tenantId) || [];
+    } else {
+      const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+      sups = store ? store.getCollection('suppliers', tenantId) || [] : [];
+    }
+
     if (!sups || sups.length === 0) {
       sups = [
         { id: 'sup-001', supplierCode: 'SUP-001', supplierName: 'Prime Foods', contactPerson: 'Rajesh Sharma', phone: '+91 98200 11223', email: 'orders@primefoods.in', status: 'ACTIVE' },
@@ -24,8 +31,14 @@ export class SupplierRepository {
         { id: 'sup-003', supplierCode: 'SUP-003', supplierName: 'Apex Dairy Products', contactPerson: 'Suresh Patel', phone: '+91 98333 77889', email: 'supply@apexdairy.com', status: 'ACTIVE' },
         { id: 'sup-004', supplierCode: 'SUP-004', supplierName: 'Green Harvest Farm Produce', contactPerson: 'Anil Deshmukh', phone: '+91 98444 99000', email: 'farm@greenharvest.in', status: 'ACTIVE' }
       ];
-      if (store) {
-        store.setCollection('suppliers', sups);
+
+      if (this.dataGateway && typeof this.dataGateway.create === 'function') {
+        sups.forEach(s => this.dataGateway.create('suppliers', s));
+      } else {
+        const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+        if (store) {
+          store.setCollection('suppliers', sups);
+        }
       }
     }
     return sups;
@@ -36,13 +49,16 @@ export class SupplierRepository {
   }
 
   getById(id, tenantId = null) {
+    if (this.dataGateway && typeof this.dataGateway.getCachedById === 'function') {
+      return this.dataGateway.getCachedById('suppliers', id, tenantId);
+    }
     return this.getAll(tenantId).find(s => s.id === id || s.supplierCode === id || s.supplierName === id) || null;
   }
 
   create(supplierData, session) {
+    const tenantId = session ? session.tenantId : (supplierData.tenantId || '');
     const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
     const journal = this.offlineJournal || (typeof offlineJournal !== 'undefined' ? offlineJournal : null);
-    const tenantId = session ? session.tenantId : (supplierData.tenantId || '');
 
     let newSupplier = {
       id: 'sup-' + Math.random().toString(36).substring(2, 7),
@@ -56,14 +72,18 @@ export class SupplierRepository {
       newSupplier = attachStandardMetadata(newSupplier, tenantId, session);
     }
 
-    if (store) {
-      store.appendItem('suppliers', newSupplier);
-    }
+    if (this.dataGateway && typeof this.dataGateway.create === 'function') {
+      this.dataGateway.create('suppliers', newSupplier, session);
+    } else {
+      if (store) {
+        store.appendItem('suppliers', newSupplier);
+      }
 
-    if (journal && typeof journal.createSyncJob === 'function') {
-      journal.createSyncJob('UPLOAD_EVENT', tenantId, 'suppliers', { commandType: 'CREATE_SUPPLIER', eventType: 'SupplierCreated', ...newSupplier }, session);
-    } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
-      offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, 'suppliers', { commandType: 'CREATE_SUPPLIER', eventType: 'SupplierCreated', ...newSupplier }, session);
+      if (journal && typeof journal.createSyncJob === 'function') {
+        journal.createSyncJob('UPLOAD_EVENT', tenantId, 'suppliers', { commandType: 'CREATE_SUPPLIER', eventType: 'SupplierCreated', ...newSupplier }, session);
+      } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
+        offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, 'suppliers', { commandType: 'CREATE_SUPPLIER', eventType: 'SupplierCreated', ...newSupplier }, session);
+      }
     }
 
     const actor = session ? session.employeeName : 'Admin';
@@ -82,25 +102,33 @@ export class SupplierRepository {
     const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
     const journal = this.offlineJournal || (typeof offlineJournal !== 'undefined' ? offlineJournal : null);
 
-    const list = store ? (store.getCollection('suppliers') || []) : [];
-    const idx = list.findIndex(s => (s.id === id || s.supplierCode === id) && (!tenantId || s.tenantId === tenantId));
-    if (idx !== -1) {
+    const existing = this.getById(id, tenantId);
+    if (existing) {
       const updated = {
-        ...list[idx],
+        ...existing,
         ...patch,
         modifiedBy: session ? session.employeeName : 'Admin',
         modifiedAt: new Date().toISOString(),
-        version: (list[idx].version || 1) + 1
+        version: (existing.version || 1) + 1
       };
-      list[idx] = updated;
-      if (store) {
-        store.setCollection('suppliers', list);
-      }
 
-      if (journal && typeof journal.createSyncJob === 'function') {
-        journal.createSyncJob('UPDATE_SUPPLIER', tenantId, 'suppliers', { id: updated.id, patch }, session);
-      } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
-        offlineJournal.createSyncJob('UPDATE_SUPPLIER', tenantId, 'suppliers', { id: updated.id, patch }, session);
+      if (this.dataGateway && typeof this.dataGateway.update === 'function') {
+        this.dataGateway.update('suppliers', id, patch, session);
+      } else {
+        const list = store ? (store.getCollection('suppliers') || []) : [];
+        const idx = list.findIndex(s => (s.id === id || s.supplierCode === id) && (!tenantId || s.tenantId === tenantId));
+        if (idx !== -1) {
+          list[idx] = updated;
+          if (store) {
+            store.setCollection('suppliers', list);
+          }
+        }
+
+        if (journal && typeof journal.createSyncJob === 'function') {
+          journal.createSyncJob('UPDATE_SUPPLIER', tenantId, 'suppliers', { id: updated.id, patch }, session);
+        } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
+          offlineJournal.createSyncJob('UPDATE_SUPPLIER', tenantId, 'suppliers', { id: updated.id, patch }, session);
+        }
       }
 
       const actor = session ? session.employeeName : 'Admin';

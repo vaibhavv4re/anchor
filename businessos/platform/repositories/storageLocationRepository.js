@@ -4,11 +4,12 @@ import { attachStandardMetadata } from '../metadata/entityMetadata.js';
  * StorageLocationRepository domain persistence abstraction.
  *
  * Manages hierarchical storage location trees, defaults pre-seeding, and validation.
- * Supports constructor dependency injection while remaining
- * fully backward-compatible with legacy global platform instances.
+ * Supports constructor dependency injection (DataGateway, OfflineStore, OfflineJournal, AuditLogger)
+ * while remaining fully backward-compatible with legacy global platform instances.
  */
 export class StorageLocationRepository {
   constructor(deps = {}) {
+    this.dataGateway = deps.dataGateway || null;
     this.offlineStore = deps.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
     this.offlineJournal = deps.offlineJournal || (typeof offlineJournal !== 'undefined' ? offlineJournal : null);
     this.auditLogger = deps.auditLogger || null;
@@ -16,15 +17,28 @@ export class StorageLocationRepository {
   }
 
   getAll(tenantId = null) {
-    const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
-    return store ? store.getCollection('storage_locations', tenantId) || [] : [];
+    let list = [];
+    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+      list = this.dataGateway.getCachedCollection('storage_locations', tenantId) || [];
+    } else {
+      const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+      list = store ? store.getCollection('storage_locations', tenantId) || [] : [];
+    }
+
+    if (!list || list.length === 0) {
+      return this.initDefaultLocations(tenantId || 'ros-tenant-master');
+    }
+    return list;
   }
 
   getByCode(locationCode, tenantId = null) {
-    return this.getAll(tenantId).find(l => l.locationCode === locationCode) || null;
+    return this.getAll(tenantId).find(l => l.locationCode === locationCode || l.code === locationCode) || null;
   }
 
   getById(id, tenantId = null) {
+    if (this.dataGateway && typeof this.dataGateway.getCachedById === 'function') {
+      return this.dataGateway.getCachedById('storage_locations', id, tenantId);
+    }
     return this.getAll(tenantId).find(l => l.id === id || l.locationCode === id) || null;
   }
 
@@ -74,14 +88,18 @@ export class StorageLocationRepository {
       newLoc = attachStandardMetadata(newLoc, tenantId, session);
     }
 
-    if (store) {
-      store.appendItem('storage_locations', newLoc);
-    }
+    if (this.dataGateway && typeof this.dataGateway.create === 'function') {
+      this.dataGateway.create('storage_locations', newLoc, session);
+    } else {
+      if (store) {
+        store.appendItem('storage_locations', newLoc);
+      }
 
-    if (journal && typeof journal.createSyncJob === 'function') {
-      journal.createSyncJob('UPLOAD_EVENT', tenantId, 'storage_locations', { commandType: 'CREATE_STORAGE_LOCATION', eventType: 'StorageLocationCreated', ...newLoc }, session);
-    } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
-      offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, 'storage_locations', { commandType: 'CREATE_STORAGE_LOCATION', eventType: 'StorageLocationCreated', ...newLoc }, session);
+      if (journal && typeof journal.createSyncJob === 'function') {
+        journal.createSyncJob('UPLOAD_EVENT', tenantId, 'storage_locations', { commandType: 'CREATE_STORAGE_LOCATION', eventType: 'StorageLocationCreated', ...newLoc }, session);
+      } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
+        offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, 'storage_locations', { commandType: 'CREATE_STORAGE_LOCATION', eventType: 'StorageLocationCreated', ...newLoc }, session);
+      }
     }
 
     const actor = session ? session.employeeName : 'Admin';
@@ -100,35 +118,42 @@ export class StorageLocationRepository {
     const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
     const journal = this.offlineJournal || (typeof offlineJournal !== 'undefined' ? offlineJournal : null);
 
-    const list = store ? (store.getCollection('storage_locations') || []) : [];
-    const idx = list.findIndex(l => (l.id === id || l.locationCode === id) && (!tenantId || l.tenantId === tenantId));
-    if (idx !== -1) {
+    const existing = this.getById(id, tenantId);
+    if (existing) {
       const updated = {
-        ...list[idx],
+        ...existing,
         ...patch,
         modifiedBy: session ? session.employeeName : 'Admin',
         modifiedAt: new Date().toISOString(),
-        version: (list[idx].version || 1) + 1
+        version: (existing.version || 1) + 1
       };
 
       if (patch.parentLocationCode !== undefined) {
         let parentPath = '';
         if (patch.parentLocationCode) {
-          const parent = list.find(l => l.locationCode === patch.parentLocationCode);
+          const parent = this.getByCode(patch.parentLocationCode, tenantId);
           if (parent) parentPath = (parent.path || parent.locationCode) + ' / ';
         }
         updated.path = parentPath + (updated.shortName || updated.locationCode);
       }
 
-      list[idx] = updated;
-      if (store) {
-        store.setCollection('storage_locations', list);
-      }
+      if (this.dataGateway && typeof this.dataGateway.update === 'function') {
+        this.dataGateway.update('storage_locations', id, patch, session);
+      } else {
+        const list = store ? (store.getCollection('storage_locations') || []) : [];
+        const idx = list.findIndex(l => (l.id === id || l.locationCode === id) && (!tenantId || l.tenantId === tenantId));
+        if (idx !== -1) {
+          list[idx] = updated;
+          if (store) {
+            store.setCollection('storage_locations', list);
+          }
+        }
 
-      if (journal && typeof journal.createSyncJob === 'function') {
-        journal.createSyncJob('UPDATE_LOCATION', tenantId, 'storage_locations', { id: updated.id, patch }, session);
-      } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
-        offlineJournal.createSyncJob('UPDATE_LOCATION', tenantId, 'storage_locations', { id: updated.id, patch }, session);
+        if (journal && typeof journal.createSyncJob === 'function') {
+          journal.createSyncJob('UPDATE_LOCATION', tenantId, 'storage_locations', { id: updated.id, patch }, session);
+        } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
+          offlineJournal.createSyncJob('UPDATE_LOCATION', tenantId, 'storage_locations', { id: updated.id, patch }, session);
+        }
       }
 
       const actor = session ? session.employeeName : 'Admin';
@@ -149,8 +174,8 @@ export class StorageLocationRepository {
     const loc = this.getById(id, tenantId);
     if (!loc) return { success: false, error: 'Location not found.' };
 
-    const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
-    const children = store ? (store.getCollection('storage_locations', tenantId) || []).filter(l => l.parentLocationCode === loc.locationCode && l.status !== 'ARCHIVED') : [];
+    const allLocations = this.getAll(tenantId);
+    const children = allLocations.filter(l => l.parentLocationCode === loc.locationCode && l.status !== 'ARCHIVED');
     if (children.length > 0) {
       return {
         success: false,
@@ -158,7 +183,14 @@ export class StorageLocationRepository {
       };
     }
 
-    const itemsWithStock = store ? (store.getCollection('inventory', tenantId) || []).filter(i => (i.defaultLocationId === loc.id || i.locationCode === loc.locationCode) && i.status !== 'ARCHIVED') : [];
+    let itemsWithStock = [];
+    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+      itemsWithStock = (this.dataGateway.getCachedCollection('inventory', tenantId) || []).filter(i => (i.defaultLocationId === loc.id || i.locationCode === loc.locationCode || i.defaultLocationCode === loc.locationCode) && i.status !== 'ARCHIVED');
+    } else {
+      const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+      itemsWithStock = store ? (store.getCollection('inventory', tenantId) || []).filter(i => (i.defaultLocationId === loc.id || i.locationCode === loc.locationCode || i.defaultLocationCode === loc.locationCode) && i.status !== 'ARCHIVED') : [];
+    }
+
     if (itemsWithStock.length > 0) {
       return {
         success: false,
@@ -194,14 +226,15 @@ export class StorageLocationRepository {
     }
   }
 
-  initDefaultLocations(tenantId) {
+  initDefaultLocations(tenantId = 'ros-tenant-master') {
+    const tid = tenantId || 'ros-tenant-master';
     const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
     const journal = this.offlineJournal || (typeof offlineJournal !== 'undefined' ? offlineJournal : null);
 
     const defaultList = [
       {
-        id: 'loc-1-' + tenantId,
-        tenantId,
+        id: 'loc-1-' + tid,
+        tenantId: tid,
         locationCode: 'LOC-MWH',
         locationName: 'Main Warehouse',
         shortName: 'MWH',
@@ -227,8 +260,8 @@ export class StorageLocationRepository {
         notes: 'Central receiving bay.'
       },
       {
-        id: 'loc-2-' + tenantId,
-        tenantId,
+        id: 'loc-2-' + tid,
+        tenantId: tid,
         locationCode: 'LOC-DRY',
         locationName: 'Dry Store',
         shortName: 'DRY',
@@ -251,8 +284,8 @@ export class StorageLocationRepository {
         notes: 'Keep elevated on pallets.'
       },
       {
-        id: 'loc-3-' + tenantId,
-        tenantId,
+        id: 'loc-3-' + tid,
+        tenantId: tid,
         locationCode: 'LOC-CHILL',
         locationName: 'Walk-in Chiller',
         shortName: 'CHILL',
@@ -275,8 +308,8 @@ export class StorageLocationRepository {
         notes: 'Temperature log checked twice daily.'
       },
       {
-        id: 'loc-4-' + tenantId,
-        tenantId,
+        id: 'loc-4-' + tid,
+        tenantId: tid,
         locationCode: 'LOC-FREEZE',
         locationName: 'Deep Freezer',
         shortName: 'FREEZE',
@@ -299,8 +332,8 @@ export class StorageLocationRepository {
         notes: 'Commercial deep freezer.'
       },
       {
-        id: 'loc-5-' + tenantId,
-        tenantId,
+        id: 'loc-5-' + tid,
+        tenantId: tid,
         locationCode: 'LOC-KITCHEN',
         locationName: 'Kitchen Store',
         shortName: 'KITCHEN',
@@ -323,8 +356,8 @@ export class StorageLocationRepository {
         notes: 'Daily line consumption store.'
       },
       {
-        id: 'loc-6-' + tenantId,
-        tenantId,
+        id: 'loc-6-' + tid,
+        tenantId: tid,
         locationCode: 'LOC-BAR',
         locationName: 'Bar Store',
         shortName: 'BAR',
@@ -348,17 +381,18 @@ export class StorageLocationRepository {
       }
     ];
 
-    defaultList.forEach(item => {
-      if (store) {
-        store.appendItem('storage_locations', item);
-      }
-
-      if (journal && typeof journal.createSyncJob === 'function') {
-        journal.createSyncJob('UPLOAD_EVENT', tenantId, 'storage_locations', { commandType: 'CREATE_STORAGE_LOCATION', eventType: 'StorageLocationCreated', ...item }, { employeeName: 'System Pre-seed', tenantId });
-      } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
-        offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, 'storage_locations', { commandType: 'CREATE_STORAGE_LOCATION', eventType: 'StorageLocationCreated', ...item }, { employeeName: 'System Pre-seed', tenantId });
-      }
-    });
+    if (this.dataGateway && typeof this.dataGateway.create === 'function') {
+      defaultList.forEach(item => this.dataGateway.create('storage_locations', item));
+    } else {
+      defaultList.forEach(item => {
+        if (store) {
+          store.appendItem('storage_locations', item);
+        }
+        if (journal && typeof journal.createSyncJob === 'function') {
+          journal.createSyncJob('UPLOAD_EVENT', tid, 'storage_locations', { commandType: 'CREATE_STORAGE_LOCATION', eventType: 'StorageLocationCreated', ...item }, { employeeName: 'System Pre-seed', tenantId: tid });
+        }
+      });
+    }
     return defaultList;
   }
 }

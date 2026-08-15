@@ -38,7 +38,7 @@ export class DataGateway {
     const { collection, operation, record } = event;
 
     if (this.localAdapter) {
-      const id = record.id || record.uuid || record.itemCode || record.code;
+      const id = record.id || record.uuid || record.itemCode || record.code || record.categoryCode || record.supplierCode || record.uomCode || record.locationCode;
       if (operation === 'INSERT' || operation === 'UPDATE') {
         const existing = this.localAdapter.getById(collection, id);
         if (existing) {
@@ -73,7 +73,7 @@ export class DataGateway {
    */
   getCachedById(collection, id, tenantId = null) {
     const list = this.getCachedCollection(collection, tenantId);
-    return list.find(item => item.id === id || item.uuid === id || item.itemCode === id || item.code === id) || null;
+    return list.find(item => item.id === id || item.uuid === id || item.itemCode === id || item.code === id || item.categoryCode === id || item.supplierCode === id || item.uomCode === id || item.locationCode === id) || null;
   }
 
   /**
@@ -100,7 +100,7 @@ export class DataGateway {
    */
   async getById(collection, id, tenantId = null) {
     const list = await this.getCollection(collection, tenantId);
-    return list.find(item => item.id === id || item.uuid === id || item.itemCode === id || item.code === id) || null;
+    return list.find(item => item.id === id || item.uuid === id || item.itemCode === id || item.code === id || item.categoryCode === id || item.supplierCode === id || item.uomCode === id || item.locationCode === id) || null;
   }
 
   /**

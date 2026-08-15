@@ -17,7 +17,7 @@ export class OfflineDataAdapter {
 
   getById(collection, id, tenantId = null) {
     const list = this.getCollection(collection, tenantId);
-    return list.find(item => item.id === id || item.uuid === id || item.code === id || item.itemCode === id) || null;
+    return list.find(item => item.id === id || item.uuid === id || item.code === id || item.itemCode === id || item.categoryCode === id || item.supplierCode === id || item.uomCode === id || item.locationCode === id) || null;
   }
 
   create(collection, data, session = null) {
@@ -29,7 +29,7 @@ export class OfflineDataAdapter {
     if (!this.store) return null;
     const tenantId = session ? session.tenantId : '';
     const list = this.store.getCollection(collection) || [];
-    const idx = list.findIndex(item => (item.id === id || item.uuid === id || item.code === id || item.itemCode === id) && (!tenantId || item.tenantId === tenantId));
+    const idx = list.findIndex(item => (item.id === id || item.uuid === id || item.code === id || item.itemCode === id || item.categoryCode === id || item.supplierCode === id || item.uomCode === id || item.locationCode === id) && (!tenantId || item.tenantId === tenantId));
     if (idx !== -1) {
       const updated = { ...list[idx], ...patch };
       list[idx] = updated;
@@ -43,7 +43,7 @@ export class OfflineDataAdapter {
     if (!this.store) return false;
     const tenantId = session ? session.tenantId : '';
     const list = this.store.getCollection(collection) || [];
-    const filtered = list.filter(item => !( (item.id === id || item.uuid === id || item.code === id || item.itemCode === id) && (!tenantId || item.tenantId === tenantId) ));
+    const filtered = list.filter(item => !( (item.id === id || item.uuid === id || item.code === id || item.itemCode === id || item.categoryCode === id || item.supplierCode === id || item.uomCode === id || item.locationCode === id) && (!tenantId || item.tenantId === tenantId) ));
     const changed = filtered.length !== list.length;
     if (changed) {
       this.store.setCollection(collection, filtered);
