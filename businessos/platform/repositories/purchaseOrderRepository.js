@@ -3,11 +3,12 @@ import { attachStandardMetadata } from '../metadata/entityMetadata.js';
 /**
  * PurchaseOrderRepository domain persistence abstraction.
  *
- * Supports constructor dependency injection while remaining
- * fully backward-compatible with legacy global platform instances.
+ * Supports constructor dependency injection (DataGateway, OfflineStore, OfflineJournal, AuditLogger)
+ * while remaining fully backward-compatible with legacy global platform instances.
  */
 export class PurchaseOrderRepository {
   constructor(deps = {}) {
+    this.dataGateway = deps.dataGateway || null;
     this.offlineStore = deps.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
     this.offlineJournal = deps.offlineJournal || (typeof offlineJournal !== 'undefined' ? offlineJournal : null);
     this.auditLogger = deps.auditLogger || null;
@@ -15,15 +16,24 @@ export class PurchaseOrderRepository {
   }
 
   getAll(tenantId = null) {
+    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+      return this.dataGateway.getCachedCollection('purchase_orders', tenantId) || [];
+    }
     const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
     return store ? store.getCollection('purchase_orders', tenantId) || [] : [];
   }
 
   getByPoNumber(poNumber, tenantId = null) {
-    return this.getAll(tenantId).find(p => p.poNumber === poNumber) || null;
+    if (this.dataGateway && typeof this.dataGateway.getCachedById === 'function') {
+      return this.dataGateway.getCachedById('purchase_orders', poNumber, tenantId);
+    }
+    return this.getAll(tenantId).find(p => p.poNumber === poNumber || p.id === poNumber) || null;
   }
 
   getById(id, tenantId = null) {
+    if (this.dataGateway && typeof this.dataGateway.getCachedById === 'function') {
+      return this.dataGateway.getCachedById('purchase_orders', id, tenantId);
+    }
     return this.getAll(tenantId).find(p => p.id === id || p.poNumber === id) || null;
   }
 
@@ -66,14 +76,18 @@ export class PurchaseOrderRepository {
       newPo = attachStandardMetadata(newPo, tenantId, session);
     }
 
-    if (store) {
-      store.appendItem('purchase_orders', newPo);
-    }
+    if (this.dataGateway && typeof this.dataGateway.create === 'function') {
+      this.dataGateway.create('purchase_orders', newPo, session);
+    } else {
+      if (store) {
+        store.appendItem('purchase_orders', newPo);
+      }
 
-    if (journal && typeof journal.createSyncJob === 'function') {
-      journal.createSyncJob('UPLOAD_EVENT', tenantId, 'purchase_orders', { commandType: 'CREATE_PURCHASE_ORDER', eventType: 'PurchaseOrderCreated', ...newPo }, session);
-    } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
-      offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, 'purchase_orders', { commandType: 'CREATE_PURCHASE_ORDER', eventType: 'PurchaseOrderCreated', ...newPo }, session);
+      if (journal && typeof journal.createSyncJob === 'function') {
+        journal.createSyncJob('UPLOAD_EVENT', tenantId, 'purchase_orders', { commandType: 'CREATE_PURCHASE_ORDER', eventType: 'PurchaseOrderCreated', ...newPo }, session);
+      } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
+        offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, 'purchase_orders', { commandType: 'CREATE_PURCHASE_ORDER', eventType: 'PurchaseOrderCreated', ...newPo }, session);
+      }
     }
 
     const actor = session ? session.employeeName : 'Admin';
@@ -92,25 +106,33 @@ export class PurchaseOrderRepository {
     const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
     const journal = this.offlineJournal || (typeof offlineJournal !== 'undefined' ? offlineJournal : null);
 
-    const list = store ? (store.getCollection('purchase_orders') || []) : [];
-    const idx = list.findIndex(p => (p.id === id || p.poNumber === id) && (!tenantId || p.tenantId === tenantId));
-    if (idx !== -1) {
+    const existing = this.getById(id, tenantId);
+    if (existing) {
       const updated = {
-        ...list[idx],
+        ...existing,
         ...patch,
         modifiedBy: session ? session.employeeName : 'Admin',
         modifiedAt: new Date().toISOString(),
-        version: (list[idx].version || 1) + 1
+        version: (existing.version || 1) + 1
       };
-      list[idx] = updated;
-      if (store) {
-        store.setCollection('purchase_orders', list);
-      }
 
-      if (journal && typeof journal.createSyncJob === 'function') {
-        journal.createSyncJob('UPDATE_PURCHASE_ORDER', tenantId, 'purchase_orders', { id: updated.id, patch }, session);
-      } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
-        offlineJournal.createSyncJob('UPDATE_PURCHASE_ORDER', tenantId, 'purchase_orders', { id: updated.id, patch }, session);
+      if (this.dataGateway && typeof this.dataGateway.update === 'function') {
+        this.dataGateway.update('purchase_orders', id, patch, session);
+      } else {
+        const list = store ? (store.getCollection('purchase_orders') || []) : [];
+        const idx = list.findIndex(p => (p.id === id || p.poNumber === id) && (!tenantId || p.tenantId === tenantId));
+        if (idx !== -1) {
+          list[idx] = updated;
+          if (store) {
+            store.setCollection('purchase_orders', list);
+          }
+        }
+
+        if (journal && typeof journal.createSyncJob === 'function') {
+          journal.createSyncJob('UPDATE_PURCHASE_ORDER', tenantId, 'purchase_orders', { id: updated.id, patch }, session);
+        } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
+          offlineJournal.createSyncJob('UPDATE_PURCHASE_ORDER', tenantId, 'purchase_orders', { id: updated.id, patch }, session);
+        }
       }
 
       const actor = session ? session.employeeName : 'Admin';

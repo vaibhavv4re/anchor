@@ -4,11 +4,12 @@ import { attachStandardMetadata } from '../metadata/entityMetadata.js';
  * GoodsReceiptRepository domain persistence abstraction.
  *
  * Idempotent stock creation engine for Goods Receipts and Opening Stock.
- * Supports constructor dependency injection while remaining
- * fully backward-compatible with legacy global platform instances.
+ * Supports constructor dependency injection (DataGateway, OfflineStore, OfflineJournal, AuditLogger, InventoryRepository, PurchaseOrderRepository)
+ * while remaining fully backward-compatible with legacy global platform instances.
  */
 export class GoodsReceiptRepository {
   constructor(deps = {}) {
+    this.dataGateway = deps.dataGateway || null;
     this.offlineStore = deps.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
     this.offlineJournal = deps.offlineJournal || (typeof offlineJournal !== 'undefined' ? offlineJournal : null);
     this.auditLogger = deps.auditLogger || null;
@@ -18,15 +19,24 @@ export class GoodsReceiptRepository {
   }
 
   getAll(tenantId = null) {
+    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+      return this.dataGateway.getCachedCollection('goods_receipt_notes', tenantId) || [];
+    }
     const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
     return store ? store.getCollection('goods_receipt_notes', tenantId) || [] : [];
   }
 
   getByGrnNumber(grnNumber, tenantId = null) {
-    return this.getAll(tenantId).find(g => g.grnNumber === grnNumber) || null;
+    if (this.dataGateway && typeof this.dataGateway.getCachedById === 'function') {
+      return this.dataGateway.getCachedById('goods_receipt_notes', grnNumber, tenantId);
+    }
+    return this.getAll(tenantId).find(g => g.grnNumber === grnNumber || g.id === grnNumber) || null;
   }
 
   getById(id, tenantId = null) {
+    if (this.dataGateway && typeof this.dataGateway.getCachedById === 'function') {
+      return this.dataGateway.getCachedById('goods_receipt_notes', id, tenantId);
+    }
     return this.getAll(tenantId).find(g => g.id === id || g.grnNumber === id) || null;
   }
 
@@ -72,8 +82,16 @@ export class GoodsReceiptRepository {
     };
 
     // 2. Process Line Items: Generate Append-Only Stock Ledger Entries & Update Store Balances
-    const ledgerList = store ? (store.getCollection('stock_ledger', tenantId) || []) : [];
-    const balanceList = store ? (store.getCollection('stock_balances', tenantId) || []) : [];
+    let ledgerList = [];
+    let balanceList = [];
+
+    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+      ledgerList = this.dataGateway.getCachedCollection('stock_ledger', tenantId) || [];
+      balanceList = this.dataGateway.getCachedCollection('stock_balances', tenantId) || [];
+    } else if (store) {
+      ledgerList = store.getCollection('stock_ledger', tenantId) || [];
+      balanceList = store.getCollection('stock_balances', tenantId) || [];
+    }
 
     grnRecord.lines.forEach((line, idx) => {
       const acceptedQty = parseFloat(line.acceptedQty) || 0;
@@ -101,16 +119,29 @@ export class GoodsReceiptRepository {
         postedBy: grnRecord.postedBy,
         timestamp: new Date().toISOString()
       };
-      ledgerList.push(ledgerEntry);
+
+      if (this.dataGateway && typeof this.dataGateway.create === 'function') {
+        this.dataGateway.create('stock_ledger', ledgerEntry, session);
+      } else {
+        ledgerList.push(ledgerEntry);
+      }
 
       // Update Store Balance (stock_balances)
       let balIdx = balanceList.findIndex(b => b.itemCode === line.itemCode && b.locationCode === grnRecord.receivingLocationCode && (!tenantId || b.tenantId === tenantId));
       if (balIdx !== -1) {
-        balanceList[balIdx].quantity = (parseFloat(balanceList[balIdx].quantity) || 0) + acceptedBaseQty;
-        balanceList[balIdx].valuation = (parseFloat(balanceList[balIdx].valuation) || 0) + lineValuation;
-        balanceList[balIdx].lastUpdatedAt = new Date().toISOString();
+        const updatedBal = {
+          ...balanceList[balIdx],
+          quantity: (parseFloat(balanceList[balIdx].quantity) || 0) + acceptedBaseQty,
+          valuation: (parseFloat(balanceList[balIdx].valuation) || 0) + lineValuation,
+          lastUpdatedAt: new Date().toISOString()
+        };
+        if (this.dataGateway && typeof this.dataGateway.update === 'function') {
+          this.dataGateway.update('stock_balances', balanceList[balIdx].id || balanceList[balIdx].itemCode, updatedBal, session);
+        } else {
+          balanceList[balIdx] = updatedBal;
+        }
       } else {
-        balanceList.push({
+        const newBal = {
           id: 'bal-' + Math.random().toString(36).substring(2, 7),
           tenantId,
           itemCode: line.itemCode,
@@ -119,7 +150,12 @@ export class GoodsReceiptRepository {
           baseUom: line.baseUom || 'KG',
           valuation: lineValuation,
           lastUpdatedAt: new Date().toISOString()
-        });
+        };
+        if (this.dataGateway && typeof this.dataGateway.create === 'function') {
+          this.dataGateway.create('stock_balances', newBal, session);
+        } else {
+          balanceList.push(newBal);
+        }
       }
 
       // Update lastPurchasePrice on Master Inventory Item (Definition stays clean; currentStock is NOT mutated)
@@ -134,8 +170,8 @@ export class GoodsReceiptRepository {
       }
     });
 
-    // Save Collections
-    if (store) {
+    // Save Collections (if not using DataGateway)
+    if (!this.dataGateway && store) {
       store.setCollection('stock_ledger', ledgerList);
       store.setCollection('stock_balances', balanceList);
     }
@@ -146,7 +182,9 @@ export class GoodsReceiptRepository {
       grnRecord = attachStandardMetadata(grnRecord, tenantId, session);
     }
 
-    if (store) {
+    if (this.dataGateway && typeof this.dataGateway.create === 'function') {
+      this.dataGateway.create('goods_receipt_notes', grnRecord, session);
+    } else if (store) {
       store.appendItem('goods_receipt_notes', grnRecord);
     }
 
@@ -159,11 +197,11 @@ export class GoodsReceiptRepository {
         let totalReceived = 0;
 
         po.items.forEach(poItem => {
-          totalOrdered += (parseFloat(poItem.orderedQuantity) || 0);
+          totalOrdered += (parseFloat(poItem.orderedQuantity || poItem.orderQty) || 0);
           let itemRec = 0;
           allGrnsForPo.forEach(g => {
             g.lines.filter(l => l.itemCode === poItem.itemCode).forEach(l => {
-              itemRec += (parseFloat(l.receivedQty) || 0);
+              itemRec += (parseFloat(l.receivedQty || l.acceptedQty) || 0);
             });
           });
           totalReceived += itemRec;
@@ -174,10 +212,12 @@ export class GoodsReceiptRepository {
       }
     }
 
-    if (journal && typeof journal.createSyncJob === 'function') {
-      journal.createSyncJob('UPLOAD_EVENT', tenantId, 'goods_receipt_notes', { commandType: 'POST_GOODS_RECEIPT', eventType: 'GoodsReceiptPosted', ...grnRecord }, session);
-    } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
-      offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, 'goods_receipt_notes', { commandType: 'POST_GOODS_RECEIPT', eventType: 'GoodsReceiptPosted', ...grnRecord }, session);
+    if (!this.dataGateway) {
+      if (journal && typeof journal.createSyncJob === 'function') {
+        journal.createSyncJob('UPLOAD_EVENT', tenantId, 'goods_receipt_notes', { commandType: 'POST_GOODS_RECEIPT', eventType: 'GoodsReceiptPosted', ...grnRecord }, session);
+      } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
+        offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, 'goods_receipt_notes', { commandType: 'POST_GOODS_RECEIPT', eventType: 'GoodsReceiptPosted', ...grnRecord }, session);
+      }
     }
 
     const actor = session ? session.employeeName : 'Admin';
