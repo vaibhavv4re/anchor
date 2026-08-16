@@ -8,6 +8,7 @@ import { UomConversionEngine } from './uom/uomConversionEngine.js';
 
 import { DataGateway } from './data/dataGateway.js';
 import { SupabaseRealtime } from './realtime/supabaseRealtime.js';
+import { IdentityModel } from './identity/identityModel.js';
 
 import { CategoryRepository } from './repositories/categoryRepository.js';
 import { GoodsReceiptRepository } from './repositories/goodsReceiptRepository.js';
@@ -28,8 +29,8 @@ import { UomRepository } from './repositories/uomRepository.js';
  * PlatformContainer composition root.
  *
  * Exposes platform services (this.services), cloud transport adapters (this.cloud),
- * real-time data gateway (this.dataGateway), and domain repositories (this.repositories)
- * with explicit dependency contracts without relying on global state.
+ * real-time data gateway (this.dataGateway), identity model (this.identityModel),
+ * and domain repositories (this.repositories) with explicit dependency contracts without relying on global state.
  */
 export class PlatformContainer {
   constructor(config = {}) {
@@ -77,6 +78,11 @@ export class PlatformContainer {
       realtime: this.realtime,
       supabaseClient: this.cloud.supabase,
       isOnline: config.isOnline !== undefined ? config.isOnline : true
+    });
+
+    this.identityModel = config.identityModel || new IdentityModel({
+      dataGateway: this.dataGateway,
+      offlineStore: this.services.offlineStore
     });
 
     if (config.autoInitRepositories !== false) {

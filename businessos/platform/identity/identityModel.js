@@ -3,8 +3,6 @@
  * Manages security credentials, SHA-256 PIN hashing, and identity lookup.
  */
 
-import { offlineStore } from '../offline_store/offlineStore.js';
-
 export async function hashPin(pin) {
   const encoder = new TextEncoder();
   const data = encoder.encode(pin);
@@ -13,7 +11,12 @@ export async function hashPin(pin) {
   return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
 }
 
-class IdentityModel {
+export class IdentityModel {
+  constructor(deps = {}) {
+    this.dataGateway = deps.dataGateway || null;
+    this.offlineStore = deps.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+  }
+
   /**
    * Find an identity matching the provided 6-digit PIN.
    * @param {string} pin 
@@ -21,7 +24,14 @@ class IdentityModel {
    */
   async findByPin(pin) {
     const hashed = await hashPin(pin);
-    const identities = offlineStore.getCollection('identities') || [];
+    let identities = [];
+    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+      identities = this.dataGateway.getCachedCollection('identities') || [];
+    } else {
+      const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+      identities = store ? store.getCollection('identities') || [] : [];
+    }
+
     return identities.find(id => id.pinHash === hashed && id.status === 'ACTIVE') || null;
   }
 
@@ -37,7 +47,12 @@ class IdentityModel {
       createdAt: new Date().toISOString()
     };
 
-    offlineStore.appendItem('identities', newIdentity);
+    if (this.dataGateway && typeof this.dataGateway.create === 'function') {
+      this.dataGateway.create('identities', newIdentity);
+    } else {
+      const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+      if (store) store.appendItem('identities', newIdentity);
+    }
     return newIdentity;
   }
 
@@ -46,18 +61,28 @@ class IdentityModel {
    */
   async resetPin(identityId, newPin) {
     const pinHash = await hashPin(newPin);
-    const identities = offlineStore.getCollection('identities') || [];
-    const updated = identities.map(id => id.id === identityId ? { ...id, pinHash } : id);
-    offlineStore.setCollection('identities', updated);
+    if (this.dataGateway && typeof this.dataGateway.update === 'function') {
+      this.dataGateway.update('identities', identityId, { pinHash });
+    } else {
+      const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+      const identities = store ? store.getCollection('identities') || [] : [];
+      const updated = identities.map(id => id.id === identityId ? { ...id, pinHash } : id);
+      if (store) store.setCollection('identities', updated);
+    }
   }
 
   /**
    * Disable an identity.
    */
   disableIdentity(identityId) {
-    const identities = offlineStore.getCollection('identities') || [];
-    const updated = identities.map(id => id.id === identityId ? { ...id, status: 'DISABLED' } : id);
-    offlineStore.setCollection('identities', updated);
+    if (this.dataGateway && typeof this.dataGateway.update === 'function') {
+      this.dataGateway.update('identities', identityId, { status: 'DISABLED' });
+    } else {
+      const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+      const identities = store ? store.getCollection('identities') || [] : [];
+      const updated = identities.map(id => id.id === identityId ? { ...id, status: 'DISABLED' } : id);
+      if (store) store.setCollection('identities', updated);
+    }
   }
 }
 

@@ -1,15 +1,18 @@
+import { authEngine as globalAuthEngine } from '../../../../../businessos/platform/authentication/authEngine.js';
+
 /**
  * Capability Group 1 - Identity & Authentication UI
  * PinPadView component handling 6-digit PIN entry, visual feedback, photo confirmation, and error alerts.
+ * Supports explicit Dependency Injection (authEngine, dataGateway, offlineStore) with backward-compatible fallbacks.
  */
-
-import { authEngine } from '../../../../../businessos/platform/authentication/authEngine.js';
-import { offlineStore } from '../../../../../businessos/platform/offline_store/offlineStore.js';
-
 export class PinPadView {
-  constructor({ onSuccess, deviceId = 'DEV-FLOOR-01' }) {
-    this.onSuccess = onSuccess;
-    this.deviceId = deviceId;
+  constructor(options = {}) {
+    this.onSuccess = options.onSuccess;
+    this.deviceId = options.deviceId || 'DEV-FLOOR-01';
+    this.authEngine = options.authEngine || (options.appDependencies ? options.appDependencies.authEngine : globalAuthEngine);
+    this.dataGateway = options.dataGateway || (options.appDependencies ? options.appDependencies.dataGateway : null);
+    this.offlineStore = options.offlineStore || (options.appDependencies && options.appDependencies.services ? options.appDependencies.services.offlineStore : (typeof offlineStore !== 'undefined' ? offlineStore : null));
+
     this.currentPin = '';
     this.container = null;
     this.matchedEmployee = null;
@@ -100,13 +103,19 @@ export class PinPadView {
   }
 
   checkMatchedEmployee() {
-    // Optional preview check if user enters digits
     if (this.currentPin.length === 6) {
-      const identities = offlineStore.getCollection('identities') || [];
-      const employees = offlineStore.getCollection('employees') || [];
-      const roles = offlineStore.getCollection('roles') || [];
+      let employees = [];
+      let roles = [];
 
-      // Demo preview lookup
+      if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+        employees = this.dataGateway.getCachedCollection('employees') || [];
+        roles = this.dataGateway.getCachedCollection('roles') || [];
+      } else {
+        const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+        employees = store ? store.getCollection('employees') || [] : [];
+        roles = store ? store.getCollection('roles') || [] : [];
+      }
+
       const foundEmp = employees.find(e => e.name);
       if (foundEmp) {
         const role = roles.find(r => r.id === foundEmp.roleId);
@@ -119,7 +128,8 @@ export class PinPadView {
     const errEl = this.container.querySelector('#pin-error');
     if (errEl) errEl.textContent = 'Authenticating...';
 
-    const result = await authEngine.authenticate(this.currentPin, this.deviceId);
+    const auth = this.authEngine || globalAuthEngine;
+    const result = await auth.authenticate(this.currentPin, this.deviceId);
 
     if (result.success) {
       if (this.onSuccess) this.onSuccess(result.session);

@@ -1,15 +1,20 @@
+import { identityModel as globalIdentityModel } from '../identity/identityModel.js';
+import { platformEventBus as globalEventBus, PlatformEventTypes } from '../events/platformEvents.js';
+
 /**
  * BusinessOS Platform - Authentication & Session Engine
  * Handles PIN validation, active session management, workspace-specific idle timeouts,
  * lock screen, and manager override functionality.
  */
+export class AuthEngine {
+  constructor(deps = {}) {
+    this.dataGateway = deps.dataGateway || null;
+    this.identityModel = deps.identityModel || globalIdentityModel;
+    this.staffRepository = deps.staffRepository || null;
+    this.tenantRepository = deps.tenantRepository || null;
+    this.offlineStore = deps.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+    this.platformEventBus = deps.platformEventBus || globalEventBus;
 
-import { identityModel } from '../identity/identityModel.js';
-import { offlineStore } from '../offline_store/offlineStore.js';
-import { platformEventBus, PlatformEventTypes } from '../events/platformEvents.js';
-
-class AuthEngine {
-  constructor() {
     this.activeSession = null;
     this.idleTimer = null;
   }
@@ -21,24 +26,38 @@ class AuthEngine {
    * @returns {Promise<{success: boolean, session?: Object, error?: string}>}
    */
   async authenticate(pin, deviceId = 'LOCAL_DEVICE') {
-    const identity = await identityModel.findByPin(pin);
+    const identity = await this.identityModel.findByPin(pin);
     if (!identity) {
       return { success: false, error: 'Invalid PIN' };
     }
 
     // Find linked Employee profile
-    const employees = offlineStore.getCollection('employees') || [];
-    const employee = employees.find(e => e.identityId === identity.id);
+    let employees = [];
+    if (this.staffRepository && typeof this.staffRepository.getAll === 'function') {
+      employees = this.staffRepository.getAll();
+    } else if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+      employees = this.dataGateway.getCachedCollection('employees') || [];
+    } else {
+      const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+      employees = store ? store.getCollection('employees') || [] : [];
+    }
 
+    const employee = employees.find(e => e.identityId === identity.id || e.id === identity.employeeId);
     if (!employee) {
       return { success: false, error: 'No employee profile linked to this identity' };
     }
 
     // Find linked Role
-    const roles = offlineStore.getCollection('roles') || [];
-    const role = roles.find(r => r.id === employee.roleId);
+    let roles = [];
+    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+      roles = this.dataGateway.getCachedCollection('roles') || [];
+    } else {
+      const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+      roles = store ? store.getCollection('roles') || [] : [];
+    }
 
-    const workspace = role ? role.workspace : employee.workspaceDefault || 'waiter';
+    const role = roles.find(r => r.id === employee.roleId);
+    const workspace = role ? role.workspace : (employee.workspaceDefault || 'waiter');
 
     const session = {
       sessionId: 'sess_' + Math.random().toString(36).substring(2, 9),
@@ -56,13 +75,19 @@ class AuthEngine {
     };
 
     this.activeSession = session;
-    offlineStore.appendItem('sessions', session);
+
+    if (this.dataGateway && typeof this.dataGateway.create === 'function') {
+      this.dataGateway.create('sessions', session);
+    } else {
+      const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+      if (store) store.appendItem('sessions', session);
+    }
 
     // Reset and start workspace-specific idle lock timer
     this._restartIdleTimer();
 
-    // Publish platform event (Attendance Engine subscribes to this to auto clock-in!)
-    platformEventBus.publish(PlatformEventTypes.EMPLOYEE_AUTHENTICATED, {
+    // Publish platform event
+    this.platformEventBus.publish(PlatformEventTypes.EMPLOYEE_AUTHENTICATED, {
       sessionId: session.sessionId,
       identityId: identity.id,
       employeeId: employee.id,
@@ -89,8 +114,7 @@ class AuthEngine {
     this.clearIdleTimer();
     this.activeSession = null;
 
-    // Publish platform event (Attendance Engine subscribes to this to auto clock-out!)
-    platformEventBus.publish(PlatformEventTypes.EMPLOYEE_LOGGED_OUT, {
+    this.platformEventBus.publish(PlatformEventTypes.EMPLOYEE_LOGGED_OUT, {
       sessionId: session.sessionId,
       identityId: session.identityId,
       employeeId: session.employeeId,
@@ -111,7 +135,7 @@ class AuthEngine {
     this.activeSession.isLocked = true;
     this.clearIdleTimer();
 
-    platformEventBus.publish(PlatformEventTypes.SESSION_LOCKED, {
+    this.platformEventBus.publish(PlatformEventTypes.SESSION_LOCKED, {
       sessionId: this.activeSession.sessionId,
       identityId: this.activeSession.identityId,
       employeeId: this.activeSession.employeeId,
@@ -127,7 +151,7 @@ class AuthEngine {
   async unlockSession(pin) {
     if (!this.activeSession) return { success: false, error: 'No session' };
 
-    const identity = await identityModel.findByPin(pin);
+    const identity = await this.identityModel.findByPin(pin);
     if (!identity) {
       return { success: false, error: 'Invalid PIN' };
     }
@@ -137,7 +161,7 @@ class AuthEngine {
       this.activeSession.isLocked = false;
       this._restartIdleTimer();
 
-      platformEventBus.publish(PlatformEventTypes.SESSION_UNLOCKED, {
+      this.platformEventBus.publish(PlatformEventTypes.SESSION_UNLOCKED, {
         sessionId: this.activeSession.sessionId,
         identityId: identity.id,
         isOverride: false,
@@ -148,17 +172,33 @@ class AuthEngine {
     }
 
     // Manager Override Check ("Take Control")
-    const employees = offlineStore.getCollection('employees') || [];
+    let employees = [];
+    if (this.staffRepository && typeof this.staffRepository.getAll === 'function') {
+      employees = this.staffRepository.getAll();
+    } else if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+      employees = this.dataGateway.getCachedCollection('employees') || [];
+    } else {
+      const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+      employees = store ? store.getCollection('employees') || [] : [];
+    }
+
     const employee = employees.find(e => e.identityId === identity.id);
-    const roles = offlineStore.getCollection('roles') || [];
+
+    let roles = [];
+    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+      roles = this.dataGateway.getCachedCollection('roles') || [];
+    } else {
+      const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+      roles = store ? store.getCollection('roles') || [] : [];
+    }
+
     const role = employee ? roles.find(r => r.id === employee.roleId) : null;
 
     if (role && (role.permissions.includes('*') || role.permissions.includes('override.lock'))) {
-      // Create new session for Manager
       this.logout();
       const authResult = await this.authenticate(pin, this.activeSession ? this.activeSession.deviceId : 'LOCAL_DEVICE');
       if (authResult.success) {
-        platformEventBus.publish(PlatformEventTypes.SESSION_UNLOCKED, {
+        this.platformEventBus.publish(PlatformEventTypes.SESSION_UNLOCKED, {
           sessionId: authResult.session.sessionId,
           identityId: identity.id,
           isOverride: true,
@@ -178,11 +218,19 @@ class AuthEngine {
     this.clearIdleTimer();
     if (!this.activeSession) return;
 
-    const config = offlineStore.getCollection('configuration') || {};
+    let config = {};
+    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+      const configList = this.dataGateway.getCachedCollection('configuration') || [];
+      config = Array.isArray(configList) ? (configList[0] || {}) : configList;
+    } else {
+      const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+      config = store ? store.getCollection('configuration') || {} : {};
+    }
+
     const timeouts = (config.system && config.system.idleTimeoutMinutes) || {};
     const timeoutMin = timeouts[this.activeSession.workspace] !== undefined ? timeouts[this.activeSession.workspace] : 3;
 
-    if (timeoutMin <= 0) return; // 0 means never lock (e.g. Kitchen display)
+    if (timeoutMin <= 0) return;
 
     const timeoutMs = timeoutMin * 60 * 1000;
     this.idleTimer = setTimeout(() => {

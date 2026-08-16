@@ -1,5 +1,5 @@
 import { PlatformContainer, createPlatformContainer } from '../platformContainer.js';
-import { authEngine } from '../authentication/authEngine.js';
+import { AuthEngine, authEngine as globalAuthEngine } from '../authentication/authEngine.js';
 import { rbacEngine } from '../authorization/rbacEngine.js';
 import { platformEventBus } from '../events/platformEvents.js';
 import { notificationEngine } from '../notifications/notificationEngine.js';
@@ -23,7 +23,15 @@ export class ApplicationContainer {
     this.platformEventBus = config.platformEventBus || platformEventBus;
     this.rbacEngine = config.rbacEngine || rbacEngine;
     this.notificationEngine = config.notificationEngine || notificationEngine;
-    this.authEngine = config.authEngine || authEngine;
+
+    this.authEngine = config.authEngine || new AuthEngine({
+      dataGateway: this.platform.dataGateway,
+      identityModel: this.platform.identityModel,
+      staffRepository: this.platform.repositories ? this.platform.repositories.staff : null,
+      tenantRepository: this.platform.repositories ? this.platform.repositories.tenant : null,
+      offlineStore: this.platform.services ? this.platform.services.offlineStore : null,
+      platformEventBus: this.platformEventBus
+    });
 
     // 3. Expose DataGateway & Repositories
     this.dataGateway = this.platform.dataGateway;
