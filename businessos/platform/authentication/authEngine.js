@@ -44,7 +44,13 @@ export class AuthEngine {
       employees = store ? store.getCollection('employees') || [] : [];
     }
 
-    const employee = employees.find(e => e.identityId === identity.id || e.id === identity.employeeId);
+    const employee = employees.find(e => 
+      e.identityId === identity.id || 
+      e.identity_id === identity.id || 
+      e.id === identity.employeeId || 
+      (e.data && (String(e.data.pinDisplay) === String(pin) || e.data.identityId === identity.id))
+    );
+
     if (!employee) {
       return { success: false, error: 'No employee profile linked to this identity' };
     }
@@ -52,7 +58,7 @@ export class AuthEngine {
     // Resolve Role via RbacEngine
     let role = null;
     if (this.rbacEngine && typeof this.rbacEngine.getRoleById === 'function') {
-      role = this.rbacEngine.getRoleById(employee.roleId);
+      role = this.rbacEngine.getRoleById(employee.roleId || (employee.data ? employee.data.roleId : null));
     } else {
       let roles = [];
       if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
@@ -61,18 +67,18 @@ export class AuthEngine {
         const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
         roles = store ? store.getCollection('roles') || [] : [];
       }
-      role = roles.find(r => r.id === employee.roleId);
+      role = roles.find(r => r.id === (employee.roleId || (employee.data ? employee.data.roleId : null)));
     }
 
-    const workspace = role ? role.workspace : (employee.workspaceDefault || 'waiter');
+    const workspace = role ? role.workspace : (employee.workspaceDefault || (employee.data ? employee.data.workspaceDefault : 'waiter'));
 
     const session = {
       sessionId: 'sess_' + Math.random().toString(36).substring(2, 9),
       identityId: identity.id,
       employeeId: employee.id,
       employeeName: employee.name,
-      tenantId: employee.tenantId || identity.tenant_id || '',
-      avatarUrl: employee.avatarUrl,
+      tenantId: employee.tenantId || employee.tenant_id || (employee.data ? employee.data.tenantId : ''),
+      avatarUrl: employee.avatarUrl || `https://api.dicebear.com/7.x/avataaars/svg?seed=${employee.name}`,
       roleId: role ? role.id : (employee.roleId || 'role-waiter'),
       roleName: role ? role.name : 'Staff',
       workspace,

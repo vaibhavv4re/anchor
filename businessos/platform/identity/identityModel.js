@@ -1,6 +1,7 @@
 /**
  * BusinessOS Platform - Decoupled Identity Model & Helper Utilities
  * Manages security credentials, SHA-256 PIN hashing, and identity lookup.
+ * Includes resilience fallback to query employees.data.pinDisplay when cloud identities table is empty.
  */
 
 export async function hashPin(pin) {
@@ -32,11 +33,39 @@ export class IdentityModel {
       identities = store ? store.getCollection('identities') || [] : [];
     }
 
-    return identities.find(id => {
+    let found = identities.find(id => {
       const pinMatch = (id.pinHash === hashed || id.pin_hash === hashed);
       const statusMatch = (!id.status || id.status === 'ACTIVE');
       return pinMatch && statusMatch;
-    }) || null;
+    });
+
+    if (!found) {
+      // Fallback: Query employees collection for embedded data.pinDisplay
+      let employees = [];
+      if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+        employees = this.dataGateway.getCachedCollection('employees') || [];
+      } else {
+        const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+        employees = store ? store.getCollection('employees') || [] : [];
+      }
+
+      const empMatch = employees.find(e => {
+        const payload = e.data || e;
+        const pinDisp = payload.pinDisplay || payload.pin || e.pinDisplay;
+        return String(pinDisp) === String(pin);
+      });
+
+      if (empMatch) {
+        found = {
+          id: empMatch.identityId || empMatch.identity_id || ('id-' + empMatch.id),
+          pinHash: hashed,
+          employeeId: empMatch.id,
+          status: 'ACTIVE'
+        };
+      }
+    }
+
+    return found || null;
   }
 
   /**
