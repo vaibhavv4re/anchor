@@ -1,4 +1,5 @@
 import { identityModel as globalIdentityModel } from '../identity/identityModel.js';
+import { rbacEngine as globalRbacEngine } from '../authorization/rbacEngine.js';
 import { platformEventBus as globalEventBus, PlatformEventTypes } from '../events/platformEvents.js';
 
 /**
@@ -10,6 +11,7 @@ export class AuthEngine {
   constructor(deps = {}) {
     this.dataGateway = deps.dataGateway || null;
     this.identityModel = deps.identityModel || globalIdentityModel;
+    this.rbacEngine = deps.rbacEngine || globalRbacEngine;
     this.staffRepository = deps.staffRepository || null;
     this.tenantRepository = deps.tenantRepository || null;
     this.offlineStore = deps.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
@@ -47,16 +49,21 @@ export class AuthEngine {
       return { success: false, error: 'No employee profile linked to this identity' };
     }
 
-    // Find linked Role
-    let roles = [];
-    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
-      roles = this.dataGateway.getCachedCollection('roles') || [];
+    // Resolve Role via RbacEngine
+    let role = null;
+    if (this.rbacEngine && typeof this.rbacEngine.getRoleById === 'function') {
+      role = this.rbacEngine.getRoleById(employee.roleId);
     } else {
-      const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
-      roles = store ? store.getCollection('roles') || [] : [];
+      let roles = [];
+      if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+        roles = this.dataGateway.getCachedCollection('roles') || [];
+      } else {
+        const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+        roles = store ? store.getCollection('roles') || [] : [];
+      }
+      role = roles.find(r => r.id === employee.roleId);
     }
 
-    const role = roles.find(r => r.id === employee.roleId);
     const workspace = role ? role.workspace : (employee.workspaceDefault || 'waiter');
 
     const session = {
@@ -64,8 +71,9 @@ export class AuthEngine {
       identityId: identity.id,
       employeeId: employee.id,
       employeeName: employee.name,
+      tenantId: employee.tenantId || identity.tenant_id || '',
       avatarUrl: employee.avatarUrl,
-      roleId: role ? role.id : 'role-waiter',
+      roleId: role ? role.id : (employee.roleId || 'role-waiter'),
       roleName: role ? role.name : 'Staff',
       workspace,
       permissions: role ? role.permissions : [],
@@ -91,6 +99,7 @@ export class AuthEngine {
       sessionId: session.sessionId,
       identityId: identity.id,
       employeeId: employee.id,
+      tenantId: session.tenantId,
       employeeName: employee.name,
       roleId: session.roleId,
       workspace: session.workspace,
@@ -118,6 +127,7 @@ export class AuthEngine {
       sessionId: session.sessionId,
       identityId: session.identityId,
       employeeId: session.employeeId,
+      tenantId: session.tenantId,
       employeeName: session.employeeName,
       workspace: session.workspace,
       shiftDurationMs: durationMs,
@@ -139,6 +149,7 @@ export class AuthEngine {
       sessionId: this.activeSession.sessionId,
       identityId: this.activeSession.identityId,
       employeeId: this.activeSession.employeeId,
+      tenantId: this.activeSession.tenantId,
       workspace: this.activeSession.workspace,
       lockedAt: new Date().toISOString(),
       deviceId: this.activeSession.deviceId
@@ -184,15 +195,7 @@ export class AuthEngine {
 
     const employee = employees.find(e => e.identityId === identity.id);
 
-    let roles = [];
-    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
-      roles = this.dataGateway.getCachedCollection('roles') || [];
-    } else {
-      const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
-      roles = store ? store.getCollection('roles') || [] : [];
-    }
-
-    const role = employee ? roles.find(r => r.id === employee.roleId) : null;
+    const role = employee ? (this.rbacEngine ? this.rbacEngine.getRoleById(employee.roleId) : null) : null;
 
     if (role && (role.permissions.includes('*') || role.permissions.includes('override.lock'))) {
       this.logout();

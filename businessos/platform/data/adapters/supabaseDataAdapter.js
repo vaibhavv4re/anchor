@@ -2,6 +2,8 @@ import { formatRecordForTable } from '../../cloud/supabaseClient.js';
 
 /**
  * SupabaseDataAdapter handles cloud REST requests via SupabaseClient.
+ * Normalizes PostgreSQL snake_case columns (tenant_id, identity_id, pin_hash, role_id)
+ * to JavaScript camelCase while preserving original row attributes.
  */
 export class SupabaseDataAdapter {
   constructor(supabaseClient) {
@@ -13,7 +15,17 @@ export class SupabaseDataAdapter {
     const res = await this.client.fetchTableData(collection);
     if (!res.success || !Array.isArray(res.data)) return [];
     
-    let list = res.data.map(row => (row && row.data ? row.data : row));
+    let list = res.data.map(row => {
+      let item = (row && row.data) ? { ...row.data, ...row } : { ...row };
+      if (item.tenant_id && !item.tenantId) item.tenantId = item.tenant_id;
+      if (item.identity_id && !item.identityId) item.identityId = item.identity_id;
+      if (item.pin_hash && !item.pinHash) item.pinHash = item.pin_hash;
+      if (item.role_id && !item.roleId) item.roleId = item.role_id;
+      if (item.workspace_default && !item.workspaceDefault) item.workspaceDefault = item.workspace_default;
+      if (item.employee_code && !item.employeeCode) item.employeeCode = item.employee_code;
+      return item;
+    });
+
     if (tenantId) {
       list = list.filter(item => !item.tenantId || item.tenantId === tenantId);
     }
@@ -22,20 +34,20 @@ export class SupabaseDataAdapter {
 
   async getById(collection, id, tenantId = null) {
     const list = await this.getCollection(collection, tenantId);
-    return list.find(item => item.id === id || item.uuid === id || item.code === id) || null;
+    return list.find(item => item.id === id || item.uuid === id || item.code === id || item.itemCode === id) || null;
   }
 
   async create(collection, data, session = null) {
     if (!this.client) return data;
     const formatted = formatRecordForTable(collection, {
       payload: data,
-      tenantId: session ? session.tenantId : (data.tenantId || '')
+      tenantId: session ? session.tenantId : (data.tenantId || data.tenant_id || '')
     });
 
     const res = await this.client.upsertRecord(collection, formatted);
     if (res.success && res.data) {
       const returned = Array.isArray(res.data) ? res.data[0] : res.data;
-      return returned && returned.data ? returned.data : data;
+      return returned && returned.data ? { ...returned.data, ...returned } : data;
     }
     return data;
   }

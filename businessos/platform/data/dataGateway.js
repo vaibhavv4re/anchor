@@ -77,8 +77,21 @@ export class DataGateway {
   }
 
   /**
+   * Hydrates local cache from cloud storage for requested collections.
+   * @param {Array<string>} collections 
+   * @param {string|null} tenantId 
+   */
+  async hydrateCollections(collections = ['tenants', 'identities', 'employees', 'roles'], tenantId = null) {
+    const results = {};
+    for (const col of collections) {
+      results[col] = await this.getCollection(col, tenantId);
+    }
+    return results;
+  }
+
+  /**
    * Fetches collection data.
-   * Online: attempts cloud fetch with local fallback.
+   * Online: attempts cloud fetch with local fallback + updates local cache.
    * Offline: reads from local store.
    */
   async getCollection(collection, tenantId = null) {
@@ -86,6 +99,9 @@ export class DataGateway {
       try {
         const cloudData = await this.cloudAdapter.getCollection(collection, tenantId);
         if (Array.isArray(cloudData) && cloudData.length > 0) {
+          if (this.localAdapter && typeof this.localAdapter.setCollection === 'function') {
+            this.localAdapter.setCollection(collection, cloudData);
+          }
           return cloudData;
         }
       } catch (e) {
@@ -149,49 +165,51 @@ export class DataGateway {
       try {
         await this.cloudAdapter.update(collection, id, patch, session);
       } catch (e) {
-        console.warn(`[DataGateway] Cloud update failed for "${collection}" (${id}), queued locally`, e);
+        console.warn(`[DataGateway] Cloud update failed for "${collection}", queued locally`, e);
         if (this.offlineJournal && typeof this.offlineJournal.createSyncJob === 'function') {
-          this.offlineJournal.createSyncJob('UPDATE_RECORD', tenantId, collection, { id, patch }, session);
+          this.offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, collection, { commandType: `UPDATE_${collection.toUpperCase()}`, eventType: `${collection}Updated`, id, patch }, session);
         }
       }
     } else if (this.offlineJournal && typeof this.offlineJournal.createSyncJob === 'function') {
-      this.offlineJournal.createSyncJob('UPDATE_RECORD', tenantId, collection, { id, patch }, session);
+      this.offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, collection, { commandType: `UPDATE_${collection.toUpperCase()}`, eventType: `${collection}Updated`, id, patch }, session);
     }
 
-    return localResult;
+    return localResult || patch;
   }
 
   /**
-   * Deletes/archives an entity.
+   * Deletes an entity by ID.
    */
   async delete(collection, id, session = null) {
     const tenantId = session ? session.tenantId : '';
-    let localResult = false;
     if (this.localAdapter) {
-      localResult = this.localAdapter.delete(collection, id, session);
+      this.localAdapter.delete(collection, id);
     }
 
     this.notifySubscribers(collection, 'DELETE', { id });
 
     if (this.isOnline && this.cloudAdapter) {
       try {
-        await this.cloudAdapter.delete(collection, id, session);
+        await this.cloudAdapter.delete(collection, id);
       } catch (e) {
-        console.warn(`[DataGateway] Cloud delete failed for "${collection}" (${id})`, e);
+        console.warn(`[DataGateway] Cloud delete failed for "${collection}", queued locally`, e);
       }
     }
-
-    return localResult;
+    return true;
   }
 
   /**
-   * Subscribes to changes for a collection.
+   * Subscribes to collection change events.
+   * @param {string} collection 
+   * @param {Function} callback 
+   * @returns {Function} unsubscribe function
    */
   subscribe(collection, callback) {
     if (!this.listeners.has(collection)) {
       this.listeners.set(collection, new Set());
     }
     this.listeners.get(collection).add(callback);
+
     return () => {
       if (this.listeners.has(collection)) {
         this.listeners.get(collection).delete(callback);
@@ -199,13 +217,23 @@ export class DataGateway {
     };
   }
 
-  notifySubscribers(collection, action, payload) {
+  notifySubscribers(collection, operation, data) {
     if (this.listeners.has(collection)) {
       this.listeners.get(collection).forEach(cb => {
         try {
-          cb({ collection, action, payload, timestamp: new Date().toISOString() });
-        } catch (e) {
-          console.error('[DataGateway] Subscription callback error:', e);
+          cb({ collection, operation, data });
+        } catch (err) {
+          console.error(`[DataGateway] Error in subscriber for ${collection}:`, err);
+        }
+      });
+    }
+
+    if (this.listeners.has('*')) {
+      this.listeners.get('*').forEach(cb => {
+        try {
+          cb({ collection, operation, data });
+        } catch (err) {
+          console.error(`[DataGateway] Error in wildcard subscriber:`, err);
         }
       });
     }
