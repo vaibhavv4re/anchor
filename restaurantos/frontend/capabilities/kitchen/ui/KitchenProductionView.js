@@ -8,7 +8,10 @@ import { productionModel } from '../../../../../businessos/platform/kitchen/prod
 import { offlineStore } from '../../../../../businessos/platform/offline_store/offlineStore.js';
 
 export class KitchenProductionView {
-  constructor() {
+  constructor(deps = {}) {
+    this.dataGateway = deps.dataGateway || (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform ? window.__APP__.platform.dataGateway : null);
+    this.offlineStore = deps.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+
     this.activeTab = 'DASHBOARD'; // DASHBOARD | BOMS | NEW_BATCH | ACTIVE | REQUISITIONS | HISTORY
     this.selectedBomId = null;
     this.newBatchTargetQty = 5;
@@ -27,6 +30,19 @@ export class KitchenProductionView {
       status: 'APPROVED',
       ingredients: []
     };
+  }
+
+  _getCollection(name, tenantId) {
+    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+      const list = this.dataGateway.getCachedCollection(name, tenantId);
+      if (Array.isArray(list) && list.length > 0) return list;
+    }
+    if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.dataGateway) {
+      const list = window.__APP__.platform.dataGateway.getCachedCollection(name, tenantId);
+      if (Array.isArray(list) && list.length > 0) return list;
+    }
+    const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+    return store && typeof store.getCollection === 'function' ? store.getCollection(name, tenantId) || [] : [];
   }
 
   render(mount, session) {
@@ -440,7 +456,7 @@ export class KitchenProductionView {
 
   // --- PREPARATION BOM EDITOR FORM ---
   renderBomEditorForm(container, session, tenantId) {
-    const masterInv = offlineStore.getCollection('inventory', tenantId) || [];
+    const masterInv = this._getCollection('inventory', tenantId);
 
     let sfItems = masterInv.filter(i => {
       const type = (i.itemType || i.item_type || i.category || '').toLowerCase();
@@ -756,8 +772,8 @@ export class KitchenProductionView {
     const targetQty = this.newBatchTargetQty || activeBom.standardYieldQuantity;
     const scalingFactor = targetQty / activeBom.standardYieldQuantity;
 
-    const masterInv = offlineStore.getCollection('inventory', tenantId) || [];
-    const stockBalances = offlineStore.getCollection('stock_balances', tenantId) || [];
+    const masterInv = this._getCollection('inventory', tenantId);
+    const stockBalances = this._getCollection('stock_balances', tenantId);
 
     const ingredientRequirements = activeBom.ingredients.map(ing => {
       const lineCode = String(ing.inventoryItemCode || ing.inventory_item_code);

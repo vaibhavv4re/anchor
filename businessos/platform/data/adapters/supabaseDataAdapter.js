@@ -4,6 +4,7 @@ import { formatRecordForTable } from '../../cloud/supabaseClient.js';
  * SupabaseDataAdapter handles cloud REST requests via SupabaseClient.
  * Normalizes PostgreSQL snake_case columns (tenant_id, identity_id, pin_hash, role_id)
  * to JavaScript camelCase while preserving original row attributes.
+ * Excludes virtual in-memory/local collections ('roles', 'sessions') from Cloud REST calls.
  */
 export class SupabaseDataAdapter {
   constructor(supabaseClient) {
@@ -11,8 +12,8 @@ export class SupabaseDataAdapter {
   }
 
   async getCollection(collection, tenantId = null) {
-    // 'roles' is an in-memory/local RBAC catalog, not a physical PostgreSQL table
-    if (!this.client || collection === 'roles') return [];
+    // 'roles' and 'sessions' are in-memory/local state catalogs, not physical PostgreSQL tables
+    if (!this.client || collection === 'roles' || collection === 'sessions') return [];
     
     const res = await this.client.fetchTableData(collection);
     if (!res.success || !Array.isArray(res.data)) return [];
@@ -40,7 +41,7 @@ export class SupabaseDataAdapter {
   }
 
   async create(collection, data, session = null) {
-    if (!this.client || collection === 'roles') return data;
+    if (!this.client || collection === 'roles' || collection === 'sessions') return data;
     const formatted = formatRecordForTable(collection, {
       payload: data,
       tenantId: session ? session.tenantId : (data.tenantId || data.tenant_id || '')
@@ -55,7 +56,7 @@ export class SupabaseDataAdapter {
   }
 
   async update(collection, id, patch, session = null) {
-    if (!this.client || collection === 'roles') return null;
+    if (!this.client || collection === 'roles' || collection === 'sessions') return null;
     const existing = await this.getById(collection, id, session ? session.tenantId : null);
     if (!existing) return null;
 
@@ -64,7 +65,7 @@ export class SupabaseDataAdapter {
   }
 
   async delete(collection, id, session = null) {
-    if (!this.client || collection === 'roles') return false;
+    if (!this.client || collection === 'roles' || collection === 'sessions') return false;
     const tenantId = session ? session.tenantId : '';
     const filter = tenantId ? `id=eq.${id}&tenant_id=eq.${tenantId}` : `id=eq.${id}`;
     const res = await this.client.deleteRecords(collection, filter);

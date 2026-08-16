@@ -63,12 +63,28 @@ function convertRecipeUomToNormalized(qty, recipeUom, baseUom) {
 }
 
 export class KitchenRecipeView {
-  constructor() {
+  constructor(deps = {}) {
+    this.dataGateway = deps.dataGateway || (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform ? window.__APP__.platform.dataGateway : null);
+    this.offlineStore = deps.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+
     this.activeFilter = 'ALL'; // ALL | LINKED | MISSING
     this.searchQuery = '';
     this.currentView = 'LIST'; // 'LIST' | 'BUILDER'
     this.selectedMenuItem = null;
     this.activeRecipe = null;
+  }
+
+  _getCollection(name, tenantId) {
+    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+      const list = this.dataGateway.getCachedCollection(name, tenantId);
+      if (Array.isArray(list) && list.length > 0) return list;
+    }
+    if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.dataGateway) {
+      const list = window.__APP__.platform.dataGateway.getCachedCollection(name, tenantId);
+      if (Array.isArray(list) && list.length > 0) return list;
+    }
+    const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+    return store && typeof store.getCollection === 'function' ? store.getCollection(name, tenantId) || [] : [];
   }
 
   render(mount, session) {
@@ -83,7 +99,7 @@ export class KitchenRecipeView {
 
   renderListView(mount, session, tenantId) {
     const menuItems = kitchenMenuModel.getAll(tenantId, { showArchived: false });
-    const masterInv = offlineStore.getCollection('inventory', tenantId) || [];
+    const masterInv = this._getCollection('inventory', tenantId);
 
     const filteredMenuItems = menuItems.filter(item => {
       const hasRecipe = Boolean(item.recipeId || item.recipe_id);
@@ -241,7 +257,7 @@ export class KitchenRecipeView {
 
   renderBuilderView(mount, session, tenantId) {
     const menuItem = this.selectedMenuItem;
-    const masterInv = offlineStore.getCollection('inventory', tenantId) || [];
+    const masterInv = this._getCollection('inventory', tenantId);
 
     const mId = menuItem.id || menuItem._id || menuItem.itemCode || menuItem.item_code;
     const mCode = menuItem.itemCode || menuItem.item_code || 'CODE';
