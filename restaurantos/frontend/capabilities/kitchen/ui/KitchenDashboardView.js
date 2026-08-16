@@ -5,7 +5,7 @@
  * and low-stock ingredient alerts based on stock_balances + Master Inventory policies.
  */
 
-import { offlineStore } from '../../../../businessos/platform/offline_store/offlineStore.js';
+import { offlineStore } from '../../../../../businessos/platform/offline_store/offlineStore.js';
 
 export class KitchenDashboardView {
   constructor({ onNavigate, onLaunchKDS }) {

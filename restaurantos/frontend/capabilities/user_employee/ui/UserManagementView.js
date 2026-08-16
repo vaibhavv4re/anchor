@@ -4,8 +4,8 @@
  * assigning roles/permissions, resetting PINs, and toggling account status.
  */
 
-import { offlineStore } from '../../../../businessos/platform/offline_store/offlineStore.js';
-import { identityModel } from '../../../../businessos/platform/identity/identityModel.js';
+import { offlineStore } from '../../../../../businessos/platform/offline_store/offlineStore.js';
+import { identityModel } from '../../../../../businessos/platform/identity/identityModel.js';
 
 export class UserManagementView {
   constructor() {

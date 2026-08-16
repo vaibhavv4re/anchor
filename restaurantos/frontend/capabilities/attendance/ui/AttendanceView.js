@@ -3,7 +3,7 @@
  * Real-time timesheet monitor displaying automatically generated ClockIn and ClockOut entries.
  */
 
-import { attendanceEngine } from '../../../../businessos/platform/attendance/attendanceEngine.js';
+import { attendanceEngine } from '../../../../../businessos/platform/attendance/attendanceEngine.js';
 
 export class AttendanceView {
   constructor() {

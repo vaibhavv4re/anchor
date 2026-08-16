@@ -3,7 +3,7 @@
  * Renders a chronological operational ledger of all restaurant business events.
  */
 
-import { timelineLedger } from '../../../../businessos/platform/timeline/timelineLedger.js';
+import { timelineLedger } from '../../../../../businessos/platform/timeline/timelineLedger.js';
 
 export class TimelineWidget {
   constructor() {

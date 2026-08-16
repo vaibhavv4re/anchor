@@ -3,7 +3,7 @@
  * Dynamic 5-step guided launcher for shared infrastructure configuration with setup resume and estimated times.
  */
 
-import { tenantModel } from '../../../../businessos/platform/tenant/tenantModel.js';
+import { tenantModel } from '../../../../../businessos/platform/tenant/tenantModel.js';
 
 export class AdminSetupWizardView {
   constructor({ onComplete }) {

@@ -3,10 +3,10 @@
  * Integrates Menu Browser, Order Builder Drawer, Order Review Modal, and Automatic KOT/BOT Routing.
  */
 
-import { sessionProjectionService } from '../../../../businessos/platform/session/sessionProjectionService.js';
-import { sessionStateMachine, SessionMilestones } from '../../../../businessos/platform/session/sessionStateMachine.js';
-import { tableStateMachine, PhysicalTableStates } from '../../../../businessos/platform/table_state/tableStateMachine.js';
-import { platformEventBus } from '../../../../businessos/platform/events/platformEvents.js';
+import { sessionProjectionService } from '../../../../../businessos/platform/session/sessionProjectionService.js';
+import { sessionStateMachine, SessionMilestones } from '../../../../../businessos/platform/session/sessionStateMachine.js';
+import { tableStateMachine, PhysicalTableStates } from '../../../../../businessos/platform/table_state/tableStateMachine.js';
+import { platformEventBus } from '../../../../../businessos/platform/events/platformEvents.js';
 
 import { MenuBrowserView } from '../../order_management/ui/MenuBrowserView.js';
 import { OrderBuilderDrawer } from '../../order_management/ui/OrderBuilderDrawer.js';

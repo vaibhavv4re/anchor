@@ -3,8 +3,8 @@
  * Displays dispatched KOT (Kitchen) and BOT (Bar) tickets for the active session.
  */
 
-import { orderModel } from '../../../../businessos/platform/ordering/orderModel.js';
-import { platformEventBus } from '../../../../businessos/platform/events/platformEvents.js';
+import { orderModel } from '../../../../../businessos/platform/ordering/orderModel.js';
+import { platformEventBus } from '../../../../../businessos/platform/events/platformEvents.js';
 
 export class ActiveOrdersWidget {
   constructor({ sessionId }) {

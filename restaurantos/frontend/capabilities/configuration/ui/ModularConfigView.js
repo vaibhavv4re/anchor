@@ -3,8 +3,8 @@
  * Provides tabbed settings for Business Profile, Hardware, Payments, Printing, and System parameters.
  */
 
-import { offlineStore } from '../../../../businessos/platform/offline_store/offlineStore.js';
-import { platformEventBus, PlatformEventTypes } from '../../../../businessos/platform/events/platformEvents.js';
+import { offlineStore } from '../../../../../businessos/platform/offline_store/offlineStore.js';
+import { platformEventBus, PlatformEventTypes } from '../../../../../businessos/platform/events/platformEvents.js';
 
 export class ModularConfigView {
   constructor() {

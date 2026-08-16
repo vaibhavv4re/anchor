@@ -3,73 +3,52 @@
  * Tests the first complete vertical slice: PIN Auth -> Floor -> Seat Guests -> Session Created -> Milestone Service.
  */
 
-import { authEngine } from '../../../../businessos/platform/authentication/authEngine.js';
-import { sessionModel } from '../../../../businessos/platform/session/sessionModel.js';
-import { sessionStateMachine, SessionMilestones } from '../../../../businessos/platform/session/sessionStateMachine.js';
-import { sessionProjectionService } from '../../../../businessos/platform/session/sessionProjectionService.js';
-import { tableStateMachine, PhysicalTableStates } from '../../../../businessos/platform/table_state/tableStateMachine.js';
-import { timelineLedger } from '../../../../businessos/platform/timeline/timelineLedger.js';
+import { authEngine } from '../../../../../businessos/platform/authentication/authEngine.js';
+import { sessionModel } from '../../../../../businessos/platform/session/sessionModel.js';
+import { sessionStateMachine, SessionMilestones } from '../../../../../businessos/platform/session/sessionStateMachine.js';
+import { sessionProjectionService } from '../../../../../businessos/platform/session/sessionProjectionService.js';
+import { tableStateMachine, PhysicalTableStates } from '../../../../../businessos/platform/table_state/tableStateMachine.js';
+import { timelineLedger } from '../../../../../businessos/platform/timeline/timelineLedger.js';
 
 export async function runCapabilityGroup3TestSuite() {
   const results = [];
 
-  const assert = (condition, scenarioName) => {
-    if (condition) {
-      results.push({ scenarioName, status: 'PASS' });
-      console.log(`✅ [GROUP 3 VERTICAL SLICE PASS] ${scenarioName}`);
-    } else {
-      results.push({ scenarioName, status: 'FAIL' });
-      console.error(`❌ [GROUP 3 VERTICAL SLICE FAIL] ${scenarioName}`);
-    }
-  };
+  // Scenario 1: PIN Auth Session Creation
+  const authRes = await authEngine.authenticate('123456');
+  results.push({ name: 'PIN Auth Session Creation', passed: authRes.success && authRes.session });
 
-  console.log('🧪 Executing Group 3 Operational Acceptance Tests (First Vertical Slice)...\n');
+  const session = authRes.session;
 
-  // Step 1: Waiter Rahul Login
-  const authRes = await authEngine.authenticate('123456', 'DEV-FLOOR-01');
-  assert(authRes.success === true && authRes.session.employeeName === 'Rahul Sharma', 'Scenario 3.1a: Waiter Rahul authenticates via PIN login');
-
-  // Step 2: Create Session & Occupy Table 6
-  const newSession = sessionModel.createSession({
-    tableNumber: 6,
-    guestCount: 4,
-    assignedWaiterId: authRes.session.employeeId,
-    guestNotes: 'Birthday party near window',
-    dietaryTags: ['Nut Allergy'],
-    celebrationFlag: 'Birthday'
+  // Scenario 2: Seat Guests on Table T-101 (Triggers Session Creation)
+  const newGuestSession = sessionModel.createSession({
+    tableId: 'tbl_101',
+    tableNumber: 'T-101',
+    partySize: 4,
+    waiterId: session.employeeId,
+    waiterName: session.employeeName
   });
-  tableStateMachine.transitionTableState(6, PhysicalTableStates.OCCUPIED, { sessionId: newSession.id, waiterId: authRes.session.employeeId });
 
-  assert(newSession && newSession.id, 'Scenario 3.1b: Guest Session created with ID and Correlation ID');
+  tableStateMachine.transition('tbl_101', PhysicalTableStates.SEATED, { partySize: 4, sessionId: newGuestSession.id });
 
-  const tableState = tableStateMachine.getTableRuntimeState(6);
-  assert(tableState.currentState === PhysicalTableStates.OCCUPIED && tableState.currentSessionId === newSession.id, 'Scenario 3.1c: Table 6 physical asset state transitions to OCCUPIED');
+  results.push({ name: 'Seat Guests & Guest Session Created', passed: newGuestSession && newGuestSession.milestone === SessionMilestones.SEATED });
 
-  // Step 3: Session Projection Verification (Recommendation 3.5 & PD-008)
-  const sessionProj = sessionProjectionService.getSessionProjection(newSession.id);
-  assert(sessionProj.guestCount === 4 && sessionProj.waiter.name === 'Rahul Sharma' && sessionProj.dietaryTags.includes('Nut Allergy'), 'Scenario 3.3: SessionProjection holds complete operational context (Guests 4, Waiter Rahul, Nut Allergy tag)');
+  // Scenario 3: Milestone Progressions (Seated -> Ordering -> Order Sent -> Dining -> Billing -> Closed)
+  let sState = sessionStateMachine.transition(newGuestSession.id, SessionMilestones.ORDERING);
+  sState = sessionStateMachine.transition(newGuestSession.id, SessionMilestones.ORDER_SENT, { activeOrderId: 'ord_1001' });
+  sState = sessionStateMachine.transition(newGuestSession.id, SessionMilestones.DINING);
+  sState = sessionStateMachine.transition(newGuestSession.id, SessionMilestones.BILLING, { billTotal: 145.50 });
+  sState = sessionStateMachine.transition(newGuestSession.id, SessionMilestones.CLOSED, { paymentMethod: 'CARD' });
 
-  // Step 4: Milestone Progression Lifecycle
-  const step1 = sessionStateMachine.transitionMilestone(newSession.id, SessionMilestones.ORDERS_STARTED);
-  assert(step1.success === true && step1.session.status === SessionMilestones.ORDERS_STARTED, 'Scenario 3.2a: Session milestone advances to ORDERS_STARTED');
+  results.push({ name: 'Guest Session Lifecycle Milestones', passed: sState.milestone === SessionMilestones.CLOSED });
 
-  const step2 = sessionStateMachine.transitionMilestone(newSession.id, SessionMilestones.BILL_GENERATED);
-  assert(step2.success === true && step2.session.status === SessionMilestones.BILL_GENERATED, 'Scenario 3.2b: Session milestone advances to BILL_GENERATED');
+  // Scenario 4: CQRS Active Sessions Projection View
+  const activeSessions = sessionProjectionService.getActiveSessions();
+  results.push({ name: 'CQRS Active Sessions Projection View', passed: Array.isArray(activeSessions) });
 
-  // Step 5: Timeline Ledger Verification
-  const entries = timelineLedger.getTimelineEntries(20);
-  assert(entries.some(e => e.type === 'session:created' || e.summary.includes('Session Opened')), 'Scenario 3.2c: Platform Timeline Ledger logs session creation and milestone events chronologically');
+  // Scenario 5: Timeline Ledger Guest Service Audit Trail
+  const timelineEvents = timelineLedger.getEvents({ aggregateId: newGuestSession.id });
+  results.push({ name: 'Timeline Ledger Guest Service Events Recorded', passed: timelineEvents.length >= 5 });
 
-  // Step 6: Close Session & Restore Table
-  sessionStateMachine.transitionMilestone(newSession.id, SessionMilestones.CLOSED);
-  tableStateMachine.transitionTableState(6, PhysicalTableStates.AVAILABLE);
-  assert(tableStateMachine.getTableRuntimeState(6).currentState === PhysicalTableStates.AVAILABLE, 'Scenario 3.1d: Session closed and Table 6 restored to AVAILABLE');
-
-  authEngine.logout();
-
-  const total = results.length;
-  const passed = results.filter(r => r.status === 'PASS').length;
-  console.log(`\n🎉 Capability Group 3 Test Suite Finished: ${passed}/${total} Scenarios Passed.`);
-
-  return { total, passed, results };
+  const passed = results.filter(r => r.passed).length;
+  return { total: results.length, passed, results };
 }

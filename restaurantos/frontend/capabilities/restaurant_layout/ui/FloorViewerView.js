@@ -3,8 +3,8 @@
  * Renders visual table cards with 6-state badges, CreateSessionModal, and ActiveSessionView.
  */
 
-import { tableProjectionService } from '../../../../businessos/platform/table_state/tableProjectionService.js';
-import { platformEventBus } from '../../../../businessos/platform/events/platformEvents.js';
+import { tableProjectionService } from '../../../../../businessos/platform/table_state/tableProjectionService.js';
+import { platformEventBus } from '../../../../../businessos/platform/events/platformEvents.js';
 
 import { DiningAreaTabs } from './DiningAreaTabs.js';
 import { TableInspectorModal } from './TableInspectorModal.js';

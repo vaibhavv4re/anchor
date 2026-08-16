@@ -3,7 +3,7 @@
  * LockScreenView component handling idle lock overlay, PIN unlock, and Manager Override.
  */
 
-import { authEngine } from '../../../../businessos/platform/authentication/authEngine.js';
+import { authEngine } from '../../../../../businessos/platform/authentication/authEngine.js';
 
 export class LockScreenView {
   constructor({ session, onUnlock }) {

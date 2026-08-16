@@ -3,7 +3,7 @@
  * Touch-optimized menu grid categorized with fast search filtering (< 50ms) and dietary indicators.
  */
 
-import { menuMasterModel } from '../../../../businessos/platform/ordering/menuMasterModel.js';
+import { menuMasterModel } from '../../../../../businessos/platform/ordering/menuMasterModel.js';
 
 export class MenuBrowserView {
   constructor({ onSelectItem }) {

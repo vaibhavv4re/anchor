@@ -3,8 +3,8 @@
  * Launches when Admin clicks "Restaurant Ready for Service" to audit go-live requirements.
  */
 
-import { commissioningEngine } from '../../../../businessos/platform/commissioning/commissioningEngine.js';
-import { tenantModel } from '../../../../businessos/platform/tenant/tenantModel.js';
+import { commissioningEngine } from '../../../../../businessos/platform/commissioning/commissioningEngine.js';
+import { tenantModel } from '../../../../../businessos/platform/tenant/tenantModel.js';
 
 export class GoLiveReadinessModal {
   constructor({ onApproved, onCancel }) {

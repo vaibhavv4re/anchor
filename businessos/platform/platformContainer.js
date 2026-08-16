@@ -6,6 +6,9 @@ import { OfflineJournal } from './sync/offlineJournal.js';
 import { UOM_REGISTRY } from './uom/uomRegistry.js';
 import { UomConversionEngine } from './uom/uomConversionEngine.js';
 
+import { DataGateway } from './data/dataGateway.js';
+import { SupabaseRealtime } from './realtime/supabaseRealtime.js';
+
 import { CategoryRepository } from './repositories/categoryRepository.js';
 import { GoodsReceiptRepository } from './repositories/goodsReceiptRepository.js';
 import { InventoryRepository } from './repositories/inventoryRepository.js';
@@ -25,19 +28,20 @@ import { UomRepository } from './repositories/uomRepository.js';
  * PlatformContainer composition root.
  *
  * Exposes platform services (this.services), cloud transport adapters (this.cloud),
- * and domain repositories (this.repositories) with explicit dependency contracts without relying on global state.
+ * real-time data gateway (this.dataGateway), and domain repositories (this.repositories)
+ * with explicit dependency contracts without relying on global state.
  */
 export class PlatformContainer {
   constructor(config = {}) {
-    const offlineStore = config.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+    const storeInstance = config.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
     const deviceId = config.getDeviceId || getDeviceId;
 
-    const offlineJournal = config.offlineJournal ||
-      (offlineStore ? new OfflineJournal(offlineStore, deviceId) :
+    const journalInstance = config.offlineJournal ||
+      (storeInstance ? new OfflineJournal(storeInstance, deviceId) :
       (typeof offlineJournal !== 'undefined' ? offlineJournal : null));
 
-    const auditLogger = config.auditLogger ||
-      (offlineStore ? new AuditLogger(offlineStore) : null);
+    const auditLoggerInstance = config.auditLogger ||
+      (storeInstance ? new AuditLogger(storeInstance) : null);
 
     const entityMetadata = config.entityMetadata || {
       getDeviceId: deviceId,
@@ -49,10 +53,10 @@ export class PlatformContainer {
     const uomEngine = config.uomEngine || new UomConversionEngine(uomRegistry);
 
     this.services = {
-      offlineStore,
+      offlineStore: storeInstance,
       getDeviceId: deviceId,
-      offlineJournal,
-      auditLogger,
+      offlineJournal: journalInstance,
+      auditLogger: auditLoggerInstance,
       entityMetadata,
       productFamilies,
       uomRegistry,
@@ -63,6 +67,18 @@ export class PlatformContainer {
       supabase: config.supabaseClient || new SupabaseClient(config.supabase || {})
     };
 
+    this.realtime = config.realtime || new SupabaseRealtime(config.realtimeConfig || {});
+
+    this.dataGateway = config.dataGateway || new DataGateway({
+      cloudAdapter: config.cloudAdapter,
+      localAdapter: config.localAdapter,
+      offlineStore: this.services.offlineStore,
+      offlineJournal: this.services.offlineJournal,
+      realtime: this.realtime,
+      supabaseClient: this.cloud.supabase,
+      isOnline: config.isOnline !== undefined ? config.isOnline : true
+    });
+
     if (config.autoInitRepositories !== false) {
       this.initRepositories(config.repositories);
     }
@@ -70,6 +86,7 @@ export class PlatformContainer {
 
   initRepositories(customRepos = {}) {
     const commonDeps = {
+      dataGateway: this.dataGateway,
       offlineStore: this.services.offlineStore,
       offlineJournal: this.services.offlineJournal,
       auditLogger: this.services.auditLogger,
@@ -85,6 +102,7 @@ export class PlatformContainer {
     const storageLocation = customRepos.storageLocation || new StorageLocationRepository(commonDeps);
 
     const uom = customRepos.uom || new UomRepository({
+      dataGateway: this.dataGateway,
       offlineStore: this.services.offlineStore,
       offlineJournal: this.services.offlineJournal,
       uomRegistry: this.services.uomRegistry
@@ -120,6 +138,7 @@ export class PlatformContainer {
     });
 
     const stockCount = customRepos.stockCount || new StockCountRepository({
+      dataGateway: this.dataGateway,
       offlineStore: this.services.offlineStore,
       auditLogger: this.services.auditLogger,
       entityMetadata: this.services.entityMetadata,
@@ -130,6 +149,7 @@ export class PlatformContainer {
     const staff = customRepos.staff || new StaffRepository(commonDeps);
 
     const tenant = customRepos.tenant || new TenantRepository({
+      dataGateway: this.dataGateway,
       offlineStore: this.services.offlineStore,
       offlineJournal: this.services.offlineJournal,
       auditLogger: this.services.auditLogger

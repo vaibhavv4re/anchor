@@ -3,8 +3,8 @@
  * PinPadView component handling 6-digit PIN entry, visual feedback, photo confirmation, and error alerts.
  */
 
-import { authEngine } from '../../../../businessos/platform/authentication/authEngine.js';
-import { offlineStore } from '../../../../businessos/platform/offline_store/offlineStore.js';
+import { authEngine } from '../../../../../businessos/platform/authentication/authEngine.js';
+import { offlineStore } from '../../../../../businessos/platform/offline_store/offlineStore.js';
 
 export class PinPadView {
   constructor({ onSuccess, deviceId = 'DEV-FLOOR-01' }) {

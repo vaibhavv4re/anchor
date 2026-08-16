@@ -3,9 +3,9 @@
  * Canonical Home Page displaying Setup Resume bar, Classified Readiness Counters, Workspace Health Scores, Contextual Links, and Explore Mode.
  */
 
-import { setupValidationEngine } from '../../../../businessos/platform/tenant/setupValidationEngine.js';
-import { tenantModel } from '../../../../businessos/platform/tenant/tenantModel.js';
-import { demoDataSeeder } from '../../../../businessos/platform/tenant/demoDataSeeder.js';
+import { setupValidationEngine } from '../../../../../businessos/platform/tenant/setupValidationEngine.js';
+import { tenantModel } from '../../../../../businessos/platform/tenant/tenantModel.js';
+import { demoDataSeeder } from '../../../../../businessos/platform/tenant/demoDataSeeder.js';
 
 export class AdminDashboardView {
   constructor({ onNavigateWorkspace }) {

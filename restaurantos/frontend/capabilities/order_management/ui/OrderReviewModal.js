@@ -4,9 +4,9 @@
  * Triggers Automatic Production Routing (PD-010) on confirmation.
  */
 
-import { orderModel } from '../../../../businessos/platform/ordering/orderModel.js';
-import { authEngine } from '../../../../businessos/platform/authentication/authEngine.js';
-import { sessionStateMachine, SessionMilestones } from '../../../../businessos/platform/session/sessionStateMachine.js';
+import { orderModel } from '../../../../../businessos/platform/ordering/orderModel.js';
+import { authEngine } from '../../../../../businessos/platform/authentication/authEngine.js';
+import { sessionStateMachine, SessionMilestones } from '../../../../../businessos/platform/session/sessionStateMachine.js';
 
 export class OrderReviewModal {
   constructor({ sessionId, tableNumber, draftItems, onClose, onOrderConfirmed }) {

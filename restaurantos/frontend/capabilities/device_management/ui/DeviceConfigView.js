@@ -3,8 +3,8 @@
  * Controls tablet hardware registration, assigned workspace defaults, floor area mapping, and printer routing.
  */
 
-import { deviceEngine } from '../../../../businessos/platform/devices/deviceEngine.js';
-import { offlineStore } from '../../../../businessos/platform/offline_store/offlineStore.js';
+import { deviceEngine } from '../../../../../businessos/platform/devices/deviceEngine.js';
+import { offlineStore } from '../../../../../businessos/platform/offline_store/offlineStore.js';
 
 export class DeviceConfigView {
   constructor() {

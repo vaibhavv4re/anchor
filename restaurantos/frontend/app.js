@@ -13,11 +13,13 @@ import { runCapabilityGroup3TestSuite } from './capabilities/guest_service/tests
 import { runCapabilityGroup4TestSuite } from './capabilities/order_management/tests/capability_group_4.test.js';
 import { runMilestone1TestSuite } from './capabilities/setup_wizard/tests/milestone_1_setup.test.js';
 
-window.runTestSuite = runCapabilityGroup1TestSuite;
-window.runGroup2Tests = runCapabilityGroup2TestSuite;
-window.runGroup3Tests = runCapabilityGroup3TestSuite;
-window.runGroup4Tests = runCapabilityGroup4TestSuite;
-window.runMilestone1Tests = runMilestone1TestSuite;
+if (typeof window !== 'undefined') {
+  window.runTestSuite = runCapabilityGroup1TestSuite;
+  window.runGroup2Tests = runCapabilityGroup2TestSuite;
+  window.runGroup3Tests = runCapabilityGroup3TestSuite;
+  window.runGroup4Tests = runCapabilityGroup4TestSuite;
+  window.runMilestone1Tests = runMilestone1TestSuite;
+}
 
 import { PinPadView } from './capabilities/identity/ui/PinPadView.js';
 import { LockScreenView } from './capabilities/identity/ui/LockScreenView.js';
@@ -27,34 +29,44 @@ import { ModularConfigView } from './capabilities/configuration/ui/ModularConfig
 import { AttendanceView } from './capabilities/attendance/ui/AttendanceView.js';
 import { FloorViewerView } from './capabilities/restaurant_layout/ui/FloorViewerView.js';
 
-class ApplicationShell {
-  constructor() {
+export class ApplicationShell {
+  constructor(deps = {}) {
     this.appEl = null;
     this.activeWorkspace = 'waiter';
     this.activeSubView = 'floor';
     this.lockScreenComponent = null;
+
+    // Dependency Injection with zero-breaking-change fallback to imported singletons
+    this.container = deps.container || deps.applicationContainer || null;
+    this.authEngine = deps.authEngine || (deps.appDependencies ? deps.appDependencies.authEngine : authEngine);
+    this.platformEventBus = deps.platformEventBus || (deps.appDependencies ? deps.appDependencies.platformEventBus : platformEventBus);
+    this.notificationEngine = deps.notificationEngine || (deps.appDependencies ? deps.appDependencies.notificationEngine : notificationEngine);
+    this.rbacEngine = deps.rbacEngine || (deps.appDependencies ? deps.appDependencies.rbacEngine : rbacEngine);
+    this.repositories = deps.repositories || (deps.appDependencies ? deps.appDependencies.repositories : null);
   }
 
   init() {
-    this.appEl = document.getElementById('app');
-    this.subscribePlatformEvents();
-    this.render();
+    if (typeof document !== 'undefined') {
+      this.appEl = document.getElementById('app');
+      this.subscribePlatformEvents();
+      this.render();
+    }
   }
 
   subscribePlatformEvents() {
     // Listen for session lock events
-    platformEventBus.subscribe(PlatformEventTypes.SESSION_LOCKED, (envelope) => {
+    this.platformEventBus.subscribe(PlatformEventTypes.SESSION_LOCKED, (envelope) => {
       this.handleSessionLocked(envelope.payload);
     });
 
     // Listen for notifications
-    platformEventBus.subscribe(PlatformEventTypes.NOTIFICATION_EMITTED, (envelope) => {
+    this.platformEventBus.subscribe(PlatformEventTypes.NOTIFICATION_EMITTED, (envelope) => {
       this.showToast(envelope.payload);
     });
   }
 
   render() {
-    const session = authEngine.getCurrentSession();
+    const session = this.authEngine.getCurrentSession();
 
     if (!session) {
       this.renderPinPad();
@@ -66,6 +78,7 @@ class ApplicationShell {
   }
 
   renderPinPad() {
+    if (!this.appEl) return;
     this.appEl.innerHTML = `
       <div style="min-height:100vh; display:flex; align-items:center; justify-content:center; padding:var(--space-md); overflow-y:auto; -webkit-overflow-scrolling:touch;">
         <div id="pin-pad-mount" style="width:100%; max-width:420px;"></div>
@@ -78,10 +91,11 @@ class ApplicationShell {
     });
 
     const mount = this.appEl.querySelector('#pin-pad-mount');
-    mount.appendChild(pinPad.render());
+    if (mount) mount.appendChild(pinPad.render());
   }
 
   renderWorkspace(session) {
+    if (!this.appEl) return;
     this.appEl.innerHTML = `
       <div class="flex-col h-full" style="min-height:100vh;">
         <!-- Top Navigation Header -->
@@ -130,7 +144,7 @@ class ApplicationShell {
   }
 
   renderSidebarNav(session) {
-    const isManagerOrAdmin = rbacEngine.hasPermission(session.roleId, 'user.create') || rbacEngine.hasPermission(session.roleId, '*');
+    const isManagerOrAdmin = this.rbacEngine.hasPermission(session.roleId, 'user.create') || this.rbacEngine.hasPermission(session.roleId, '*');
 
     return `
       <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; margin-bottom:4px; padding-left:8px;">Workspace Modules</div>
@@ -165,6 +179,7 @@ class ApplicationShell {
   }
 
   bindHeaderEvents() {
+    if (!this.appEl) return;
     const m1TestBtn = this.appEl.querySelector('#btn-run-m1-tests');
     if (m1TestBtn) {
       m1TestBtn.addEventListener('click', async () => {
@@ -205,27 +220,35 @@ class ApplicationShell {
       });
     }
 
-    this.appEl.querySelector('#btn-lock-session').addEventListener('click', () => {
-      authEngine.lockSession();
-    });
+    const lockBtn = this.appEl.querySelector('#btn-lock-session');
+    if (lockBtn) {
+      lockBtn.addEventListener('click', () => {
+        this.authEngine.lockSession();
+      });
+    }
 
-    this.appEl.querySelector('#btn-logout').addEventListener('click', () => {
-      authEngine.logout();
-      this.render();
-    });
+    const logoutBtn = this.appEl.querySelector('#btn-logout');
+    if (logoutBtn) {
+      logoutBtn.addEventListener('click', () => {
+        this.authEngine.logout();
+        this.render();
+      });
+    }
 
     const navBtns = this.appEl.querySelectorAll('.nav-item');
     navBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         this.activeSubView = btn.dataset.view;
-        const session = authEngine.getCurrentSession();
+        const session = this.authEngine.getCurrentSession();
         this.renderWorkspace(session);
       });
     });
   }
 
   mountSubView(session) {
+    if (!this.appEl) return;
     const mount = this.appEl.querySelector('#workspace-mount');
+    if (!mount) return;
     mount.innerHTML = '';
 
     if (this.activeSubView === 'floor') {
@@ -279,7 +302,7 @@ class ApplicationShell {
   }
 
   handleSessionLocked(payload) {
-    const session = authEngine.getCurrentSession();
+    const session = this.authEngine.getCurrentSession();
     if (!session || this.lockScreenComponent) return;
 
     const lockView = new LockScreenView({
@@ -291,10 +314,13 @@ class ApplicationShell {
     });
 
     this.lockScreenComponent = lockView.render();
-    document.body.appendChild(this.lockScreenComponent);
+    if (typeof document !== 'undefined') {
+      document.body.appendChild(this.lockScreenComponent);
+    }
   }
 
   showToast(payload) {
+    if (typeof document === 'undefined') return;
     const toast = document.createElement('div');
     toast.className = 'badge badge-info animate-fade-in';
     toast.style.cssText = 'position:fixed; bottom:20px; right:20px; z-index:10000; padding:12px 20px; box-shadow:var(--shadow-lg); background:var(--bg-surface-2); border:1px solid var(--accent-primary);';
@@ -306,8 +332,3 @@ class ApplicationShell {
     }, 4000);
   }
 }
-
-document.addEventListener('DOMContentLoaded', () => {
-  const app = new ApplicationShell();
-  app.init();
-});

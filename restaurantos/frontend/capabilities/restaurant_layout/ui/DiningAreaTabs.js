@@ -3,7 +3,7 @@
  * Tab bar for switching between dining zones (Main Hall, Outdoor Patio, VIP Lounge, Bar Counter).
  */
 
-import { diningAreaModel } from '../../../../businessos/platform/layout/diningAreaModel.js';
+import { diningAreaModel } from '../../../../../businessos/platform/layout/diningAreaModel.js';
 
 export class DiningAreaTabs {
   constructor({ activeAreaId, onSelectArea }) {

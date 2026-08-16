@@ -3,9 +3,9 @@
  * Seamlessly opens CreateSessionModal when seating guests, or ActiveSessionView when inspecting active sessions.
  */
 
-import { PhysicalTableStates } from '../../../../businessos/platform/table_state/tableStateMachine.js';
+import { PhysicalTableStates } from '../../../../../businessos/platform/table_state/tableStateMachine.js';
 import { CreateSessionModal } from '../../guest_service/ui/CreateSessionModal.js';
-import { sessionProjectionService } from '../../../../businessos/platform/session/sessionProjectionService.js';
+import { sessionProjectionService } from '../../../../../businessos/platform/session/sessionProjectionService.js';
 
 export class TableInspectorModal {
   constructor({ projection, onClose, onActionComplete, onOpenActiveSession }) {

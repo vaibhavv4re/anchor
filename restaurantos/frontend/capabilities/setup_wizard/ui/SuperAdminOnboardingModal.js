@@ -3,8 +3,8 @@
  * Allows Super Admin (PIN 888888) to create a new restaurant tenant and Admin account.
  */
 
-import { tenantModel } from '../../../../businessos/platform/tenant/tenantModel.js';
-import { identityModel } from '../../../../businessos/platform/identity/identityModel.js';
+import { tenantModel } from '../../../../../businessos/platform/tenant/tenantModel.js';
+import { identityModel } from '../../../../../businessos/platform/identity/identityModel.js';
 
 export class SuperAdminOnboardingModal {
   constructor({ onClose, onCreated }) {

@@ -4,9 +4,9 @@
  * Automatically binds logged-in waiter identity and occupies table asset.
  */
 
-import { authEngine } from '../../../../businessos/platform/authentication/authEngine.js';
-import { sessionModel } from '../../../../businessos/platform/session/sessionModel.js';
-import { tableStateMachine, PhysicalTableStates } from '../../../../businessos/platform/table_state/tableStateMachine.js';
+import { authEngine } from '../../../../../businessos/platform/authentication/authEngine.js';
+import { sessionModel } from '../../../../../businessos/platform/session/sessionModel.js';
+import { tableStateMachine, PhysicalTableStates } from '../../../../../businessos/platform/table_state/tableStateMachine.js';
 
 export class CreateSessionModal {
   constructor({ tableNumber, onClose, onSessionCreated }) {

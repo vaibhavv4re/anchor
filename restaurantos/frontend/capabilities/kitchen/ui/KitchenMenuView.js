@@ -9,7 +9,7 @@
  * 6. 🔗 Recipe Status (K-03 Recipe Linkage Preparation)
  */
 
-import { kitchenMenuModel } from '../../../../businessos/platform/kitchen/kitchenMenuModel.js';
+import { kitchenMenuModel } from '../../../../../businessos/platform/kitchen/kitchenMenuModel.js';
 
 export class KitchenMenuView {
   constructor({ onNavigate }) {
