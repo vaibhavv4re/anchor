@@ -32,7 +32,11 @@ export class IdentityModel {
       identities = store ? store.getCollection('identities') || [] : [];
     }
 
-    return identities.find(id => id.pinHash === hashed && id.status === 'ACTIVE') || null;
+    return identities.find(id => {
+      const pinMatch = (id.pinHash === hashed || id.pin_hash === hashed);
+      const statusMatch = (!id.status || id.status === 'ACTIVE');
+      return pinMatch && statusMatch;
+    }) || null;
   }
 
   /**
