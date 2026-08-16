@@ -34,12 +34,30 @@ export function createApplication(options = {}) {
 }
 
 /**
- * Bootstraps and initializes the modular application shell.
+ * Bootstraps and initializes the modular application shell with diagnostic loggers.
  * @param {Object} options Configuration overrides.
  * @returns {ApplicationShell} Initialized ApplicationShell instance.
  */
 export function startModularApp(options = {}) {
-  const { shell } = createApplication(options);
-  shell.init();
-  return shell;
+  const appGraph = createApplication(options);
+
+  if (typeof window !== 'undefined') {
+    window.__APP__ = appGraph;
+    console.log('🚀 [Anchor Modular Runtime] Initialized successfully.');
+    console.log('💡 Access global app graph in devtools via: window.__APP__');
+
+    // Trigger background cloud collection hydration for identities, employees, roles, tenants
+    if (appGraph.platform.dataGateway && typeof appGraph.platform.dataGateway.hydrateCollections === 'function') {
+      appGraph.platform.dataGateway.hydrateCollections(['tenants', 'identities', 'employees', 'roles'])
+        .then(res => {
+          console.log('☁️ [DataGateway] Pre-hydrated collections from cloud:', Object.keys(res));
+        })
+        .catch(err => {
+          console.warn('⚠️ [DataGateway] Hydration fallback notice:', err.message || err);
+        });
+    }
+  }
+
+  appGraph.shell.init();
+  return appGraph.shell;
 }
