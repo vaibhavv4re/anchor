@@ -1,5 +1,4 @@
 import { createApplication } from '../restaurantos/frontend/bootstrap.js';
-import { hashPin } from '../businessos/platform/identity/identityModel.js';
 
 console.log('====================================================================');
 console.log('STEP 17.12A REAL SUPABASE TENANT AUTHENTICATION TRACE TEST');
@@ -7,32 +6,20 @@ console.log('===================================================================
 
 async function runTenantAuthTraceSuite() {
   try {
-    const sureshPinHash = await hashPin('555111');
-    const aabhasPinHash = await hashPin('777222');
-    const kirtanPinHash = await hashPin('111333');
-    const sibuPinHash = await hashPin('111444');
-    const jituPinHash = await hashPin('999555');
-
-    const targetTenantId = 'tenant_h0cq7wf';
+    const targetTenantId = 'tenant_h0qc7wf';
 
     const mockOfflineStore = {
       collections: {
         tenants: [
-          { tenant_id: targetTenantId, name: 'Anchor Cafe (Main Branch)', admin_name: 'Jitu Admin' }
+          { tenant_id: targetTenantId, name: 'Anchor Cafe (Main Branch)', admin_name: 'Jitu' }
         ],
-        identities: [
-          { id: 'id-suresh', tenant_id: targetTenantId, pinHash: sureshPinHash, status: 'ACTIVE' },
-          { id: 'id-aabhas', tenant_id: targetTenantId, pinHash: aabhasPinHash, status: 'ACTIVE' },
-          { id: 'id-kirtan', tenant_id: targetTenantId, pinHash: kirtanPinHash, status: 'ACTIVE' },
-          { id: 'id-sibu', tenant_id: targetTenantId, pinHash: sibuPinHash, status: 'ACTIVE' },
-          { id: 'id-jitu', tenant_id: targetTenantId, pinHash: jituPinHash, status: 'ACTIVE' }
-        ],
+        identities: [],
         employees: [
-          { id: 'emp-suresh', identityId: 'id-suresh', tenantId: targetTenantId, name: 'Suresh Kumar', roleId: 'role_chef_01', avatarUrl: 'suresh.jpg' },
-          { id: 'emp-aabhas', identityId: 'id-aabhas', tenantId: targetTenantId, name: 'Aabhas Verma', roleId: 'role_manager_01', avatarUrl: 'aabhas.jpg' },
-          { id: 'emp-kirtan', identityId: 'id-kirtan', tenantId: targetTenantId, name: 'Kirtan Patel', roleId: 'role_waiter_01', avatarUrl: 'kirtan.jpg' },
-          { id: 'emp-sibu', identityId: 'id-sibu', tenantId: targetTenantId, name: 'Sibu Sundar', roleId: 'role_waiter_02', avatarUrl: 'sibu.jpg' },
-          { id: 'emp-jitu', identityId: 'id-jitu', tenantId: targetTenantId, name: 'Jitu Admin', roleId: 'role_admin_01', avatarUrl: 'jitu.jpg' }
+          { id: 'emp-eo32w', identity_id: 'id-x4qi6', tenant_id: targetTenantId, employee_code: 'EMP-00002', name: 'Aabhas', role_id: 'role-chef', workspace_default: 'kitchen', status: 'ACTIVE', data: { pinDisplay: '111111' } },
+          { id: 'emp-6rh56', identity_id: 'id-7hfgy', tenant_id: targetTenantId, employee_code: 'EMP-00003', name: 'Suresh', role_id: 'role-waiter', workspace_default: 'waiter', status: 'ACTIVE', data: { pinDisplay: '222222' } },
+          { id: 'emp-ocqsq', identity_id: 'id-12aud', tenant_id: targetTenantId, employee_code: 'EMP-00004', name: 'Kirtan', role_id: 'role-inventory', workspace_default: 'inventory', status: 'ACTIVE', data: { pinDisplay: '333333' } },
+          { id: 'emp-udb5t', identity_id: 'id-5f5kk', tenant_id: targetTenantId, employee_code: 'EMP-00005', name: 'Sibu', role_id: 'role-bartender', workspace_default: 'bar', status: 'ACTIVE', data: { pinDisplay: '555555' } },
+          { id: 'emp-wia42', identity_id: 'id-asoyu', tenant_id: targetTenantId, employee_code: 'EMP-00006', name: 'Jitu', role_id: 'role-cashier', workspace_default: 'cashier', status: 'ACTIVE', data: { pinDisplay: '666666' } }
         ],
         roles: [],
         sessions: []
@@ -51,15 +38,15 @@ async function runTenantAuthTraceSuite() {
     const authEngine = appGraph.application.authEngine;
 
     console.log(`1. HYDRATING REAL TENANT DATASET FOR "${targetTenantId}"`);
-    await dataGateway.hydrateCollections(['tenants', 'identities', 'employees', 'roles'], targetTenantId);
+    await dataGateway.hydrateCollections(['tenants', 'identities', 'employees'], targetTenantId);
     console.log('  ✓ Hydration completed via DataGateway');
 
     const realTenantEmployees = [
-      { name: 'Suresh Kumar', pin: '555111', roleId: 'role_chef_01', expectedWorkspace: 'kitchen' },
-      { name: 'Aabhas Verma', pin: '777222', roleId: 'role_manager_01', expectedWorkspace: 'manager' },
-      { name: 'Kirtan Patel', pin: '111333', roleId: 'role_waiter_01', expectedWorkspace: 'waiter' },
-      { name: 'Sibu Sundar', pin: '111444', roleId: 'role_waiter_02', expectedWorkspace: 'waiter' },
-      { name: 'Jitu Admin', pin: '999555', roleId: 'role_admin_01', expectedWorkspace: 'admin' }
+      { name: 'Aabhas', pin: '111111', roleId: 'role-chef', expectedWorkspace: 'kitchen' },
+      { name: 'Suresh', pin: '222222', roleId: 'role-waiter', expectedWorkspace: 'waiter' },
+      { name: 'Kirtan', pin: '333333', roleId: 'role-inventory', expectedWorkspace: 'inventory' },
+      { name: 'Sibu', pin: '555555', roleId: 'role-bartender', expectedWorkspace: 'bar' },
+      { name: 'Jitu', pin: '666666', roleId: 'role-cashier', expectedWorkspace: 'cashier' }
     ];
 
     console.log('\n2. REAL TENANT AUTHENTICATION TRACE TABLE');

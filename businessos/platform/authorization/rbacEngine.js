@@ -22,7 +22,7 @@ export class RbacEngine {
     const roles = this.getRoles();
     let role = roles.find(r => r.id === roleId || r.name?.toLowerCase() === roleId?.toLowerCase());
     if (!role) {
-      // Dynamic fallback for custom tenant role IDs (e.g. role_chef_01, role-waiter-02, manager-role)
+      // Dynamic fallback for custom tenant role IDs (e.g. role-chef, role-bartender, role-cashier, role-inventory)
       const lower = (roleId || '').toLowerCase();
       let workspace = 'waiter';
       let permissions = ['floor.view'];
@@ -33,9 +33,18 @@ export class RbacEngine {
       } else if (lower.includes('admin') || lower.includes('super') || lower.includes('owner')) {
         workspace = 'admin';
         permissions = ['*'];
-      } else if (lower.includes('manager') || lower.includes('inv')) {
+      } else if (lower.includes('inventory')) {
+        workspace = 'inventory';
+        permissions = ['inventory.view', 'stock.manage'];
+      } else if (lower.includes('manager') || lower.includes('mgr')) {
         workspace = 'manager';
         permissions = ['override.lock', 'floor.view', 'kitchen.view', 'attendance.view', 'action.approve'];
+      } else if (lower.includes('bar') || lower.includes('bartender')) {
+        workspace = 'bar';
+        permissions = ['bar.view', 'order.create'];
+      } else if (lower.includes('cashier') || lower.includes('billing')) {
+        workspace = 'cashier';
+        permissions = ['cashier.view', 'payment.process'];
       }
 
       role = { id: roleId, name: roleId, workspace, permissions };
