@@ -78,13 +78,16 @@ export class DataGateway {
 
   /**
    * Hydrates local cache from cloud storage for requested collections.
+   * Excludes virtual collections like 'roles'.
    * @param {Array<string>} collections 
    * @param {string|null} tenantId 
    */
-  async hydrateCollections(collections = ['tenants', 'identities', 'employees', 'roles'], tenantId = null) {
+  async hydrateCollections(collections = ['tenants', 'identities', 'employees'], tenantId = null) {
     const results = {};
     for (const col of collections) {
-      results[col] = await this.getCollection(col, tenantId);
+      if (col !== 'roles') {
+        results[col] = await this.getCollection(col, tenantId);
+      }
     }
     return results;
   }
@@ -95,7 +98,7 @@ export class DataGateway {
    * Offline: reads from local store.
    */
   async getCollection(collection, tenantId = null) {
-    if (this.isOnline && this.cloudAdapter) {
+    if (this.isOnline && this.cloudAdapter && collection !== 'roles') {
       try {
         const cloudData = await this.cloudAdapter.getCollection(collection, tenantId);
         if (Array.isArray(cloudData) && cloudData.length > 0) {
@@ -133,7 +136,7 @@ export class DataGateway {
 
     this.notifySubscribers(collection, 'CREATE', localResult || data);
 
-    if (this.isOnline && this.cloudAdapter) {
+    if (this.isOnline && this.cloudAdapter && collection !== 'roles') {
       try {
         await this.cloudAdapter.create(collection, data, session);
       } catch (e) {
@@ -161,7 +164,7 @@ export class DataGateway {
 
     this.notifySubscribers(collection, 'UPDATE', localResult || patch);
 
-    if (this.isOnline && this.cloudAdapter) {
+    if (this.isOnline && this.cloudAdapter && collection !== 'roles') {
       try {
         await this.cloudAdapter.update(collection, id, patch, session);
       } catch (e) {
@@ -188,7 +191,7 @@ export class DataGateway {
 
     this.notifySubscribers(collection, 'DELETE', { id });
 
-    if (this.isOnline && this.cloudAdapter) {
+    if (this.isOnline && this.cloudAdapter && collection !== 'roles') {
       try {
         await this.cloudAdapter.delete(collection, id);
       } catch (e) {
