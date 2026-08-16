@@ -86,6 +86,9 @@ export class ApplicationShell {
     `;
 
     const pinPad = new PinPadView({
+      authEngine: this.authEngine,
+      dataGateway: this.container ? this.container.dataGateway : (this.authEngine ? this.authEngine.dataGateway : null),
+      appDependencies: this.container ? this.container.appDependencies : null,
       onSuccess: () => this.render(),
       deviceId: 'DEV-FLOOR-01'
     });

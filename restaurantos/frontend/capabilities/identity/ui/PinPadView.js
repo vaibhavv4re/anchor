@@ -10,7 +10,7 @@ export class PinPadView {
     this.onSuccess = options.onSuccess;
     this.deviceId = options.deviceId || 'DEV-FLOOR-01';
     this.authEngine = options.authEngine || (options.appDependencies ? options.appDependencies.authEngine : globalAuthEngine);
-    this.dataGateway = options.dataGateway || (options.appDependencies ? options.appDependencies.dataGateway : null);
+    this.dataGateway = options.dataGateway || (options.appDependencies ? options.appDependencies.dataGateway : (this.authEngine ? this.authEngine.dataGateway : null));
     this.offlineStore = options.offlineStore || (options.appDependencies && options.appDependencies.services ? options.appDependencies.services.offlineStore : (typeof offlineStore !== 'undefined' ? offlineStore : null));
 
     this.currentPin = '';
@@ -34,7 +34,7 @@ export class PinPadView {
 
     const photoHtml = this.matchedEmployee ? `
       <div class="employee-confirm-avatar animate-fade-in">
-        <img src="${this.matchedEmployee.avatarUrl}" class="employee-avatar-img" alt="${this.matchedEmployee.name}">
+        <img src="${this.matchedEmployee.avatarUrl || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + this.matchedEmployee.name}" class="employee-avatar-img" alt="${this.matchedEmployee.name}">
         <div>
           <div style="font-weight:600;">${this.matchedEmployee.name}</div>
           <div style="font-size:0.75rem; color:var(--text-muted);">${this.matchedEmployee.roleName || 'Staff'}</div>
@@ -63,7 +63,7 @@ export class PinPadView {
         <button class="keypad-btn" data-action="backspace" style="font-size:1rem;">⌫</button>
       </div>
 
-      <div id="pin-error" style="color:var(--status-danger); font-size:0.875rem; height:20px;"></div>
+      <div id="pin-error" style="color:var(--status-danger); font-size:0.875rem; height:20px; text-align:center; margin-top:8px;"></div>
     `;
 
     this.bindEvents();
@@ -116,10 +116,15 @@ export class PinPadView {
         roles = store ? store.getCollection('roles') || [] : [];
       }
 
-      const foundEmp = employees.find(e => e.name);
+      const foundEmp = employees.find(e => {
+        const payload = e.data || e;
+        const pinDisp = payload.pinDisplay || payload.pin || e.pinDisplay;
+        return String(pinDisp) === String(this.currentPin);
+      });
+
       if (foundEmp) {
-        const role = roles.find(r => r.id === foundEmp.roleId);
-        this.matchedEmployee = { ...foundEmp, roleName: role ? role.name : '' };
+        const role = roles.find(r => r.id === (foundEmp.roleId || (foundEmp.data ? foundEmp.data.roleId : null)));
+        this.matchedEmployee = { ...foundEmp, roleName: role ? role.name : (foundEmp.roleId || 'Staff') };
       }
     }
   }
