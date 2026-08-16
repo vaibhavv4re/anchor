@@ -774,3 +774,4 @@ export class KitchenMenuView {
     });
   }
 }
+

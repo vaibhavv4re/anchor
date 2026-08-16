@@ -893,3 +893,5 @@ class KitchenInventoryView {
 }
 
 const kitchenInventoryView = new KitchenInventoryView();
+
+export { KitchenInventoryView, kitchenInventoryView };

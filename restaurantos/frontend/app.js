@@ -29,11 +29,20 @@ import { ModularConfigView } from './capabilities/configuration/ui/ModularConfig
 import { AttendanceView } from './capabilities/attendance/ui/AttendanceView.js';
 import { FloorViewerView } from './capabilities/restaurant_layout/ui/FloorViewerView.js';
 
+import { KitchenDashboardView } from './capabilities/kitchen/ui/KitchenDashboardView.js';
+import { KitchenProductionView } from './capabilities/kitchen/ui/KitchenProductionView.js';
+import { KitchenInventoryView } from './capabilities/kitchen/ui/KitchenInventoryView.js';
+import { KitchenMenuView } from './capabilities/kitchen/ui/KitchenMenuView.js';
+import { KitchenRecipeView } from './capabilities/kitchen/ui/KitchenRecipeView.js';
+
+import { MenuBrowserView } from './capabilities/order_management/ui/MenuBrowserView.js';
+import { ActiveSessionView } from './capabilities/guest_service/ui/ActiveSessionView.js';
+
 export class ApplicationShell {
   constructor(deps = {}) {
     this.appEl = null;
     this.activeWorkspace = 'waiter';
-    this.activeSubView = 'floor';
+    this.activeSubView = 'auto';
     this.lockScreenComponent = null;
 
     // Dependency Injection with zero-breaking-change fallback to imported singletons
@@ -74,6 +83,14 @@ export class ApplicationShell {
     }
 
     this.activeWorkspace = session.workspace;
+    if (this.activeSubView === 'auto') {
+      if (session.workspace === 'kitchen') this.activeSubView = 'kitchen_dashboard';
+      else if (session.workspace === 'inventory') this.activeSubView = 'kitchen_inventory';
+      else if (session.workspace === 'bar' || session.workspace === 'cashier') this.activeSubView = 'menu_browser';
+      else if (session.workspace === 'admin' || session.workspace === 'manager') this.activeSubView = 'dashboard';
+      else this.activeSubView = 'floor';
+    }
+
     this.renderWorkspace(session);
   }
 
@@ -89,7 +106,10 @@ export class ApplicationShell {
       authEngine: this.authEngine,
       dataGateway: this.container ? this.container.dataGateway : (this.authEngine ? this.authEngine.dataGateway : null),
       appDependencies: this.container ? this.container.appDependencies : null,
-      onSuccess: () => this.render(),
+      onSuccess: () => {
+        this.activeSubView = 'auto';
+        this.render();
+      },
       deviceId: 'DEV-FLOOR-01'
     });
 
@@ -148,11 +168,24 @@ export class ApplicationShell {
 
   renderSidebarNav(session) {
     const isManagerOrAdmin = this.rbacEngine.hasPermission(session.roleId, 'user.create') || this.rbacEngine.hasPermission(session.roleId, '*');
+    const isKitchen = session.workspace === 'kitchen';
 
     return `
       <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; margin-bottom:4px; padding-left:8px;">Workspace Modules</div>
-      <button class="nav-item ${this.activeSubView === 'floor' ? 'active' : ''}" data-view="floor">🗺️ Floor & Layout</button>
+      
       <button class="nav-item ${this.activeSubView === 'dashboard' ? 'active' : ''}" data-view="dashboard">📌 Main Overview</button>
+      <button class="nav-item ${this.activeSubView === 'floor' ? 'active' : ''}" data-view="floor">🗺️ Floor & Layout</button>
+      <button class="nav-item ${this.activeSubView === 'menu_browser' ? 'active' : ''}" data-view="menu_browser">🍽️ POS Menu Browser</button>
+      <button class="nav-item ${this.activeSubView === 'active_sessions' ? 'active' : ''}" data-view="active_sessions">🛎️ Active Guest Sessions</button>
+
+      <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; margin-top:12px; margin-bottom:4px; padding-left:8px;">Kitchen & Production</div>
+      <button class="nav-item ${this.activeSubView === 'kitchen_dashboard' ? 'active' : ''}" data-view="kitchen_dashboard">🍳 Kitchen Display</button>
+      <button class="nav-item ${this.activeSubView === 'kitchen_production' ? 'active' : ''}" data-view="kitchen_production">👨‍🍳 Production Plan</button>
+      <button class="nav-item ${this.activeSubView === 'kitchen_inventory' ? 'active' : ''}" data-view="kitchen_inventory">📦 Kitchen Stock</button>
+      <button class="nav-item ${this.activeSubView === 'kitchen_menu' ? 'active' : ''}" data-view="kitchen_menu">📋 Menu Master</button>
+      <button class="nav-item ${this.activeSubView === 'kitchen_recipe' ? 'active' : ''}" data-view="kitchen_recipe">📖 Recipe Book</button>
+
+      <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; margin-top:12px; margin-bottom:4px; padding-left:8px;">Staff & Operations</div>
       <button class="nav-item ${this.activeSubView === 'attendance' ? 'active' : ''}" data-view="attendance">⏱️ Timesheet</button>
 
       ${isManagerOrAdmin ? `
@@ -234,6 +267,7 @@ export class ApplicationShell {
     if (logoutBtn) {
       logoutBtn.addEventListener('click', () => {
         this.authEngine.logout();
+        this.activeSubView = 'auto';
         this.render();
       });
     }
@@ -254,22 +288,50 @@ export class ApplicationShell {
     if (!mount) return;
     mount.innerHTML = '';
 
+    const opts = {
+      repositories: this.repositories,
+      dataGateway: this.container ? this.container.dataGateway : null,
+      authEngine: this.authEngine,
+      platformEventBus: this.platformEventBus
+    };
+
     if (this.activeSubView === 'floor') {
-      const view = new FloorViewerView();
+      const view = new FloorViewerView(opts);
       mount.appendChild(view.render());
     } else if (this.activeSubView === 'dashboard') {
       mount.appendChild(this.renderMainOverview(session));
     } else if (this.activeSubView === 'attendance') {
-      const view = new AttendanceView();
+      const view = new AttendanceView(opts);
       mount.appendChild(view.render());
     } else if (this.activeSubView === 'users') {
-      const view = new UserManagementView();
+      const view = new UserManagementView(opts);
       mount.appendChild(view.render());
     } else if (this.activeSubView === 'devices') {
-      const view = new DeviceConfigView();
+      const view = new DeviceConfigView(opts);
       mount.appendChild(view.render());
     } else if (this.activeSubView === 'config') {
-      const view = new ModularConfigView();
+      const view = new ModularConfigView(opts);
+      mount.appendChild(view.render());
+    } else if (this.activeSubView === 'kitchen_dashboard') {
+      const view = new KitchenDashboardView(opts);
+      mount.appendChild(view.render());
+    } else if (this.activeSubView === 'kitchen_production') {
+      const view = new KitchenProductionView(opts);
+      mount.appendChild(view.render());
+    } else if (this.activeSubView === 'kitchen_inventory') {
+      const view = new KitchenInventoryView(opts);
+      mount.appendChild(view.render());
+    } else if (this.activeSubView === 'kitchen_menu') {
+      const view = new KitchenMenuView(opts);
+      mount.appendChild(view.render());
+    } else if (this.activeSubView === 'kitchen_recipe') {
+      const view = new KitchenRecipeView(opts);
+      mount.appendChild(view.render());
+    } else if (this.activeSubView === 'menu_browser') {
+      const view = new MenuBrowserView(opts);
+      mount.appendChild(view.render());
+    } else if (this.activeSubView === 'active_sessions') {
+      const view = new ActiveSessionView(opts);
       mount.appendChild(view.render());
     }
   }
