@@ -1,47 +1,45 @@
 import { SupabaseClient } from '../businessos/platform/cloud/supabaseClient.js';
 
 async function auditAllSupabaseTables() {
+  console.log('🔍 FULL DOMAIN TABLE AUDIT IN SUPABASE POSTGRESQL\n');
   const client = new SupabaseClient();
 
-  const candidateTables = [
+  const allDomainCollections = [
     'tenants',
-    'identities',
     'employees',
-    'roles',
-    'sessions',
-    'dining_areas',
-    'tables_master',
-    'menu_catalog',
-    'menu_items',
-    'menu_categories',
     'inventory',
     'suppliers',
     'storage_locations',
-    'devices',
-    'system_config',
-    'orders',
-    'tickets',
-    'attendance_logs',
-    'audit_logs'
+    'inventory_categories',
+    'inventory_uoms',
+    'stock_balances',
+    'stock_issues',
+    'stock_transfers',
+    'stock_adjustments',
+    'stock_counts',
+    'supplier_catalog',
+    'purchase_orders',
+    'goods_receipt_notes',
+    'inventory_requests'
   ];
 
-  console.log('====================================================================');
-  console.log('SUPABASE CLOUD POSTGRESQL TABLE AUDIT');
-  console.log('====================================================================\n');
+  const existingTables = [];
+  const missingTables = [];
 
-  console.log('Checking 19 candidate table endpoints at https://orlcftjkhqypvqzcmfci.supabase.co/rest/v1...\n');
-
-  for (const table of candidateTables) {
+  for (const table of allDomainCollections) {
     const res = await client.fetchTableData(table);
-    if (res.success && Array.isArray(res.data)) {
-      console.log(`✅ Table EXISTS in Supabase: "${table}" (${res.data.length} rows)`);
-      if (res.data.length > 0) {
-        console.log(`   Columns:`, Object.keys(res.data[0]).join(', '));
-      }
+    if (res.success) {
+      existingTables.push({ table, count: res.data.length });
+      console.log(`✅ Table \`${table}\`: EXISTS (${res.data.length} records)`);
     } else {
-      console.log(`❌ Table MISSING in Supabase (404/Error): "${table}" (Status: ${res.status || 'Error'})`);
+      missingTables.push({ table, status: res.status });
+      console.log(`❌ Table \`${table}\`: MISSING (HTTP ${res.status})`);
     }
   }
+
+  console.log('\n====================================================================');
+  console.log(`SUMMARY: ${existingTables.length} Existing Tables | ${missingTables.length} Missing Tables`);
+  console.log('====================================================================\n');
 }
 
 auditAllSupabaseTables().catch(console.error);

@@ -55,7 +55,7 @@ export function startModularApp(options = {}) {
         'stock_balances', 'purchase_orders', 'goods_receipt_notes',
         'inventory_requests', 'inventory_categories', 'inventory_uoms',
         'stock_issues', 'stock_transfers', 'stock_adjustments', 'stock_counts',
-        'devices', 'system_config'
+        'supplier_catalog', 'devices', 'system_config'
       ])
         .then(res => {
           console.log('☁️ [DataGateway] Pre-hydrated 12 domain collections from cloud:', Object.keys(res));

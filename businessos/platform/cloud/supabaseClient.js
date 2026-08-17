@@ -26,19 +26,12 @@ export class SupabaseClient {
   async updateRecord(tableName, id, patch) {
     try {
       const filterKey = tableName === 'tenants' ? `tenant_id=eq.${id}` : `id=eq.${id}`;
-      
-      // If patch contains a nested data payload or full object, format correctly
-      const body = {
-        ...(patch.data ? patch : { data: patch }),
-        ...(patch.name ? { name: patch.name } : {}),
-        ...(patch.legalName ? { legal_name: patch.legalName } : {}),
-        ...(patch.profileVersion ? { profile_version: patch.profileVersion } : {})
-      };
+      const formatted = formatRecordForTable(tableName, { payload: patch });
 
       const resp = await fetch(`${this.baseUrl}/${tableName}?${filterKey}`, {
         method: 'PATCH',
         headers: this.getHeaders(),
-        body: JSON.stringify(body)
+        body: JSON.stringify(formatted)
       });
 
       if (!resp.ok) {
@@ -47,6 +40,10 @@ export class SupabaseClient {
       }
       
       const data = await resp.json();
+      if (Array.isArray(data) && data.length === 0) {
+        return this.createRecord(tableName, patch);
+      }
+
       const resultData = Array.isArray(data) && data.length > 0 ? data[0] : patch;
       return { success: true, data: resultData };
     } catch (e) {
@@ -205,6 +202,67 @@ export function formatRecordForTable(entityName, job) {
       parent_location_code: p.parentLocationCode || null,
       storage_type: p.locationType || p.storageType || 'Store',
       status: p.status || 'ACTIVE',
+      data: p
+    };
+  }
+
+  if (entityName === 'supplier_catalog') {
+    return {
+      id: p.id || ('scat-' + Math.random().toString(36).substring(2, 7)),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || '',
+      supplier_code: p.supplierCode || p.supplier_code || '',
+      item_code: p.itemCode || p.item_code || '',
+      supplier_sku: p.supplierSku || p.supplier_sku || '',
+      purchase_uom: p.purchaseUom || p.purchase_uom || 'KG',
+      current_price: parseFloat(p.currentPrice || p.current_price) || 0,
+      last_purchase_price: parseFloat(p.lastPurchasePrice || p.last_purchase_price) || 0,
+      last_purchase_at: p.lastPurchaseAt || p.last_purchase_at || null,
+      average_purchase_price: parseFloat(p.averagePurchasePrice || p.average_purchase_price) || 0,
+      status: p.status || 'ACTIVE',
+      data: p
+    };
+  }
+
+  if (entityName === 'purchase_orders') {
+    const formatted = {};
+    if (p.id) formatted.id = p.id;
+    if (job.tenantId || p.tenantId || p.tenant_id) formatted.tenant_id = job.tenantId || p.tenantId || p.tenant_id;
+    if (p.poNumber || p.po_number) formatted.po_number = p.poNumber || p.po_number;
+    if (p.supplierCode || p.supplier_code) formatted.supplier_code = p.supplierCode || p.supplier_code;
+    if (p.supplierName || p.supplier_name) formatted.supplier_name = p.supplierName || p.supplier_name;
+    if (p.status) formatted.status = p.status;
+    if (p.grandTotal || p.grand_total || p.totalAmount || p.total_amount) {
+      formatted.total_amount = parseFloat(p.grandTotal || p.grand_total || p.totalAmount || p.total_amount) || 0;
+    }
+    if (p.lines || p.data) formatted.data = p;
+    return formatted;
+  }
+
+  if (entityName === 'goods_receipt_notes') {
+    const formatted = {};
+    if (p.id) formatted.id = p.id;
+    if (job.tenantId || p.tenantId || p.tenant_id) formatted.tenant_id = job.tenantId || p.tenantId || p.tenant_id;
+    if (p.grnNumber || p.grn_number) formatted.grn_number = p.grnNumber || p.grn_number;
+    if (p.poNumber || p.po_number) formatted.po_number = p.poNumber || p.po_number;
+    if (p.supplierCode || p.supplier_code) formatted.supplier_code = p.supplierCode || p.supplier_code;
+    if (p.supplierName || p.supplier_name) formatted.supplier_name = p.supplierName || p.supplier_name;
+    if (p.status) formatted.status = p.status;
+    if (p.totalAmount || p.total_amount || p.totalReceivedValue || p.total_received_value) {
+      formatted.total_received_value = parseFloat(p.totalAmount || p.total_amount || p.totalReceivedValue || p.total_received_value) || 0;
+    }
+    if (p.lines || p.data) formatted.data = p;
+    return formatted;
+  }
+
+  if (entityName === 'stock_balances') {
+    return {
+      id: p.id || ('sb-' + Math.random().toString(36).substring(2, 7)),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || '',
+      item_code: p.itemCode || p.item_code || '',
+      location_code: p.locationCode || p.location_code || '',
+      quantity: parseFloat(p.quantity) || 0,
+      unit_cost: parseFloat(p.unitCost || p.unit_cost) || 0,
+      valuation: parseFloat(p.valuation) || 0,
       data: p
     };
   }

@@ -24,6 +24,18 @@ export class SupabaseDataAdapter {
         if (item.employee_code && !item.employeeCode) item.employeeCode = item.employee_code;
         if (item.admin_name && !item.adminName) item.adminName = item.admin_name;
         if (item.admin_pin && !item.adminPin) item.adminPin = item.admin_pin;
+
+        if (item.po_number && !item.poNumber) item.poNumber = item.po_number;
+        if (item.grn_number && !item.grnNumber) item.grnNumber = item.grn_number;
+        if (item.supplier_code && !item.supplierCode) item.supplierCode = item.supplier_code;
+        if (item.supplier_name && !item.supplierName) item.supplierName = item.supplier_name;
+        if (item.total_amount && !item.grandTotal) item.grandTotal = parseFloat(item.total_amount);
+        if (item.grand_total && !item.grandTotal) item.grandTotal = parseFloat(item.grand_total);
+        if (item.total_received_value && !item.totalAmount) item.totalAmount = parseFloat(item.total_received_value);
+
+        if (item.item_code && !item.itemCode) item.itemCode = item.item_code;
+        if (item.location_code && !item.locationCode) item.locationCode = item.location_code;
+        if (item.unit_cost && !item.unitCost) item.unitCost = parseFloat(item.unit_cost);
         
         // Normalize tenant restaurant name from patchObj or default
         if (collection === 'tenants') {
