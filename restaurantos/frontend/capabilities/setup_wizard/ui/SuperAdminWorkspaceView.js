@@ -266,12 +266,13 @@ export class SuperAdminWorkspaceView {
             await gw.create('tenants', newTenant);
             await gw.create('employees', newEmployee);
           }
-          // Also set in local cached memory store
-          const currentTenants = gw.getCachedCollection('tenants') || [];
-          gw.setCollection('tenants', [...currentTenants, newTenant]);
+          if (gw.localAdapter && typeof gw.localAdapter.setCollection === 'function') {
+            const currentTenants = gw.getCachedCollection('tenants') || [];
+            gw.localAdapter.setCollection('tenants', [...currentTenants, newTenant]);
 
-          const currentEmployees = gw.getCachedCollection('employees') || [];
-          gw.setCollection('employees', [...currentEmployees, newEmployee]);
+            const currentEmployees = gw.getCachedCollection('employees') || [];
+            gw.localAdapter.setCollection('employees', [...currentEmployees, newEmployee]);
+          }
         }
 
         alert(`✅ Restaurant "${name}" onboarded successfully!\nGeneral Manager: ${adminName}\nAdmin PIN: ${adminPin}`);
