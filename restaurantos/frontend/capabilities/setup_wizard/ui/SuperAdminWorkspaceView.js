@@ -1,9 +1,11 @@
+import { hashPin } from '../../../../../businessos/platform/identity/identityModel.js';
+
 /**
  * SuperAdminWorkspaceView.js
  * Original Super Admin Console UI (PIN 888888)
  *
  * Restores the canonical 2-Column Super Admin Console:
- * - Left: Active Restaurant Tenants list with "⚡ Switch to Admin" & "Delete" buttons
+ * - Left: Active Restaurant Tenants list with "⚡ Switch to Admin", "✏️ Reset Admin PIN" & "Delete" buttons
  * - Right: "✨ Onboard New Restaurant Tenant" inline onboarding form
  * - Top Right: "🗑️ Reset All Data & Start Fresh Slate"
  * 
@@ -17,13 +19,18 @@ export class SuperAdminWorkspaceView {
     this.platformEventBus = deps.platformEventBus || null;
   }
 
-  _getCollection(name, tenantId) {
-    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
-      const list = this.dataGateway.getCachedCollection(name, tenantId);
-      if (Array.isArray(list) && list.length > 0) return list;
-    }
+  _getDataGateway() {
+    if (this.dataGateway) return this.dataGateway;
     if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.dataGateway) {
-      const list = window.__APP__.platform.dataGateway.getCachedCollection(name, tenantId);
+      return window.__APP__.platform.dataGateway;
+    }
+    return null;
+  }
+
+  _getCollection(name, tenantId) {
+    const gw = this._getDataGateway();
+    if (gw && typeof gw.getCachedCollection === 'function') {
+      const list = gw.getCachedCollection(name, tenantId);
       if (Array.isArray(list) && list.length > 0) return list;
     }
     return [];
@@ -32,7 +39,8 @@ export class SuperAdminWorkspaceView {
   render(mount, session) {
     if (!mount) return;
 
-    const isSupabase = this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function' && this.dataGateway.getCachedCollection('employees').length > 0;
+    const gw = this._getDataGateway();
+    const isSupabase = gw && gw.cloudAdapter && typeof gw.cloudAdapter.getCollection === 'function';
     const tenants = this._getCollection('tenants');
 
     mount.innerHTML = `
@@ -77,11 +85,14 @@ export class SuperAdminWorkspaceView {
                       👤 Admin: <strong>${t.adminName || 'General Manager'}</strong> | 🔑 PIN: <strong style="color:var(--status-success); font-size:0.95rem;">${t.adminPin || '999999'}</strong>
                     </div>
                   </div>
-                  <div style="display:flex; gap:8px; align-items:center;">
+                  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                     <button class="btn-primary btn-switch-admin" data-pin="${t.adminPin || '999999'}" style="padding:6px 12px; font-size:0.85rem; font-weight:700;">
                       ⚡ Switch to Admin
                     </button>
-                    <button class="btn-secondary btn-delete-tenant" data-id="${t.tenantId || t.tenant_id || t.id}" style="color:var(--status-danger); padding:6px 10px;">Delete</button>
+                    <button class="btn-secondary btn-reset-pin" data-id="${t.tenantId || t.tenant_id || t.id}" data-name="${t.name}" data-pin="${t.adminPin || '999999'}" style="padding:6px 10px; font-size:0.8rem;">
+                      ✏️ Reset PIN
+                    </button>
+                    <button class="btn-secondary btn-delete-tenant" data-id="${t.tenantId || t.tenant_id || t.id}" style="color:var(--status-danger); padding:6px 10px; font-size:0.8rem;">Delete</button>
                   </div>
                 </div>
               `).join('') : `
@@ -96,6 +107,9 @@ export class SuperAdminWorkspaceView {
                   <div style="display:flex; gap:8px; align-items:center;">
                     <button class="btn-primary btn-switch-admin" data-pin="999999" style="padding:6px 12px; font-size:0.85rem; font-weight:700;">
                       ⚡ Switch to Admin
+                    </button>
+                    <button class="btn-secondary btn-reset-pin" data-id="tenant_h0qc7wf" data-name="Anchor Bistro & Cafe" data-pin="999999" style="padding:6px 10px; font-size:0.8rem;">
+                      ✏️ Reset PIN
                     </button>
                   </div>
                 </div>
@@ -118,6 +132,7 @@ export class SuperAdminWorkspaceView {
                   <select id="inp-sa-curr" style="width:100%; padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle);">
                     <option value="INR">INR (₹)</option>
                     <option value="USD">USD ($)</option>
+                    <option value="EUR">EUR (€)</option>
                   </select>
                 </div>
                 <div>
@@ -154,21 +169,59 @@ export class SuperAdminWorkspaceView {
   }
 
   bindEvents(mount, session) {
+    const gw = this._getDataGateway();
+
+    // Switch to Admin
     const switchBtns = mount.querySelectorAll('.btn-switch-admin');
     switchBtns.forEach(btn => {
       btn.addEventListener('click', async () => {
         const pin = btn.dataset.pin || '999999';
-        if (this.authEngine) {
-          const res = await this.authEngine.authenticate(pin, 'DEV-FLOOR-01');
+        const ae = this.authEngine || (window.__APP__ && window.__APP__.application ? window.__APP__.application.appDependencies.authEngine : null);
+        if (ae) {
+          const res = await ae.authenticate(pin, 'DEV-FLOOR-01');
           if (res.success) {
             window.location.reload();
           } else {
-            alert('Could not switch to Admin: ' + res.error);
+            alert('Could not switch to Admin: ' + (res.error || 'Authentication error'));
           }
         }
       });
     });
 
+    // Reset Admin PIN
+    const resetPinBtns = mount.querySelectorAll('.btn-reset-pin');
+    resetPinBtns.forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const tId = btn.dataset.id;
+        const tName = btn.dataset.name;
+        const currentPin = btn.dataset.pin;
+        const newPin = prompt(`Reset Admin PIN for restaurant "${tName}" (Current PIN: ${currentPin}):`, '999999');
+
+        if (!newPin || newPin.trim().length !== 6 || isNaN(newPin.trim())) {
+          if (newPin !== null) alert('Please enter a valid 6-digit numerical PIN.');
+          return;
+        }
+
+        const cleanPin = newPin.trim();
+
+        if (gw && typeof gw.update === 'function') {
+          await gw.update('tenants', tId, { adminPin: cleanPin });
+          
+          // Also update General Manager in employees collection
+          const employees = gw.getCachedCollection('employees') || [];
+          const managerEmp = employees.find(e => (e.tenantId === tId || e.tenant_id === tId) && (e.roleId === 'role-admin' || e.role_id === 'role-admin'));
+          if (managerEmp) {
+            const updatedData = { ...(managerEmp.data || {}), pinDisplay: cleanPin };
+            await gw.update('employees', managerEmp.id, { data: updatedData, pinDisplay: cleanPin });
+          }
+        }
+
+        alert(`✅ Admin PIN for "${tName}" updated to: ${cleanPin}`);
+        this.render(mount, session);
+      });
+    });
+
+    // Onboard New Restaurant Form Submit
     const submitBtn = mount.querySelector('#btn-sa-submit');
     if (submitBtn) {
       submitBtn.addEventListener('click', async () => {
@@ -183,8 +236,11 @@ export class SuperAdminWorkspaceView {
           return;
         }
 
+        const tenantId = 'tenant_' + Math.random().toString(36).substring(2, 9);
         const newTenant = {
-          tenantId: 'tenant_' + Math.random().toString(36).substring(2, 9),
+          id: tenantId,
+          tenantId,
+          tenant_id: tenantId,
           name,
           currency: curr,
           timezone: tz,
@@ -193,10 +249,38 @@ export class SuperAdminWorkspaceView {
           createdAt: new Date().toISOString()
         };
 
-        if (this.dataGateway && typeof this.dataGateway.create === 'function') {
-          await this.dataGateway.create('tenants', newTenant);
+        const newEmployee = {
+          id: 'emp_' + Math.random().toString(36).substring(2, 9),
+          identityId: 'id_' + Math.random().toString(36).substring(2, 9),
+          tenantId,
+          employeeCode: 'EMP-00001',
+          name: adminName,
+          roleId: 'role-admin',
+          workspaceDefault: 'admin',
+          status: 'ACTIVE',
+          data: { pinDisplay: adminPin }
+        };
+
+        if (gw) {
+          if (typeof gw.create === 'function') {
+            await gw.create('tenants', newTenant);
+            await gw.create('employees', newEmployee);
+          }
+          // Also set in local cached memory store
+          const currentTenants = gw.getCachedCollection('tenants') || [];
+          gw.setCollection('tenants', [...currentTenants, newTenant]);
+
+          const currentEmployees = gw.getCachedCollection('employees') || [];
+          gw.setCollection('employees', [...currentEmployees, newEmployee]);
         }
-        alert(`✅ Restaurant "${name}" onboarded successfully!\nAdmin PIN: ${adminPin}`);
+
+        alert(`✅ Restaurant "${name}" onboarded successfully!\nGeneral Manager: ${adminName}\nAdmin PIN: ${adminPin}`);
+        
+        // Clear input form
+        mount.querySelector('#inp-sa-name').value = '';
+        mount.querySelector('#inp-sa-admin-name').value = '';
+        mount.querySelector('#inp-sa-admin-pin').value = '';
+
         this.render(mount, session);
       });
     }

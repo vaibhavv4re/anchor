@@ -160,7 +160,7 @@ export class ApplicationShell {
 
     const opts = {
       repositories: this.repositories,
-      dataGateway: this.container ? this.container.dataGateway : (this.authEngine ? this.authEngine.dataGateway : null),
+      dataGateway: (this.container && this.container.dataGateway) ? this.container.dataGateway : ((this.container && this.container.platformContainer) ? this.container.platformContainer.dataGateway : (this.authEngine && this.authEngine.dataGateway ? this.authEngine.dataGateway : (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform ? window.__APP__.platform.dataGateway : null))),
       authEngine: this.authEngine,
       platformEventBus: this.platformEventBus
     };
