@@ -45,7 +45,7 @@ export class AdminWorkspaceView {
     const gw = this._getDataGateway();
     if (gw && typeof gw.getCachedCollection === 'function') {
       const list = gw.getCachedCollection(name, tenantId);
-      if (Array.isArray(list) && list.length > 0) return list;
+      if (Array.isArray(list)) return list;
     }
     return [];
   }
@@ -190,7 +190,7 @@ export class AdminWorkspaceView {
                 <div class="card" style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface-1); padding:16px; border:1px solid var(--border-subtle); border-radius:8px;">
                   <div>
                     <div style="font-weight:700; font-size:0.95rem;">Card 2 — Dining Areas</div>
-                    <div style="font-size:0.75rem; color:var(--status-success); margin-top:2px; font-weight:600;">Status: COMPLETE (${areas.length || 2} Areas)</div>
+                    <div style="font-size:0.75rem; color:var(--status-success); margin-top:2px; font-weight:600;">Status: COMPLETE (${areas.length} Areas)</div>
                   </div>
                   <button class="btn-secondary btn-goto-card" data-v="config-areas" style="padding:6px 12px; font-size:0.82rem;">Manage →</button>
                 </div>
@@ -198,7 +198,7 @@ export class AdminWorkspaceView {
                 <div class="card" style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface-1); padding:16px; border:1px solid var(--border-subtle); border-radius:8px;">
                   <div>
                     <div style="font-weight:700; font-size:0.95rem;">Card 3 — Dining Tables & Assets</div>
-                    <div style="font-size:0.75rem; color:var(--status-success); margin-top:2px; font-weight:600;">Status: COMPLETE (${tables.length || 8} Tables)</div>
+                    <div style="font-size:0.75rem; color:var(--status-success); margin-top:2px; font-weight:600;">Status: COMPLETE (${tables.length} Tables)</div>
                   </div>
                   <button class="btn-secondary btn-goto-card" data-v="config-tables" style="padding:6px 12px; font-size:0.82rem;">Manage →</button>
                 </div>
@@ -206,7 +206,7 @@ export class AdminWorkspaceView {
                 <div class="card" style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface-1); padding:16px; border:1px solid var(--border-subtle); border-radius:8px;">
                   <div>
                     <div style="font-weight:700; font-size:0.95rem;">Card 4 — Staff & Access</div>
-                    <div style="font-size:0.75rem; color:var(--status-success); margin-top:2px; font-weight:600;">Status: COMPLETE (${employees.length || 5} Staff)</div>
+                    <div style="font-size:0.75rem; color:var(--status-success); margin-top:2px; font-weight:600;">Status: COMPLETE (${employees.length} Staff)</div>
                   </div>
                   <button class="btn-secondary btn-goto-card" data-v="config-users" style="padding:6px 12px; font-size:0.82rem;">Manage →</button>
                 </div>
@@ -313,16 +313,16 @@ export class AdminWorkspaceView {
           
           <div class="grid grid-cols-3 gap-md">
             <div class="card" style="background:var(--bg-surface-2); padding:16px;">
+              <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">DINING AREAS / SECTIONS</div>
+              <div style="font-size:1.8rem; font-weight:700; color:var(--status-success); margin-top:4px;">${areas.length} Areas</div>
+            </div>
+            <div class="card" style="background:var(--bg-surface-2); padding:16px;">
               <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">DINING FLOOR TABLES</div>
-              <div style="font-size:1.8rem; font-weight:700; color:var(--status-success); margin-top:4px;">${tables.length || 8} Active Tables</div>
+              <div style="font-size:1.8rem; font-weight:700; color:var(--status-success); margin-top:4px;">${tables.length} Tables</div>
             </div>
             <div class="card" style="background:var(--bg-surface-2); padding:16px;">
               <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">ONBOARDED STAFF ACCOUNTS</div>
-              <div style="font-size:1.8rem; font-weight:700; color:var(--accent-primary); margin-top:4px;">${employees.length || 5} Staff Accounts</div>
-            </div>
-            <div class="card" style="background:var(--bg-surface-2); padding:16px;">
-              <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">MASTER INVENTORY ITEMS</div>
-              <div style="font-size:1.8rem; font-weight:700; color:var(--status-info); margin-top:4px;">${inventory.length || 10} Items</div>
+              <div style="font-size:1.8rem; font-weight:700; color:var(--accent-primary); margin-top:4px;">${employees.length} Staff Accounts</div>
             </div>
           </div>
         </div>
