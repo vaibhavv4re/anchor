@@ -167,7 +167,7 @@ export class ApplicationShell {
 
     if (session.workspace === 'superadmin') {
       const superAdminWs = new SuperAdminWorkspaceView(opts);
-      superAdminWs.render(rootMount, session);
+      await superAdminWs.render(rootMount, session);
     } else if (session.workspace === 'admin') {
       const adminWs = new AdminWorkspaceView(opts);
       adminWs.render(rootMount, session);

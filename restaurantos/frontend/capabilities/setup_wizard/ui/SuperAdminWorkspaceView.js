@@ -27,21 +27,24 @@ export class SuperAdminWorkspaceView {
     return null;
   }
 
-  _getCollection(name, tenantId) {
+  async _fetchTenants() {
     const gw = this._getDataGateway();
-    if (gw && typeof gw.getCachedCollection === 'function') {
-      const list = gw.getCachedCollection(name, tenantId);
+    if (gw && typeof gw.getCollection === 'function') {
+      const list = await gw.getCollection('tenants');
       if (Array.isArray(list) && list.length > 0) return list;
+    }
+    if (gw && typeof gw.getCachedCollection === 'function') {
+      return gw.getCachedCollection('tenants') || [];
     }
     return [];
   }
 
-  render(mount, session) {
+  async render(mount, session) {
     if (!mount) return;
 
     const gw = this._getDataGateway();
     const isSupabase = gw && gw.cloudAdapter && typeof gw.cloudAdapter.getCollection === 'function';
-    const tenants = this._getCollection('tenants');
+    const tenants = await this._fetchTenants();
 
     mount.innerHTML = `
       <div class="superadmin-workspace-container flex-col animate-fade-in" style="width:100%; min-height:100vh; padding:20px; gap:20px;">
@@ -82,14 +85,14 @@ export class SuperAdminWorkspaceView {
                     <h4 style="font-size:1.1rem; margin:0;">${t.name}</h4>
                     <p style="font-size:0.8rem; color:var(--text-muted); margin-top:2px; margin-bottom:0;">ID: <code>${t.tenantId || t.tenant_id || t.id}</code> • ${t.currency || (t.regional ? t.regional.currency : 'INR')}</p>
                     <div style="font-size:0.82rem; margin-top:6px; background:var(--bg-surface-2); padding:4px 8px; border-radius:4px; display:inline-block;">
-                      👤 Admin: <strong>${t.adminName || 'General Manager'}</strong> | 🔑 PIN: <strong style="color:var(--status-success); font-size:0.95rem;">${t.adminPin || '999999'}</strong>
+                      👤 Admin: <strong>${t.adminName || t.admin_name || 'General Manager'}</strong> | 🔑 PIN: <strong style="color:var(--status-success); font-size:0.95rem;">${t.adminPin || t.admin_pin || '999999'}</strong>
                     </div>
                   </div>
                   <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                    <button class="btn-primary btn-switch-admin" data-pin="${t.adminPin || '999999'}" style="padding:6px 12px; font-size:0.85rem; font-weight:700;">
+                    <button class="btn-primary btn-switch-admin" data-pin="${t.adminPin || t.admin_pin || '999999'}" style="padding:6px 12px; font-size:0.85rem; font-weight:700;">
                       ⚡ Switch to Admin
                     </button>
-                    <button class="btn-secondary btn-reset-pin" data-id="${t.tenantId || t.tenant_id || t.id}" data-name="${t.name}" data-pin="${t.adminPin || '999999'}" style="padding:6px 10px; font-size:0.8rem;">
+                    <button class="btn-secondary btn-reset-pin" data-id="${t.tenantId || t.tenant_id || t.id}" data-name="${t.name}" data-pin="${t.adminPin || t.admin_pin || '999999'}" style="padding:6px 10px; font-size:0.8rem;">
                       ✏️ Reset PIN
                     </button>
                     <button class="btn-secondary btn-delete-tenant" data-id="${t.tenantId || t.tenant_id || t.id}" style="color:var(--status-danger); padding:6px 10px; font-size:0.8rem;">Delete</button>
@@ -205,10 +208,10 @@ export class SuperAdminWorkspaceView {
         const cleanPin = newPin.trim();
 
         if (gw && typeof gw.update === 'function') {
-          await gw.update('tenants', tId, { adminPin: cleanPin });
+          await gw.update('tenants', tId, { adminPin: cleanPin, admin_pin: cleanPin });
           
           // Also update General Manager in employees collection
-          const employees = gw.getCachedCollection('employees') || [];
+          const employees = (await gw.getCollection('employees')) || [];
           const managerEmp = employees.find(e => (e.tenantId === tId || e.tenant_id === tId) && (e.roleId === 'role-admin' || e.role_id === 'role-admin'));
           if (managerEmp) {
             const updatedData = { ...(managerEmp.data || {}), pinDisplay: cleanPin };
@@ -217,7 +220,7 @@ export class SuperAdminWorkspaceView {
         }
 
         alert(`✅ Admin PIN for "${tName}" updated to: ${cleanPin}`);
-        this.render(mount, session);
+        await this.render(mount, session);
       });
     });
 
@@ -245,7 +248,9 @@ export class SuperAdminWorkspaceView {
           currency: curr,
           timezone: tz,
           adminName,
+          admin_name: adminName,
           adminPin,
+          admin_pin: adminPin,
           createdAt: new Date().toISOString()
         };
 
@@ -273,16 +278,13 @@ export class SuperAdminWorkspaceView {
             const currentEmployees = gw.getCachedCollection('employees') || [];
             gw.localAdapter.setCollection('employees', [...currentEmployees, newEmployee]);
           }
+          // Force async re-fetch from cloud/gateway
+          await gw.getCollection('tenants');
         }
 
         alert(`✅ Restaurant "${name}" onboarded successfully!\nGeneral Manager: ${adminName}\nAdmin PIN: ${adminPin}`);
         
-        // Clear input form
-        mount.querySelector('#inp-sa-name').value = '';
-        mount.querySelector('#inp-sa-admin-name').value = '';
-        mount.querySelector('#inp-sa-admin-pin').value = '';
-
-        this.render(mount, session);
+        await this.render(mount, session);
       });
     }
   }
