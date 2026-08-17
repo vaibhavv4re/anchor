@@ -26,6 +26,8 @@ export class SupabaseDataAdapter {
       if (item.role_id && !item.roleId) item.roleId = item.role_id;
       if (item.workspace_default && !item.workspaceDefault) item.workspaceDefault = item.workspace_default;
       if (item.employee_code && !item.employeeCode) item.employeeCode = item.employee_code;
+      if (item.admin_name && !item.adminName) item.adminName = item.admin_name;
+      if (item.admin_pin && !item.adminPin) item.adminPin = item.admin_pin;
       return item;
     });
 
@@ -37,7 +39,7 @@ export class SupabaseDataAdapter {
 
   async getById(collection, id, tenantId = null) {
     const list = await this.getCollection(collection, tenantId);
-    return list.find(item => item.id === id || item.uuid === id || item.code === id || item.itemCode === id) || null;
+    return list.find(item => item.id === id || item.tenantId === id || item.tenant_id === id || item.uuid === id || item.code === id || item.itemCode === id) || null;
   }
 
   async create(collection, data, session = null) {
@@ -67,7 +69,16 @@ export class SupabaseDataAdapter {
   async delete(collection, id, session = null) {
     if (!this.client || collection === 'roles' || collection === 'sessions') return false;
     const tenantId = session ? session.tenantId : '';
-    const filter = tenantId ? `id=eq.${id}&tenant_id=eq.${tenantId}` : `id=eq.${id}`;
+
+    let filter = `id=eq.${id}`;
+    if (collection === 'tenants') {
+      filter = `tenant_id=eq.${id}`;
+    } else if (collection === 'inventory') {
+      filter = `uuid=eq.${id}`;
+    } else if (tenantId) {
+      filter = `id=eq.${id}&tenant_id=eq.${tenantId}`;
+    }
+
     const res = await this.client.deleteRecords(collection, filter);
     return !!res.success;
   }
