@@ -21,8 +21,8 @@ export class RbacEngine {
   getRoleById(roleId) {
     const roles = this.getRoles();
     let role = roles.find(r => r.id === roleId || r.name?.toLowerCase() === roleId?.toLowerCase());
-    if (!role) {
-      // Dynamic fallback for custom tenant role IDs (e.g. role-chef, role-bartender, role-cashier, role-inventory)
+    
+    if (!role || (roleId === 'role-superadmin' && role.workspace !== 'superadmin')) {
       const lower = (roleId || '').toLowerCase();
       let workspace = 'waiter';
       let permissions = ['floor.view'];
@@ -55,12 +55,6 @@ export class RbacEngine {
     return role;
   }
 
-  /**
-   * Check if a given role has a specific permission.
-   * @param {string} roleId 
-   * @param {string} permission 
-   * @returns {boolean}
-   */
   hasPermission(roleId, permission) {
     const role = this.getRoleById(roleId);
     if (!role) return false;
@@ -68,37 +62,11 @@ export class RbacEngine {
     return role.permissions ? role.permissions.includes(permission) : false;
   }
 
-  /**
-   * Check if a role is authorized to access a given workspace.
-   * @param {string} roleId 
-   * @param {string} workspace 
-   * @returns {boolean}
-   */
-  canAccessWorkspace(roleId, workspace) {
+  canAccessWorkspace(roleId, workspaceName) {
     const role = this.getRoleById(roleId);
     if (!role) return false;
-    if (role.permissions && role.permissions.includes('*')) return true;
-    return role.workspace === workspace || (role.permissions && role.permissions.includes(`workspace.${workspace}`));
-  }
-
-  /**
-   * Check if a device restricts a role from logging in.
-   * @param {string} deviceId 
-   * @param {string} roleId 
-   * @returns {boolean}
-   */
-  isRoleAllowedOnDevice(deviceId, roleId) {
-    let devices = [];
-    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
-      devices = this.dataGateway.getCachedCollection('devices') || [];
-    } else {
-      const store = this.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
-      devices = store ? store.getCollection('devices') || [] : [];
-    }
-
-    const device = devices.find(d => d.id === deviceId);
-    if (!device || !device.allowedRoles || device.allowedRoles.length === 0) return true;
-    return device.allowedRoles.includes('*') || device.allowedRoles.includes(roleId);
+    if (role.workspace === 'superadmin' || role.workspace === 'admin') return true;
+    return role.workspace === workspaceName;
   }
 }
 

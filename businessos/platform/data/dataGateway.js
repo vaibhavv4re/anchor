@@ -1,5 +1,6 @@
 import { SupabaseDataAdapter } from './adapters/supabaseDataAdapter.js';
 import { OfflineDataAdapter } from './adapters/offlineDataAdapter.js';
+import { offlineStore } from '../offline_store/offlineStore.js';
 
 /**
  * DataGateway orchestration layer for RestaurantOS / BusinessOS platform.
@@ -9,8 +10,13 @@ import { OfflineDataAdapter } from './adapters/offlineDataAdapter.js';
  */
 export class DataGateway {
   constructor(config = {}) {
-    this.cloudAdapter = config.cloudAdapter || (config.supabaseClient ? new SupabaseDataAdapter(config.supabaseClient) : null);
-    this.localAdapter = config.localAdapter || (config.offlineStore ? new OfflineDataAdapter(config.offlineStore) : null);
+    if (config && config instanceof SupabaseDataAdapter) {
+      this.cloudAdapter = config;
+      this.localAdapter = new OfflineDataAdapter(offlineStore);
+    } else {
+      this.cloudAdapter = config.cloudAdapter || (config.supabaseClient ? new SupabaseDataAdapter(config.supabaseClient) : null);
+      this.localAdapter = config.localAdapter || (config.offlineStore ? new OfflineDataAdapter(config.offlineStore) : new OfflineDataAdapter(offlineStore));
+    }
     this.offlineJournal = config.offlineJournal || null;
     this.isOnline = config.isOnline !== undefined ? config.isOnline : true;
     this.listeners = new Map();
@@ -20,19 +26,10 @@ export class DataGateway {
     }
   }
 
-  /**
-   * Toggles current online/offline connectivity state.
-   * @param {boolean} online 
-   */
   setOnlineState(online) {
     this.isOnline = !!online;
   }
 
-  /**
-   * Processes an incoming normalized realtime event from Supabase Realtime / EventBus.
-   * Automatically invalidates/updates the local cache and notifies UI subscribers.
-   * @param {Object} event { type: 'data:changed', collection, operation, record, oldRecord, source }
-   */
   handleRealtimeEvent(event) {
     if (!event || !event.collection || !event.record) return;
     const { collection, operation, record } = event;
@@ -54,34 +51,15 @@ export class DataGateway {
     this.notifySubscribers(collection, operation, record);
   }
 
-  /**
-   * Synchronous local cache read for immediate UI rendering.
-   * @param {string} collection 
-   * @param {string|null} tenantId 
-   * @returns {Array}
-   */
   getCachedCollection(collection, tenantId = null) {
     return this.localAdapter ? this.localAdapter.getCollection(collection, tenantId) : [];
   }
 
-  /**
-   * Synchronous local cache single entity lookup.
-   * @param {string} collection 
-   * @param {string} id 
-   * @param {string|null} tenantId 
-   * @returns {Object|null}
-   */
   getCachedById(collection, id, tenantId = null) {
     const list = this.getCachedCollection(collection, tenantId);
     return list.find(item => item.id === id || item.uuid === id || item.itemCode === id || item.code === id || item.categoryCode === id || item.supplierCode === id || item.uomCode === id || item.locationCode === id || item.poNumber === id || item.grnNumber === id || item.transferNo === id || item.issueNo === id || item.adjustmentNo === id || item.countNo === id || item.tableCode === id || item.employeeCode === id || item.tenantId === id) || null;
   }
 
-  /**
-   * Hydrates local cache from cloud storage for requested collections.
-   * Excludes virtual collections like 'roles'.
-   * @param {Array<string>} collections 
-   * @param {string|null} tenantId 
-   */
   async hydrateCollections(collections = ['tenants', 'identities', 'employees'], tenantId = null) {
     const results = {};
     for (const col of collections) {
@@ -92,11 +70,6 @@ export class DataGateway {
     return results;
   }
 
-  /**
-   * Fetches collection data.
-   * Online: attempts cloud fetch with local fallback + updates local cache.
-   * Offline: reads from local store.
-   */
   async getCollection(collection, tenantId = null) {
     if (this.isOnline && this.cloudAdapter && collection !== 'roles') {
       try {
@@ -108,105 +81,106 @@ export class DataGateway {
           return cloudData;
         }
       } catch (e) {
-        console.warn(`[DataGateway] Cloud fetch failed for "${collection}", falling back to local adapter`, e);
+        console.warn(`[DataGateway] Cloud fetch failed for "${collection}", falling back to local cache:`, e.message);
       }
     }
     return this.getCachedCollection(collection, tenantId);
   }
 
-  /**
-   * Fetches single entity by ID.
-   */
   async getById(collection, id, tenantId = null) {
-    const list = await this.getCollection(collection, tenantId);
-    return list.find(item => item.id === id || item.uuid === id || item.itemCode === id || item.code === id || item.categoryCode === id || item.supplierCode === id || item.uomCode === id || item.locationCode === id || item.poNumber === id || item.grnNumber === id || item.transferNo === id || item.issueNo === id || item.adjustmentNo === id || item.countNo === id || item.tableCode === id || item.employeeCode === id || item.tenantId === id) || null;
-  }
-
-  /**
-   * Creates an entity.
-   * Online: updates local cache immediately + upserts to cloud asynchronously.
-   * Offline: appends to local store + enqueues sync job.
-   */
-  async create(collection, data, session = null) {
-    const tenantId = session ? session.tenantId : (data.tenantId || '');
-    let localResult = null;
-    if (this.localAdapter) {
-      localResult = this.localAdapter.create(collection, data, session);
-    }
-
-    this.notifySubscribers(collection, 'CREATE', localResult || data);
-
     if (this.isOnline && this.cloudAdapter && collection !== 'roles') {
       try {
-        await this.cloudAdapter.create(collection, data, session);
-      } catch (e) {
-        console.warn(`[DataGateway] Cloud create failed for "${collection}", queued locally`, e);
-        if (this.offlineJournal && typeof this.offlineJournal.createSyncJob === 'function') {
-          this.offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, collection, { commandType: `CREATE_${collection.toUpperCase()}`, eventType: `${collection}Created`, ...data }, session);
+        const record = await this.cloudAdapter.getById(collection, id, tenantId);
+        if (record) {
+          if (this.localAdapter) {
+            const existing = this.localAdapter.getById(collection, id);
+            if (existing) this.localAdapter.update(collection, id, record);
+            else this.localAdapter.create(collection, record);
+          }
+          return record;
         }
+      } catch (e) {
+        console.warn(`[DataGateway] Cloud getById failed for "${collection}:${id}", falling back to local cache:`, e.message);
       }
-    } else if (this.offlineJournal && typeof this.offlineJournal.createSyncJob === 'function') {
-      this.offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, collection, { commandType: `CREATE_${collection.toUpperCase()}`, eventType: `${collection}Created`, ...data }, session);
     }
-
-    return localResult || data;
+    return this.getCachedById(collection, id, tenantId);
   }
 
-  /**
-   * Updates an entity patch.
-   */
-  async update(collection, id, patch, session = null) {
-    const tenantId = session ? session.tenantId : '';
-    let localResult = null;
+  async create(collection, record) {
     if (this.localAdapter) {
-      localResult = this.localAdapter.update(collection, id, patch, session);
+      this.localAdapter.create(collection, record);
     }
-
-    this.notifySubscribers(collection, 'UPDATE', localResult || patch);
-
     if (this.isOnline && this.cloudAdapter && collection !== 'roles') {
       try {
-        await this.cloudAdapter.update(collection, id, patch, session);
+        const cloudRecord = await this.cloudAdapter.create(collection, record);
+        if (cloudRecord && this.localAdapter) {
+          const id = cloudRecord.id || record.id;
+          this.localAdapter.update(collection, id, cloudRecord);
+        }
+        return cloudRecord || record;
       } catch (e) {
-        console.warn(`[DataGateway] Cloud update failed for "${collection}", queued locally`, e);
-        if (this.offlineJournal && typeof this.offlineJournal.createSyncJob === 'function') {
-          this.offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, collection, { commandType: `UPDATE_${collection.toUpperCase()}`, eventType: `${collection}Updated`, id, patch }, session);
+        console.warn(`[DataGateway] Cloud create failed for "${collection}", queuing offline job:`, e.message);
+        if (this.offlineJournal) {
+          this.offlineJournal.recordMutation({
+            tenantId: record.tenantId || 'GLOBAL',
+            jobType: 'CREATE',
+            entityName: collection,
+            payload: record,
+            actor: 'System'
+          });
         }
       }
-    } else if (this.offlineJournal && typeof this.offlineJournal.createSyncJob === 'function') {
-      this.offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, collection, { commandType: `UPDATE_${collection.toUpperCase()}`, eventType: `${collection}Updated`, id, patch }, session);
     }
-
-    return localResult || patch;
+    return record;
   }
 
-  /**
-   * Deletes an entity by ID.
-   */
-  async delete(collection, id, session = null) {
-    const tenantId = session ? session.tenantId : '';
+  async update(collection, id, patch) {
+    if (this.localAdapter) {
+      this.localAdapter.update(collection, id, patch);
+    }
+    if (this.isOnline && this.cloudAdapter && collection !== 'roles') {
+      try {
+        const cloudRecord = await this.cloudAdapter.update(collection, id, patch);
+        return cloudRecord || patch;
+      } catch (e) {
+        console.warn(`[DataGateway] Cloud update failed for "${collection}:${id}", queuing offline job:`, e.message);
+        if (this.offlineJournal) {
+          this.offlineJournal.recordMutation({
+            tenantId: patch.tenantId || 'GLOBAL',
+            jobType: 'UPDATE',
+            entityName: collection,
+            payload: { id, patch },
+            actor: 'System'
+          });
+        }
+      }
+    }
+    return patch;
+  }
+
+  async delete(collection, id) {
     if (this.localAdapter) {
       this.localAdapter.delete(collection, id);
     }
-
-    this.notifySubscribers(collection, 'DELETE', { id });
-
     if (this.isOnline && this.cloudAdapter && collection !== 'roles') {
       try {
         await this.cloudAdapter.delete(collection, id);
       } catch (e) {
-        console.warn(`[DataGateway] Cloud delete failed for "${collection}", queued locally`, e);
+        console.warn(`[DataGateway] Cloud delete failed for "${collection}:${id}", queuing offline job:`, e.message);
+        if (this.offlineJournal) {
+          this.offlineJournal.recordMutation({
+            tenantId: 'GLOBAL',
+            jobType: 'DELETE',
+            entityName: collection,
+            payload: { id },
+            actor: 'System'
+          });
+        }
       }
     }
     return true;
   }
 
-  /**
-   * Subscribes to collection change events.
-   * @param {string} collection 
-   * @param {Function} callback 
-   * @returns {Function} unsubscribe function
-   */
   subscribe(collection, callback) {
     if (!this.listeners.has(collection)) {
       this.listeners.set(collection, new Set());
@@ -220,13 +194,13 @@ export class DataGateway {
     };
   }
 
-  notifySubscribers(collection, operation, data) {
+  notifySubscribers(collection, operation, record) {
     if (this.listeners.has(collection)) {
       this.listeners.get(collection).forEach(cb => {
         try {
-          cb({ collection, operation, data });
-        } catch (err) {
-          console.error(`[DataGateway] Error in subscriber for ${collection}:`, err);
+          cb({ collection, operation, record });
+        } catch (e) {
+          console.error(`[DataGateway] Error in subscriber for "${collection}":`, e);
         }
       });
     }
@@ -234,11 +208,18 @@ export class DataGateway {
     if (this.listeners.has('*')) {
       this.listeners.get('*').forEach(cb => {
         try {
-          cb({ collection, operation, data });
-        } catch (err) {
-          console.error(`[DataGateway] Error in wildcard subscriber:`, err);
+          cb({ collection, operation, record });
+        } catch (e) {
+          console.error(`[DataGateway] Error in wildcard subscriber:`, e);
         }
       });
     }
+  }
+
+  getPendingJobs() {
+    if (this.offlineJournal && typeof this.offlineJournal.getPendingJobs === 'function') {
+      return this.offlineJournal.getPendingJobs();
+    }
+    return [];
   }
 }

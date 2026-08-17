@@ -19,19 +19,55 @@ export class SupabaseClient {
     };
   }
 
+  async createRecord(tableName, record) {
+    return this.upsertRecord(tableName, record);
+  }
+
+  async updateRecord(tableName, id, patch) {
+    try {
+      const filterKey = tableName === 'tenants' ? `tenant_id=eq.${id}` : `id=eq.${id}`;
+      
+      // If patch contains a nested data payload or full object, format correctly
+      const body = {
+        ...(patch.data ? patch : { data: patch }),
+        ...(patch.name ? { name: patch.name } : {}),
+        ...(patch.legalName ? { legal_name: patch.legalName } : {}),
+        ...(patch.profileVersion ? { profile_version: patch.profileVersion } : {})
+      };
+
+      const resp = await fetch(`${this.baseUrl}/${tableName}?${filterKey}`, {
+        method: 'PATCH',
+        headers: this.getHeaders(),
+        body: JSON.stringify(body)
+      });
+
+      if (!resp.ok) {
+        const errText = await resp.text();
+        return { success: false, status: resp.status, error: errText };
+      }
+      
+      const data = await resp.json();
+      const resultData = Array.isArray(data) && data.length > 0 ? data[0] : patch;
+      return { success: true, data: resultData };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+
   async upsertRecord(tableName, record) {
     try {
+      const formatted = formatRecordForTable(tableName, { payload: record });
       const resp = await fetch(`${this.baseUrl}/${tableName}`, {
         method: 'POST',
         headers: this.getHeaders(),
-        body: JSON.stringify(record)
+        body: JSON.stringify(formatted)
       });
       if (!resp.ok) {
         const errText = await resp.text();
         return { success: false, status: resp.status, error: errText };
       }
       const data = await resp.json();
-      return { success: true, data };
+      return { success: true, data: Array.isArray(data) ? data[0] : data };
     } catch (e) {
       return { success: false, error: e.message };
     }
@@ -73,6 +109,18 @@ export class SupabaseClient {
  */
 export function formatRecordForTable(entityName, job) {
   const p = job.payload || {};
+
+  if (entityName === 'tenants') {
+    return {
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      name: p.name || 'Anchor Bistro & Cafe',
+      legal_name: p.legalName || 'Anchor Hospitality Pvt Ltd',
+      admin_name: p.adminName || 'General Manager',
+      admin_pin: p.adminPin || '999999',
+      profile_version: p.profileVersion || 1,
+      data: p
+    };
+  }
 
   if (entityName === 'tables_master') {
     return {
@@ -119,18 +167,6 @@ export function formatRecordForTable(entityName, job) {
     };
   }
 
-  if (entityName === 'tenants') {
-    return {
-      tenant_id: job.tenantId || p.tenantId || '',
-      name: p.name || 'Restaurant',
-      legal_name: p.legalName || '',
-      admin_name: p.adminName || 'Admin',
-      admin_pin: p.adminPin || '999999',
-      profile_version: p.profileVersion || 1,
-      data: p
-    };
-  }
-
   if (entityName === 'suppliers') {
     return {
       id: p.id || ('sup-' + Math.random().toString(36).substring(2, 7)),
@@ -168,117 +204,10 @@ export function formatRecordForTable(entityName, job) {
       location_name: p.locationName || '',
       parent_location_code: p.parentLocationCode || null,
       storage_type: p.locationType || p.storageType || 'Store',
+      status: p.status || 'ACTIVE',
       data: p
     };
   }
 
-  if (entityName === 'inventory_uoms') {
-    return {
-      id: p.id || ('uom-' + (p.uomCode || '').toLowerCase()),
-      tenant_id: job.tenantId || p.tenantId || '',
-      uom_code: p.uomCode || p.code || '',
-      uom_name: p.uomName || p.name || '',
-      uom_family: p.uomFamily || p.family || 'COUNT',
-      is_base_unit: p.isBaseUnit !== undefined ? p.isBaseUnit : true,
-      conversion_factor: parseFloat(p.conversionFactor || p.baseRatio) || 1,
-      data: p
-    };
-  }
-
-  if (entityName === 'purchase_orders') {
-    return {
-      id: p.id || ('po-' + Math.random().toString(36).substring(2, 7)),
-      tenant_id: job.tenantId || p.tenantId || '',
-      po_number: p.poNumber || p.po_number || '',
-      supplier_code: p.supplierCode || p.supplier_code || '',
-      supplier_name: p.supplierName || p.supplier_name || '',
-      status: p.status || 'DRAFT',
-      total_amount: parseFloat(p.totalAmount || p.total_amount) || 0,
-      data: p
-    };
-  }
-
-  if (entityName === 'goods_receipt_notes') {
-    return {
-      id: p.id || ('grn-' + Math.random().toString(36).substring(2, 7)),
-      tenant_id: job.tenantId || p.tenantId || '',
-      grn_number: p.grnNumber || p.grn_number || '',
-      po_number: p.poNumber || p.po_number || '',
-      supplier_code: p.supplierCode || p.supplier_code || '',
-      status: p.status || 'POSTED',
-      total_received_value: parseFloat(p.totalReceivedValue || p.total_received_value) || 0,
-      data: p
-    };
-  }
-
-  if (entityName === 'stock_transfers') {
-    return {
-      id: p.id || ('st-' + Math.random().toString(36).substring(2, 7)),
-      tenant_id: job.tenantId || p.tenantId || '',
-      transfer_number: p.transferNumber || p.transfer_number || '',
-      from_location_code: p.fromLocationCode || p.from_location_code || '',
-      to_location_code: p.toLocationCode || p.to_location_code || '',
-      status: p.status || 'COMPLETED',
-      data: p
-    };
-  }
-
-  if (entityName === 'stock_issues') {
-    return {
-      id: p.id || ('si-' + Math.random().toString(36).substring(2, 7)),
-      tenant_id: job.tenantId || p.tenantId || '',
-      issue_number: p.issueNumber || p.issue_number || '',
-      location_code: p.locationCode || p.location_code || '',
-      department: p.department || '',
-      status: p.status || 'POSTED',
-      data: p
-    };
-  }
-
-  if (entityName === 'stock_adjustments') {
-    return {
-      id: p.id || ('sa-' + Math.random().toString(36).substring(2, 7)),
-      tenant_id: job.tenantId || p.tenantId || '',
-      adjustment_number: p.adjustmentNumber || p.adjustment_number || '',
-      location_code: p.locationCode || p.location_code || '',
-      reason: p.reason || '',
-      status: p.status || 'POSTED',
-      data: p
-    };
-  }
-
-  if (entityName === 'stock_counts') {
-    return {
-      id: p.id || ('sc-' + Math.random().toString(36).substring(2, 7)),
-      tenant_id: job.tenantId || p.tenantId || '',
-      count_number: p.countNumber || p.count_number || '',
-      location_code: p.locationCode || p.location_code || '',
-      status: p.status || 'COMPLETED',
-      data: p
-    };
-  }
-
-  if (entityName === 'inventory_requests') {
-    return {
-      id: p.id || ('req-' + Math.random().toString(36).substring(2, 7)),
-      tenant_id: job.tenantId || p.tenantId || '',
-      request_number: p.requestNumber || p.request_number || '',
-      department: p.department || '',
-      status: p.status || 'PENDING',
-      data: p
-    };
-  }
-
-  return {
-    job_id: job.jobId,
-    job_type: job.jobType,
-    tenant_id: job.tenantId,
-    entity_name: job.entityName,
-    payload: job.payload,
-    device_id: job.deviceId,
-    version: job.version,
-    actor: job.actor,
-    correlation_id: job.correlationId,
-    sync_state: 'SYNCED'
-  };
+  return p;
 }
