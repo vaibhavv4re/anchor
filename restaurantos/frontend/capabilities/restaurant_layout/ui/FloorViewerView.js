@@ -1,19 +1,21 @@
 /**
  * Capability Group 2 & 3 Integrated Floor View (First Complete Vertical Slice)
  * Renders visual table cards with 6-state badges, CreateSessionModal, and ActiveSessionView.
+ * Connected directly to DataGateway / Supabase Cloud DB (`dining_areas` & `tables_master`).
  */
 
 import { tableProjectionService } from '../../../../../businessos/platform/table_state/tableProjectionService.js';
 import { platformEventBus } from '../../../../../businessos/platform/events/platformEvents.js';
+import { diningAreaModel } from '../../../../../businessos/platform/layout/diningAreaModel.js';
 
 import { DiningAreaTabs } from './DiningAreaTabs.js';
-import { TableInspectorModal } from './TableInspectorModal.js';
 import { TimelineWidget } from './TimelineWidget.js';
 import { ActiveSessionView } from '../../guest_service/ui/ActiveSessionView.js';
 
 export class FloorViewerView {
   constructor() {
-    this.activeAreaId = 'area-main';
+    const areas = diningAreaModel.getAllAreas();
+    this.activeAreaId = areas.length > 0 ? areas[0].id : null;
     this.container = null;
     this.activeSessionId = null;
     this.unsubscribeProjection = null;
@@ -23,6 +25,11 @@ export class FloorViewerView {
     this.container = document.createElement('div');
     this.container.className = 'floor-viewer-container flex-col gap-lg animate-fade-in';
     this.container.style.width = '100%';
+
+    const areas = diningAreaModel.getAllAreas();
+    if (!this.activeAreaId && areas.length > 0) {
+      this.activeAreaId = areas[0].id;
+    }
 
     this.subscribeProjections();
     this.updateContent();
@@ -54,8 +61,8 @@ export class FloorViewerView {
     this.container.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--space-md);">
         <div>
-          <h2 style="font-size:1.5rem;">Restaurant Layout & Live Floor</h2>
-          <p style="color:var(--text-muted); font-size:0.875rem;">Single unified table state projection across all workspaces (PD-006 & PD-009)</p>
+          <h2 style="font-size:1.5rem; margin:0;">Restaurant Layout & Live Floor</h2>
+          <p style="color:var(--text-muted); font-size:0.875rem; margin-top:2px;">Single unified table state projection across all workspaces (PD-006 & PD-009)</p>
         </div>
         <div style="display:flex; gap:var(--space-sm); align-items:center; flex-wrap:wrap;">
           <span class="badge" style="background:#10b98122; color:#10b981; border:1px solid #10b981;">🟢 Available</span>
@@ -105,62 +112,32 @@ export class FloorViewerView {
     const projections = tableProjectionService.getProjectionsByArea(this.activeAreaId);
 
     if (!projections.length) {
-      gridMount.innerHTML = `<div style="grid-column:1/-1; color:var(--text-muted); padding:var(--space-xl); text-align:center;">No tables configured in this dining area.</div>`;
+      gridMount.innerHTML = `<div style="grid-column:1/-1; color:var(--text-muted); padding:var(--space-xl); text-align:center; background:var(--bg-surface-1); border-radius:8px;">No floor tables configured in this dining area yet.</div>`;
       return;
     }
 
     gridMount.innerHTML = projections.map(p => `
-      <div class="card table-card animate-fade-in" data-table="${p.tableNumber}" style="cursor:pointer; border-top:4px solid ${p.stateColor}; transition:transform var(--transition-fast); padding:var(--space-md);">
+      <div class="card table-card animate-fade-in" data-table="${p.tableNumber}" style="cursor:pointer; border-top:4px solid ${p.stateColor}; transition:transform var(--transition-fast); padding:var(--space-md); background:var(--bg-surface-1);">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-xs);">
-          <div style="font-size:1.25rem; font-weight:700;">Table ${p.tableNumber}</div>
-          <span class="badge" style="background:${p.stateColor}22; color:${p.stateColor}; border:1px solid ${p.stateColor}; font-size:0.65rem;">
+          <div style="font-size:1.15rem; font-weight:700;">Table ${p.tableLabel || p.tableNumber}</div>
+          <span class="badge" style="background:${p.stateColor}22; color:${p.stateColor}; border:1px solid ${p.stateColor}; font-size:0.7rem; font-weight:700;">
             ${p.physicalState}
           </span>
         </div>
 
-        <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.85rem; color:var(--text-secondary); margin-top:4px;">
-          <div>👥 ${p.capacity} / ${p.maxCapacity}</div>
-          <div style="font-size:0.75rem; color:var(--text-muted);">${p.elapsedTime}</div>
+        <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:var(--space-sm);">
+          👥 ${p.capacity} / ${p.maxCapacity} Seats
         </div>
 
-        <div style="margin-top:var(--space-xs); font-size:0.75rem; color:var(--accent-primary); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-          ${p.assignedWaiterName ? `👤 ${p.assignedWaiterName}` : '👤 Unassigned'}
+        <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.75rem;">
+          <div style="color:var(--text-secondary);">
+            👤 ${p.assignedWaiterName || 'Unassigned'}
+          </div>
+          <div style="color:var(--text-muted); font-family:monospace;">
+            ${p.elapsedTime}
+          </div>
         </div>
       </div>
     `).join('');
-
-    this.bindGridEvents();
-  }
-
-  bindGridEvents() {
-    const cards = this.container.querySelectorAll('.table-card');
-    cards.forEach(card => {
-      card.addEventListener('click', () => {
-        const tableNumber = parseInt(card.dataset.table);
-        const projection = tableProjectionService.getTableProjection(tableNumber);
-        this.openInspector(projection);
-      });
-    });
-  }
-
-  openInspector(projection) {
-    const modalMount = this.container.querySelector('#inspector-modal-mount');
-    modalMount.innerHTML = '';
-
-    const modal = new TableInspectorModal({
-      projection,
-      onClose: () => { modalMount.innerHTML = ''; },
-      onActionComplete: () => {
-        modalMount.innerHTML = '';
-        this.updateGridContent();
-      },
-      onOpenActiveSession: (sessionId) => {
-        modalMount.innerHTML = '';
-        this.activeSessionId = sessionId;
-        this.updateContent();
-      }
-    });
-
-    modalMount.appendChild(modal.render());
   }
 }

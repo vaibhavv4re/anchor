@@ -45,56 +45,57 @@ class TableProjectionService {
 
   /**
    * Generates a frozen schema TableProjection object.
-   * @param {number} tableNumber 
+   * @param {Object|string|number} target 
    * @returns {Object} TableProjection
    */
-  getTableProjection(tableNumber) {
-    const master = tableMasterModel.getTableMaster(tableNumber);
-    const runtime = tableStateMachine.getTableRuntimeState(tableNumber);
-
+  getTableProjection(target) {
+    const master = typeof target === 'object' ? target : tableMasterModel.getTableMaster(target);
     if (!master) return null;
 
+    const runtime = tableStateMachine.getTableRuntimeState(master.tableNumber || master.id);
     const area = diningAreaModel.getArea(master.areaId);
     const employees = offlineStore.getCollection('employees') || [];
-    const waiter = runtime.assignedWaiterId ? employees.find(e => e.id === runtime.assignedWaiterId) : null;
+    const waiter = (runtime && runtime.assignedWaiterId) ? employees.find(e => e.id === runtime.assignedWaiterId) : null;
 
-    const elapsedMs = runtime.lastActivityAt ? (new Date() - new Date(runtime.lastActivityAt)) : 0;
+    const currentState = (runtime && runtime.currentState) ? runtime.currentState : PhysicalTableStates.AVAILABLE;
+    const elapsedMs = (runtime && runtime.lastActivityAt) ? (new Date() - new Date(runtime.lastActivityAt)) : 0;
     const elapsedMin = Math.floor(elapsedMs / (1000 * 60));
 
     return {
-      tableId: `tbl_${master.tableNumber}`,
-      tableNumber: master.tableNumber,
+      tableId: master.id || `tbl_${master.tableNumber}`,
+      tableNumber: master.tableNumber || master.id,
+      tableLabel: master.tableCode || master.tableNumber || master.id,
       areaId: master.areaId,
       areaName: area ? area.name : master.areaId,
-      shape: master.shape,
-      capacity: master.seats,
-      maxCapacity: master.maxSeats,
-      physicalState: runtime.currentState,
-      stateColor: TableStateColors[runtime.currentState] || '#6b7280',
-      currentSessionId: runtime.currentSessionId,
-      assignedWaiterId: runtime.assignedWaiterId,
+      shape: master.shape || 'SQUARE',
+      capacity: master.seats || 4,
+      maxCapacity: master.maxSeats || 6,
+      physicalState: currentState,
+      stateColor: TableStateColors[currentState] || '#10b981',
+      currentSessionId: runtime ? runtime.currentSessionId : null,
+      assignedWaiterId: runtime ? runtime.assignedWaiterId : null,
       assignedWaiterName: waiter ? waiter.name : null,
-      guestCount: runtime.guestCount || 0,
+      guestCount: runtime ? (runtime.guestCount || 0) : 0,
       elapsedTime: `${elapsedMin} min`,
-      lastActivity: runtime.lastActivityAt,
-      primaryAction: this.getPrimaryAction(runtime.currentState),
+      lastActivity: runtime ? runtime.lastActivityAt : null,
+      primaryAction: this.getPrimaryAction(currentState),
       notificationCount: 0,
-      isReserved: runtime.currentState === PhysicalTableStates.RESERVED,
-      isMergeable: master.isMergeable,
-      mergedGroupId: master.mergedGroupId,
+      isReserved: currentState === PhysicalTableStates.RESERVED,
+      isMergeable: !!master.isMergeable,
+      mergedGroupId: master.mergedGroupId || null,
       lastUpdated: new Date().toISOString(),
-      correlationId: runtime.correlationId || 'corr_gen_' + master.tableNumber
+      correlationId: (runtime && runtime.correlationId) ? runtime.correlationId : 'corr_gen_' + (master.tableNumber || master.id)
     };
   }
 
   getProjectionsByArea(areaId) {
     const masterTables = tableMasterModel.getTablesByArea(areaId);
-    return masterTables.map(m => this.getTableProjection(m.tableNumber));
+    return masterTables.map(m => this.getTableProjection(m)).filter(Boolean);
   }
 
   getAllProjections() {
     const masterTables = tableMasterModel.getAllMasterTables();
-    return masterTables.map(m => this.getTableProjection(m.tableNumber));
+    return masterTables.map(m => this.getTableProjection(m)).filter(Boolean);
   }
 }
 

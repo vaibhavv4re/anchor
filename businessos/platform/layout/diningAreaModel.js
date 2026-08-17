@@ -1,35 +1,39 @@
 /**
  * BusinessOS Platform - Dining Area Master Configuration (PD-007)
- * Defines static dining zones (Main Hall, Outdoor Patio, VIP Lounge, Bar Counter).
+ * Connected directly to DataGateway / Supabase Cloud DB (`dining_areas` collection).
+ * ZERO hardcoded fake seed areas.
  */
 
 import { offlineStore } from '../offline_store/offlineStore.js';
 
 class DiningAreaModel {
-  constructor() {
-    this._initSeedData();
-  }
-
-  _initSeedData() {
-    if (!offlineStore.getCollection('dining_areas')) {
-      const defaultAreas = [
-        { id: 'area-main', name: 'Main Dining Hall', color: '#10b981', displayOrder: 1, isActive: true },
-        { id: 'area-patio', name: 'Outdoor Patio', color: '#3b82f6', displayOrder: 2, isActive: true },
-        { id: 'area-vip', name: 'VIP Lounge', color: '#8b5cf6', displayOrder: 3, isActive: true },
-        { id: 'area-bar', name: 'Bar Counter', color: '#f59e0b', displayOrder: 4, isActive: true }
-      ];
-      offlineStore.setCollection('dining_areas', defaultAreas);
+  _getGatewayCollection() {
+    if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.dataGateway) {
+      const list = window.__APP__.platform.dataGateway.getCachedCollection('dining_areas');
+      if (Array.isArray(list) && list.length > 0) return list;
     }
+    return offlineStore.getCollection('dining_areas') || [];
   }
 
   getAllAreas() {
-    const areas = offlineStore.getCollection('dining_areas') || [];
-    return areas.filter(a => a.isActive).sort((a, b) => a.displayOrder - b.displayOrder);
+    const rawList = this._getGatewayCollection();
+    if (!Array.isArray(rawList) || rawList.length === 0) return [];
+
+    return rawList.map((a, idx) => ({
+      id: a.id || a.area_id || `area-${idx}`,
+      name: a.areaName || a.name || a.area_name || `Area ${idx + 1}`,
+      code: a.areaCode || a.code || 'DA',
+      type: a.areaType || 'Indoor',
+      color: a.color || (idx % 2 === 0 ? '#10b981' : '#3b82f6'),
+      displayOrder: a.displayOrder || idx + 1,
+      isActive: a.status ? (a.status === 'OPEN' || a.status === 'ACTIVE') : true,
+      tenantId: a.tenantId || a.tenant_id
+    }));
   }
 
   getArea(areaId) {
     const areas = this.getAllAreas();
-    return areas.find(a => a.id === areaId) || null;
+    return areas.find(a => a.id === areaId) || areas[0] || null;
   }
 }
 
