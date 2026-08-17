@@ -37,6 +37,7 @@ import { KitchenRecipeView } from './capabilities/kitchen/ui/KitchenRecipeView.j
 
 import { MenuBrowserView } from './capabilities/order_management/ui/MenuBrowserView.js';
 import { ActiveSessionView } from './capabilities/guest_service/ui/ActiveSessionView.js';
+import { AdminWorkspaceView } from './capabilities/setup_wizard/ui/AdminWorkspaceView.js';
 
 export class ApplicationShell {
   constructor(deps = {}) {
@@ -46,7 +47,7 @@ export class ApplicationShell {
     this.kitchenActiveTab = 'catalog';
     this.lockScreenComponent = null;
 
-    // Dependency Injection with zero-breaking-change fallback to imported singletons
+    // Dependency Injection
     this.container = deps.container || deps.applicationContainer || null;
     this.authEngine = deps.authEngine || (deps.appDependencies ? deps.appDependencies.authEngine : authEngine);
     this.platformEventBus = deps.platformEventBus || (deps.appDependencies ? deps.appDependencies.platformEventBus : platformEventBus);
@@ -64,12 +65,10 @@ export class ApplicationShell {
   }
 
   subscribePlatformEvents() {
-    // Listen for session lock events
     this.platformEventBus.subscribe(PlatformEventTypes.SESSION_LOCKED, (envelope) => {
       this.handleSessionLocked(envelope.payload);
     });
 
-    // Listen for notifications
     this.platformEventBus.subscribe(PlatformEventTypes.NOTIFICATION_EMITTED, (envelope) => {
       this.showToast(envelope.payload);
     });
@@ -120,9 +119,10 @@ export class ApplicationShell {
 
   renderWorkspace(session) {
     if (!this.appEl) return;
+
     this.appEl.innerHTML = `
       <div class="flex-col h-full" style="min-height:100vh;">
-        <!-- Top Navigation Header -->
+        <!-- Top Header Controls -->
         <header class="app-header">
           <div class="flex items-center gap-md" style="flex-wrap:wrap;">
             <div style="font-weight:700; font-size:1.25rem; color:var(--accent-primary);">Anchor BusinessOS</div>
@@ -149,22 +149,37 @@ export class ApplicationShell {
           </div>
         </header>
 
-        <!-- Main Body Area -->
-        <div class="app-layout-body">
-          <!-- Sidebar Nav for Subviews -->
-          <aside class="app-sidebar flex-col gap-sm">
-            ${this.renderSidebarNav(session)}
-          </aside>
-
-          <!-- Main Content Workspace Mount -->
-          <main class="app-main" id="workspace-mount">
-          </main>
-        </div>
+        <!-- Main Body Workspace Mount -->
+        <main id="workspace-root-mount" style="flex:1; width:100%; display:flex; flex-direction:column;"></main>
       </div>
     `;
 
     this.bindHeaderEvents();
-    this.mountSubView(session);
+    const rootMount = this.appEl.querySelector('#workspace-root-mount');
+
+    const opts = {
+      repositories: this.repositories,
+      dataGateway: this.container ? this.container.dataGateway : (this.authEngine ? this.authEngine.dataGateway : null),
+      authEngine: this.authEngine,
+      platformEventBus: this.platformEventBus
+    };
+
+    if (session.workspace === 'admin') {
+      const adminWs = new AdminWorkspaceView(opts);
+      adminWs.render(rootMount, session);
+    } else {
+      // Default / Navigation Layout for other workspaces
+      rootMount.innerHTML = `
+        <div class="app-layout-body">
+          <aside class="app-sidebar flex-col gap-sm">
+            ${this.renderSidebarNav(session)}
+          </aside>
+          <main class="app-main" id="workspace-mount"></main>
+        </div>
+      `;
+      this.bindSidebarEvents(session);
+      this.mountSubView(session);
+    }
   }
 
   renderSidebarNav(session) {
@@ -270,12 +285,14 @@ export class ApplicationShell {
         this.render();
       });
     }
+  }
 
+  bindSidebarEvents(session) {
+    if (!this.appEl) return;
     const navBtns = this.appEl.querySelectorAll('.nav-item');
     navBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         this.activeSubView = btn.dataset.view;
-        const session = this.authEngine.getCurrentSession();
         this.renderWorkspace(session);
       });
     });
