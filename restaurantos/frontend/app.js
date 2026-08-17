@@ -57,6 +57,14 @@ export class ApplicationShell {
     this.repositories = deps.repositories || (deps.appDependencies ? deps.appDependencies.repositories : null);
   }
 
+  _getDataGateway() {
+    if (this.container && this.container.dataGateway) return this.container.dataGateway;
+    if (this.container && this.container.platformContainer) return this.container.platformContainer.dataGateway;
+    if (this.authEngine && this.authEngine.dataGateway) return this.authEngine.dataGateway;
+    if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform) return window.__APP__.platform.dataGateway;
+    return null;
+  }
+
   init() {
     if (typeof document !== 'undefined') {
       this.appEl = document.getElementById('app');
@@ -105,7 +113,7 @@ export class ApplicationShell {
 
     const pinPad = new PinPadView({
       authEngine: this.authEngine,
-      dataGateway: this.container ? this.container.dataGateway : (this.authEngine ? this.authEngine.dataGateway : null),
+      dataGateway: this._getDataGateway(),
       appDependencies: this.container ? this.container.appDependencies : null,
       onSuccess: () => {
         this.activeSubView = 'auto';
@@ -118,7 +126,7 @@ export class ApplicationShell {
     if (mount) mount.appendChild(pinPad.render());
   }
 
-  renderWorkspace(session) {
+  async renderWorkspace(session) {
     if (!this.appEl) return;
 
     this.appEl.innerHTML = `
@@ -160,7 +168,7 @@ export class ApplicationShell {
 
     const opts = {
       repositories: this.repositories,
-      dataGateway: (this.container && this.container.dataGateway) ? this.container.dataGateway : ((this.container && this.container.platformContainer) ? this.container.platformContainer.dataGateway : (this.authEngine && this.authEngine.dataGateway ? this.authEngine.dataGateway : (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform ? window.__APP__.platform.dataGateway : null))),
+      dataGateway: this._getDataGateway(),
       authEngine: this.authEngine,
       platformEventBus: this.platformEventBus
     };
@@ -170,7 +178,7 @@ export class ApplicationShell {
       await superAdminWs.render(rootMount, session);
     } else if (session.workspace === 'admin') {
       const adminWs = new AdminWorkspaceView(opts);
-      adminWs.render(rootMount, session);
+      await adminWs.render(rootMount, session);
     } else {
       // Default / Navigation Layout for other workspaces
       rootMount.innerHTML = `
@@ -310,7 +318,7 @@ export class ApplicationShell {
 
     const opts = {
       repositories: this.repositories,
-      dataGateway: this.container ? this.container.dataGateway : null,
+      dataGateway: this._getDataGateway(),
       authEngine: this.authEngine,
       platformEventBus: this.platformEventBus
     };
