@@ -161,6 +161,7 @@ export class ApplicationShell {
 
         <!-- Main Body Workspace Mount -->
         <main id="workspace-root-mount" style="flex:1; width:100%; display:flex; flex-direction:column;"></main>
+        <div id="admin-modal-mount"></div>
       </div>
     `;
 

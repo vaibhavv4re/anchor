@@ -35,7 +35,7 @@ export class SupabaseDataAdapter {
       });
 
       if (tenantId) {
-        list = list.filter(item => !item.tenantId || item.tenantId === tenantId);
+        list = list.filter(item => (!item.tenantId && !item.tenant_id) || item.tenantId === tenantId || item.tenant_id === tenantId);
       }
       return list;
     } catch (e) {

@@ -52,6 +52,9 @@ export function startModularApp(options = {}) {
         'tenants', 'identities', 'employees', 'roles',
         'tables_master', 'dining_areas', 'menu_catalog',
         'inventory', 'suppliers', 'storage_locations',
+        'stock_balances', 'purchase_orders', 'goods_receipt_notes',
+        'inventory_requests', 'inventory_categories', 'inventory_uoms',
+        'stock_issues', 'stock_transfers', 'stock_adjustments', 'stock_counts',
         'devices', 'system_config'
       ])
         .then(res => {
