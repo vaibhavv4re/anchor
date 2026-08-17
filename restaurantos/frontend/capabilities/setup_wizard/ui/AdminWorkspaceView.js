@@ -42,10 +42,14 @@ export class AdminWorkspaceView {
   }
 
   _getCollection(name, tenantId) {
-    const gw = this._getDataGateway();
-    if (gw && typeof gw.getCachedCollection === 'function') {
-      const list = gw.getCachedCollection(name, tenantId);
-      if (Array.isArray(list)) return list;
+    try {
+      const gw = this._getDataGateway();
+      if (gw && typeof gw.getCachedCollection === 'function') {
+        const list = gw.getCachedCollection(name, tenantId);
+        if (Array.isArray(list)) return list;
+      }
+    } catch (e) {
+      console.warn(`[AdminWorkspaceView] Error fetching collection "${name}":`, e);
     }
     return [];
   }
@@ -53,85 +57,101 @@ export class AdminWorkspaceView {
   async render(mount, session) {
     if (!mount) return;
 
-    const gw = this._getDataGateway();
-    const isSupabase = gw && gw.cloudAdapter && typeof gw.cloudAdapter.getCollection === 'function';
+    try {
+      const gw = this._getDataGateway();
+      const isSupabase = gw && gw.cloudAdapter && typeof gw.cloudAdapter.getCollection === 'function';
+      const tenantId = session ? session.tenantId : null;
 
-    const tables = this._getCollection('tables_master', session.tenantId);
-    const employees = this._getCollection('employees', session.tenantId);
-    const areas = this._getCollection('dining_areas', session.tenantId);
+      const tables = this._getCollection('tables_master', tenantId);
+      const employees = this._getCollection('employees', tenantId);
+      const areas = this._getCollection('dining_areas', tenantId);
 
-    mount.innerHTML = `
-      <div class="admin-workspace-container flex-col animate-fade-in" style="width:100%; min-height:100vh; gap:0;">
-        <!-- Data Source Diagnostic Bar -->
-        <div class="data-source-diagnostic-bar" style="background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); padding:6px 16px; font-size:0.75rem; display:flex; justify-content:space-between; align-items:center;">
-          <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-            <span class="badge ${isSupabase ? 'badge-success' : 'badge-warning'}" style="font-weight:700; font-size:0.7rem; padding:3px 10px;">
-              ${isSupabase ? 'SUPABASE ●' : 'LOCAL_CACHE ⚠️'}
-            </span>
-            <span>Tenant: <strong>${session.tenantId || 'tenant_h0qc7wf'}</strong></span>
-            <span>User: <strong>${session.employeeName}</strong></span>
-            <span>Role: <strong>${session.roleId}</strong></span>
-            <span>Workspace: <strong style="text-transform:uppercase; color:var(--accent-primary);">${session.workspace}</strong></span>
-          </div>
-          <div style="color:var(--text-muted); font-weight:600;">Anchor DataGateway Engine</div>
-        </div>
+      const areaCount = Array.isArray(areas) ? areas.length : 0;
+      const tableCount = Array.isArray(tables) ? tables.length : 0;
+      const employeeCount = Array.isArray(employees) ? employees.length : 0;
 
-        <!-- 2-Column Main Layout Body (Sidebar + Content) -->
-        <div style="display:flex; flex:1; width:100%;">
-          <!-- Left Sidebar Navigation -->
-          <aside style="width:250px; background:var(--bg-surface-1); border-right:1px solid var(--border-subtle); padding:16px; display:flex; flex-direction:column; gap:10px;">
-            <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700; text-transform:uppercase; margin-bottom:4px; padding-left:4px;">ADMIN NAVIGATION</div>
-            
-            <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'dashboard' ? 'active' : ''}" data-v="dashboard" style="text-align:left; font-weight:600; padding:10px 12px; border-radius:6px; cursor:pointer;">
-              🏠 Dashboard
-            </button>
-
-            <div style="margin:4px 0;">
-              <button class="btn-secondary" id="btn-toggle-config-group" style="width:100%; text-align:left; font-weight:600; padding:10px 12px; border-radius:6px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
-                <span>⚙ Configuration</span>
-                <span>${this.configGroupOpen ? '▾' : '▸'}</span>
-              </button>
-              ${this.configGroupOpen ? `
-                <div class="flex-col gap-xs" style="padding-left:12px; margin-top:6px; display:flex; flex-direction:column; gap:4px; border-left:2px solid var(--border-subtle);">
-                  <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'card1-full' ? 'active' : ''}" data-v="card1-full" style="text-align:left; font-size:0.85rem; padding:6px 10px; border-radius:4px; cursor:pointer;">• Business Profile</button>
-                  <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'config-areas' ? 'active' : ''}" data-v="config-areas" style="text-align:left; font-size:0.85rem; padding:6px 10px; border-radius:4px; cursor:pointer;">• Dining Areas</button>
-                  <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'config-tables' ? 'active' : ''}" data-v="config-tables" style="text-align:left; font-size:0.85rem; padding:6px 10px; border-radius:4px; cursor:pointer;">• Tables</button>
-                  <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'config-users' ? 'active' : ''}" data-v="config-users" style="text-align:left; font-size:0.85rem; padding:6px 10px; border-radius:4px; cursor:pointer;">• Staff & Access</button>
-                  <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'config-devices' ? 'active' : ''}" data-v="config-devices" style="text-align:left; font-size:0.85rem; padding:6px 10px; border-radius:4px; cursor:pointer;">• Devices & Printers</button>
-                  <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'config-payments' ? 'active' : ''}" data-v="config-payments" style="text-align:left; font-size:0.85rem; padding:6px 10px; border-radius:4px; cursor:pointer;">• Payment Configuration</button>
-                </div>
-              ` : ''}
+      mount.innerHTML = `
+        <div class="admin-workspace-container flex-col animate-fade-in" style="width:100%; gap:0;">
+          <!-- Data Source Diagnostic Bar -->
+          <div class="data-source-diagnostic-bar" style="background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); padding:6px 16px; font-size:0.75rem; display:flex; justify-content:space-between; align-items:center;">
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+              <span class="badge ${isSupabase ? 'badge-success' : 'badge-warning'}" style="font-weight:700; font-size:0.7rem; padding:3px 10px;">
+                ${isSupabase ? 'SUPABASE ●' : 'LOCAL_CACHE ⚠️'}
+              </span>
+              <span>Tenant: <strong>${session?.tenantId || 'tenant_h0qc7wf'}</strong></span>
+              <span>User: <strong>${session?.employeeName || 'General Manager'}</strong></span>
+              <span>Role: <strong>${session?.roleId || 'role-admin'}</strong></span>
+              <span>Workspace: <strong style="text-transform:uppercase; color:var(--accent-primary);">${session?.workspace || 'admin'}</strong></span>
             </div>
+            <div style="color:var(--text-muted); font-weight:600;">Anchor DataGateway Engine</div>
+          </div>
 
-            <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'commissioning' ? 'active' : ''}" data-v="commissioning" style="text-align:left; font-weight:600; padding:10px 12px; border-radius:6px; cursor:pointer;">
-              📊 Commissioning
-            </button>
+          <!-- 2-Column Main Layout Body (Sidebar + Content) -->
+          <div style="display:flex; width:100%; min-height:calc(100vh - 110px);">
+            <!-- Left Sidebar Navigation -->
+            <aside style="width:250px; background:var(--bg-surface-1); border-right:1px solid var(--border-subtle); padding:16px; display:flex; flex-direction:column; gap:10px; flex-shrink:0;">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700; text-transform:uppercase; margin-bottom:4px; padding-left:4px;">ADMIN NAVIGATION</div>
+              
+              <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'dashboard' ? 'active' : ''}" data-v="dashboard" style="text-align:left; font-weight:600; padding:10px 12px; border-radius:6px; cursor:pointer;">
+                🏠 Dashboard
+              </button>
 
-            <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'attendance' ? 'active' : ''}" data-v="attendance" style="text-align:left; font-weight:600; padding:10px 12px; border-radius:6px; cursor:pointer;">
-              ⏱️ Staff Timesheet
-            </button>
+              <div style="margin:4px 0;">
+                <button class="btn-secondary" id="btn-toggle-config-group" style="width:100%; text-align:left; font-weight:600; padding:10px 12px; border-radius:6px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;">
+                  <span>⚙ Configuration</span>
+                  <span>${this.configGroupOpen ? '▾' : '▸'}</span>
+                </button>
+                ${this.configGroupOpen ? `
+                  <div class="flex-col gap-xs" style="padding-left:12px; margin-top:6px; display:flex; flex-direction:column; gap:4px; border-left:2px solid var(--border-subtle);">
+                    <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'card1-full' ? 'active' : ''}" data-v="card1-full" style="text-align:left; font-size:0.85rem; padding:6px 10px; border-radius:4px; cursor:pointer;">• Business Profile</button>
+                    <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'config-areas' ? 'active' : ''}" data-v="config-areas" style="text-align:left; font-size:0.85rem; padding:6px 10px; border-radius:4px; cursor:pointer;">• Dining Areas</button>
+                    <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'config-tables' ? 'active' : ''}" data-v="config-tables" style="text-align:left; font-size:0.85rem; padding:6px 10px; border-radius:4px; cursor:pointer;">• Tables</button>
+                    <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'config-users' ? 'active' : ''}" data-v="config-users" style="text-align:left; font-size:0.85rem; padding:6px 10px; border-radius:4px; cursor:pointer;">• Staff & Access</button>
+                    <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'config-devices' ? 'active' : ''}" data-v="config-devices" style="text-align:left; font-size:0.85rem; padding:6px 10px; border-radius:4px; cursor:pointer;">• Devices & Printers</button>
+                    <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'config-payments' ? 'active' : ''}" data-v="config-payments" style="text-align:left; font-size:0.85rem; padding:6px 10px; border-radius:4px; cursor:pointer;">• Payment Configuration</button>
+                  </div>
+                ` : ''}
+              </div>
 
-            <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'audit' ? 'active' : ''}" data-v="audit" style="text-align:left; font-weight:600; padding:10px 12px; border-radius:6px; cursor:pointer;">
-              📋 Audit Log
-            </button>
+              <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'commissioning' ? 'active' : ''}" data-v="commissioning" style="text-align:left; font-weight:600; padding:10px 12px; border-radius:6px; cursor:pointer;">
+                📊 Commissioning
+              </button>
 
-            <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'dev-sync' ? 'active' : ''}" data-v="dev-sync" style="text-align:left; font-weight:600; padding:10px 12px; border-radius:6px; cursor:pointer; color:var(--accent-secondary); border-color:var(--accent-secondary); margin-top:8px;">
-              🛠️ Developer Sync Console
-            </button>
-          </aside>
+              <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'attendance' ? 'active' : ''}" data-v="attendance" style="text-align:left; font-weight:600; padding:10px 12px; border-radius:6px; cursor:pointer;">
+                ⏱️ Staff Timesheet
+              </button>
 
-          <!-- Main Content Area -->
-          <main id="admin-main-mount" style="flex:1; padding:24px; background:var(--bg-surface-0); overflow-y:auto; max-height:calc(100vh - 40px);"></main>
+              <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'audit' ? 'active' : ''}" data-v="audit" style="text-align:left; font-weight:600; padding:10px 12px; border-radius:6px; cursor:pointer;">
+                📋 Audit Log
+              </button>
+
+              <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'dev-sync' ? 'active' : ''}" data-v="dev-sync" style="text-align:left; font-weight:600; padding:10px 12px; border-radius:6px; cursor:pointer; color:var(--accent-secondary); border-color:var(--accent-secondary); margin-top:8px;">
+                🛠️ Developer Sync Console
+              </button>
+            </aside>
+
+            <!-- Main Content Area -->
+            <main id="admin-main-mount" style="flex:1; padding:24px; background:var(--bg-surface-0); overflow-y:auto;"></main>
+          </div>
         </div>
-      </div>
-    `;
+      `;
 
-    const mainMount = mount.querySelector('#admin-main-mount');
-    await this.mountMainContent(mainMount, session, tables, employees, areas);
-    this.bindEvents(mount, session);
+      const mainMount = mount.querySelector('#admin-main-mount');
+      await this.mountMainContent(mainMount, session, areaCount, tableCount, employeeCount);
+      this.bindEvents(mount, session);
+    } catch (err) {
+      console.error('[AdminWorkspaceView] Error rendering view:', err);
+      mount.innerHTML = `
+        <div class="card" style="padding:32px; margin:20px; background:var(--bg-surface-1); border-left:4px solid var(--status-danger);">
+          <h2 style="font-size:1.5rem; margin-top:0; color:var(--status-danger);">⚠️ Admin Workspace Render Failure</h2>
+          <p style="color:var(--text-secondary); font-size:0.9rem;">An error occurred while mounting the Admin Workspace view:</p>
+          <pre style="background:var(--bg-surface-2); padding:12px; border-radius:6px; font-size:0.85rem; overflow-x:auto;">${err.stack || err.message || err}</pre>
+        </div>
+      `;
+    }
   }
 
-  async mountMainContent(mount, session, tables, employees, areas) {
+  async mountMainContent(mount, session, areaCount, tableCount, employeeCount) {
     if (!mount) return;
 
     const gw = this._getDataGateway();
@@ -148,7 +168,7 @@ export class AdminWorkspaceView {
           <!-- Top Welcome Title & Commissioning Button -->
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
             <div>
-              <h2 style="font-size:1.75rem; margin:0;">Good Morning, ${session.employeeName || 'Admin'} 👋</h2>
+              <h2 style="font-size:1.75rem; margin:0;">Good Morning, ${session?.employeeName || 'Admin'} 👋</h2>
               <p style="color:var(--text-muted); font-size:0.875rem; margin-top:2px; margin-bottom:0;">Restaurant • Admin Command Center</p>
             </div>
             <button class="btn-primary" id="btn-goto-comm" style="padding:10px 18px; font-weight:700; background:var(--status-success); color:#000; border:none;">
@@ -190,7 +210,7 @@ export class AdminWorkspaceView {
                 <div class="card" style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface-1); padding:16px; border:1px solid var(--border-subtle); border-radius:8px;">
                   <div>
                     <div style="font-weight:700; font-size:0.95rem;">Card 2 — Dining Areas</div>
-                    <div style="font-size:0.75rem; color:var(--status-success); margin-top:2px; font-weight:600;">Status: COMPLETE (${areas.length} Areas)</div>
+                    <div style="font-size:0.75rem; color:var(--status-success); margin-top:2px; font-weight:600;">Status: COMPLETE (${areaCount} Areas)</div>
                   </div>
                   <button class="btn-secondary btn-goto-card" data-v="config-areas" style="padding:6px 12px; font-size:0.82rem;">Manage →</button>
                 </div>
@@ -198,7 +218,7 @@ export class AdminWorkspaceView {
                 <div class="card" style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface-1); padding:16px; border:1px solid var(--border-subtle); border-radius:8px;">
                   <div>
                     <div style="font-weight:700; font-size:0.95rem;">Card 3 — Dining Tables & Assets</div>
-                    <div style="font-size:0.75rem; color:var(--status-success); margin-top:2px; font-weight:600;">Status: COMPLETE (${tables.length} Tables)</div>
+                    <div style="font-size:0.75rem; color:var(--status-success); margin-top:2px; font-weight:600;">Status: COMPLETE (${tableCount} Tables)</div>
                   </div>
                   <button class="btn-secondary btn-goto-card" data-v="config-tables" style="padding:6px 12px; font-size:0.82rem;">Manage →</button>
                 </div>
@@ -206,7 +226,7 @@ export class AdminWorkspaceView {
                 <div class="card" style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface-1); padding:16px; border:1px solid var(--border-subtle); border-radius:8px;">
                   <div>
                     <div style="font-weight:700; font-size:0.95rem;">Card 4 — Staff & Access</div>
-                    <div style="font-size:0.75rem; color:var(--status-success); margin-top:2px; font-weight:600;">Status: COMPLETE (${employees.length} Staff)</div>
+                    <div style="font-size:0.75rem; color:var(--status-success); margin-top:2px; font-weight:600;">Status: COMPLETE (${employeeCount} Staff)</div>
                   </div>
                   <button class="btn-secondary btn-goto-card" data-v="config-users" style="padding:6px 12px; font-size:0.82rem;">Manage →</button>
                 </div>
@@ -245,7 +265,7 @@ export class AdminWorkspaceView {
     } else if (this.activeSubView === 'card1-full') {
       // Live Business Profile Editor connected to DataGateway & Supabase
       const tenants = this._getCollection('tenants');
-      const currentTenant = tenants.find(t => (t.tenantId || t.tenant_id || t.id) === session.tenantId) || tenants[0] || {};
+      const currentTenant = tenants.find(t => (t.tenantId || t.tenant_id || t.id) === session?.tenantId) || tenants[0] || {};
       
       mount.innerHTML = `
         <div class="card animate-fade-in" style="background:var(--bg-surface-1); padding:24px; border-radius:8px;">
@@ -262,7 +282,7 @@ export class AdminWorkspaceView {
           <div style="margin-top:24px; display:flex; flex-direction:column; gap:16px; max-width:540px;">
             <div>
               <label style="font-size:0.8rem; color:var(--text-muted); display:block; margin-bottom:4px; font-weight:600;">Restaurant Name</label>
-              <input type="text" id="inp-tenant-name" value="${currentTenant.name || session.tenantName || 'Anchor Bistro & Cafe'}" style="width:100%; padding:10px 12px; border-radius:6px; border:1px solid var(--border-subtle); font-size:0.95rem;">
+              <input type="text" id="inp-tenant-name" value="${currentTenant.name || session?.tenantName || 'Anchor Bistro & Cafe'}" style="width:100%; padding:10px 12px; border-radius:6px; border:1px solid var(--border-subtle); font-size:0.95rem;">
             </div>
             <div class="grid grid-cols-2 gap-sm">
               <div>
@@ -297,15 +317,12 @@ export class AdminWorkspaceView {
           }
 
           if (gw && typeof gw.update === 'function') {
-            await gw.update('tenants', session.tenantId || 'tenant_h0qc7wf', { name: newName, serviceChargePercent: newSc });
+            await gw.update('tenants', session?.tenantId || 'tenant_h0qc7wf', { name: newName, serviceChargePercent: newSc });
           }
           alert(`✅ Business Profile updated in Supabase Cloud DB!\nRestaurant: ${newName}`);
         });
       }
     } else if (this.activeSubView === 'commissioning') {
-      const items = this._getCollection('menu_catalog', session.tenantId);
-      const inventory = this._getCollection('inventory', session.tenantId);
-
       mount.innerHTML = `
         <div class="card animate-fade-in" style="background:var(--bg-surface-1); padding:24px; border-radius:8px;">
           <h2 style="font-size:1.5rem; margin-top:0;">📊 Commissioning Control Tower</h2>
@@ -314,21 +331,21 @@ export class AdminWorkspaceView {
           <div class="grid grid-cols-3 gap-md">
             <div class="card" style="background:var(--bg-surface-2); padding:16px;">
               <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">DINING AREAS / SECTIONS</div>
-              <div style="font-size:1.8rem; font-weight:700; color:var(--status-success); margin-top:4px;">${areas.length} Areas</div>
+              <div style="font-size:1.8rem; font-weight:700; color:var(--status-success); margin-top:4px;">${areaCount} Areas</div>
             </div>
             <div class="card" style="background:var(--bg-surface-2); padding:16px;">
               <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">DINING FLOOR TABLES</div>
-              <div style="font-size:1.8rem; font-weight:700; color:var(--status-success); margin-top:4px;">${tables.length} Tables</div>
+              <div style="font-size:1.8rem; font-weight:700; color:var(--status-success); margin-top:4px;">${tableCount} Tables</div>
             </div>
             <div class="card" style="background:var(--bg-surface-2); padding:16px;">
               <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">ONBOARDED STAFF ACCOUNTS</div>
-              <div style="font-size:1.8rem; font-weight:700; color:var(--accent-primary); margin-top:4px;">${employees.length} Staff Accounts</div>
+              <div style="font-size:1.8rem; font-weight:700; color:var(--accent-primary); margin-top:4px;">${employeeCount} Staff Accounts</div>
             </div>
           </div>
         </div>
       `;
     } else if (this.activeSubView === 'audit') {
-      const auditLogs = this._getCollection('audit_logs', session.tenantId);
+      const auditLogs = this._getCollection('audit_logs', session?.tenantId);
       mount.innerHTML = `
         <div class="card animate-fade-in" style="background:var(--bg-surface-1); padding:24px; border-radius:8px;">
           <h2 style="font-size:1.5rem; margin-top:0;">📋 System Audit Log</h2>
@@ -348,14 +365,14 @@ export class AdminWorkspaceView {
                 ${auditLogs.length > 0 ? auditLogs.map(l => `
                   <tr>
                     <td>${l.time || new Date().toLocaleString()}</td>
-                    <td><strong>${l.user || session.employeeName}</strong></td>
+                    <td><strong>${l.user || session?.employeeName}</strong></td>
                     <td>${l.action || 'System Audit Event'}</td>
                     <td><code>${l.correlationId || 'CID-INIT-001'}</code></td>
                   </tr>
                 `).join('') : `
                   <tr>
                     <td>${new Date().toLocaleTimeString()}</td>
-                    <td><strong>${session.employeeName}</strong></td>
+                    <td><strong>${session?.employeeName || 'General Manager'}</strong></td>
                     <td>Authenticated Admin Session Started</td>
                     <td><code>CID-${Math.floor(100000 + Math.random() * 900000)}</code></td>
                   </tr>
@@ -397,7 +414,7 @@ export class AdminWorkspaceView {
           <div class="grid grid-cols-3 gap-md">
             <div class="card" style="background:var(--bg-surface-1); padding:16px;">
               <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">RESTAURANT TENANT ID</div>
-              <div style="font-size:1.1rem; font-weight:700; font-family:monospace; margin-top:6px; color:var(--accent-primary);">${session.tenantId || 'tenant_h0qc7wf'}</div>
+              <div style="font-size:1.1rem; font-weight:700; font-family:monospace; margin-top:6px; color:var(--accent-primary);">${session?.tenantId || 'tenant_h0qc7wf'}</div>
             </div>
             <div class="card" style="background:var(--bg-surface-1); padding:16px;">
               <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">CONNECTION STATUS</div>
