@@ -9,7 +9,6 @@
  */
 
 import { SuperAdminOnboardingModal } from './SuperAdminOnboardingModal.js';
-import { tenantModel } from '../../../../../businessos/platform/tenant/tenantModel.js';
 
 export class SuperAdminWorkspaceView {
   constructor(deps = {}) {
@@ -19,11 +18,23 @@ export class SuperAdminWorkspaceView {
     this.showModal = false;
   }
 
+  _getCollection(name, tenantId) {
+    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+      const list = this.dataGateway.getCachedCollection(name, tenantId);
+      if (Array.isArray(list) && list.length > 0) return list;
+    }
+    if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.dataGateway) {
+      const list = window.__APP__.platform.dataGateway.getCachedCollection(name, tenantId);
+      if (Array.isArray(list) && list.length > 0) return list;
+    }
+    return [];
+  }
+
   render(mount, session) {
     if (!mount) return;
 
     const isSupabase = this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function' && this.dataGateway.getCachedCollection('employees').length > 0;
-    const tenants = tenantModel ? tenantModel.getTenants() : [];
+    const tenants = this._getCollection('tenants');
 
     mount.innerHTML = `
       <div class="superadmin-workspace-container flex-col animate-fade-in" style="width:100%; min-height:100vh; gap:0;">
@@ -89,7 +100,7 @@ export class SuperAdminWorkspaceView {
                 <div class="card" style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface-2); padding:16px; border-radius:8px;">
                   <div>
                     <h4 style="font-size:1.1rem; margin:0;">${t.name}</h4>
-                    <p style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">ID: <code>${t.tenantId || t.id}</code> • Currency: <strong>${t.regional ? t.regional.currency : 'INR (₹)'}</strong></p>
+                    <p style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">ID: <code>${t.tenantId || t.tenant_id || t.id}</code> • Currency: <strong>${t.currency || (t.regional ? t.regional.currency : 'INR (₹)')}</strong></p>
                     <div style="font-size:0.82rem; margin-top:6px; background:var(--bg-surface-1); padding:4px 10px; border-radius:4px; display:inline-block; border:1px solid var(--border-subtle);">
                       👤 General Manager: <strong>${t.adminName || 'General Manager'}</strong> | 🔑 Tenant Admin PIN: <strong style="color:var(--status-success); font-weight:700;">${t.adminPin || '999999'}</strong>
                     </div>
