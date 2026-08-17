@@ -58,8 +58,8 @@ export class AuthEngine {
         identityId: isSuper ? 'id-superadmin' : 'id-admin',
         tenantId: 'tenant_h0qc7wf',
         name: isSuper ? 'System Superadmin' : 'General Manager',
-        roleId: 'role-admin',
-        workspaceDefault: 'admin',
+        roleId: isSuper ? 'role-superadmin' : 'role-admin',
+        workspaceDefault: isSuper ? 'superadmin' : 'admin',
         status: 'ACTIVE'
       };
     }

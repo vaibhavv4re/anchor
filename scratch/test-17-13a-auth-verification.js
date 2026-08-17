@@ -48,7 +48,7 @@ async function runStep17_13A_Verification() {
     { pin: '333333', expectedName: 'Kirtan', expectedRoleId: 'role-inventory', expectedWs: 'inventory' },
     { pin: '555555', expectedName: 'Sibu', expectedRoleId: 'role-bartender', expectedWs: 'bar' },
     { pin: '666666', expectedName: 'Jitu', expectedRoleId: 'role-cashier', expectedWs: 'cashier' },
-    { pin: '888888', expectedName: 'System Superadmin', expectedRoleId: 'role-admin', expectedWs: 'admin' },
+    { pin: '888888', expectedName: 'System Superadmin', expectedRoleId: 'role-superadmin', expectedWs: 'superadmin' },
     { pin: '999999', expectedName: 'General Manager', expectedRoleId: 'role-admin', expectedWs: 'admin' },
     { pin: '000000', shouldFail: true } // Invalid PIN
   ];

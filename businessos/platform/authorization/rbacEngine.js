@@ -27,12 +27,15 @@ export class RbacEngine {
       let workspace = 'waiter';
       let permissions = ['floor.view'];
 
-      if (lower.includes('chef') || lower.includes('kitchen') || lower.includes('cook')) {
-        workspace = 'kitchen';
-        permissions = ['kitchen.view', 'kot.update', 'recipe.view'];
-      } else if (lower.includes('admin') || lower.includes('super') || lower.includes('owner')) {
+      if (lower.includes('super')) {
+        workspace = 'superadmin';
+        permissions = ['*'];
+      } else if (lower.includes('admin') || lower.includes('owner')) {
         workspace = 'admin';
         permissions = ['*'];
+      } else if (lower.includes('chef') || lower.includes('kitchen') || lower.includes('cook')) {
+        workspace = 'kitchen';
+        permissions = ['kitchen.view', 'kot.update', 'recipe.view'];
       } else if (lower.includes('inventory')) {
         workspace = 'inventory';
         permissions = ['inventory.view', 'stock.manage'];

@@ -38,6 +38,7 @@ import { KitchenRecipeView } from './capabilities/kitchen/ui/KitchenRecipeView.j
 import { MenuBrowserView } from './capabilities/order_management/ui/MenuBrowserView.js';
 import { ActiveSessionView } from './capabilities/guest_service/ui/ActiveSessionView.js';
 import { AdminWorkspaceView } from './capabilities/setup_wizard/ui/AdminWorkspaceView.js';
+import { SuperAdminWorkspaceView } from './capabilities/setup_wizard/ui/SuperAdminWorkspaceView.js';
 
 export class ApplicationShell {
   constructor(deps = {}) {
@@ -87,7 +88,7 @@ export class ApplicationShell {
       if (session.workspace === 'kitchen') this.activeSubView = 'kitchen';
       else if (session.workspace === 'inventory') this.activeSubView = 'kitchen_inventory';
       else if (session.workspace === 'bar' || session.workspace === 'cashier') this.activeSubView = 'menu_browser';
-      else if (session.workspace === 'admin' || session.workspace === 'manager') this.activeSubView = 'dashboard';
+      else if (session.workspace === 'admin' || session.workspace === 'manager' || session.workspace === 'superadmin') this.activeSubView = 'dashboard';
       else this.activeSubView = 'floor';
     }
 
@@ -126,7 +127,7 @@ export class ApplicationShell {
         <header class="app-header">
           <div class="flex items-center gap-md" style="flex-wrap:wrap;">
             <div style="font-weight:700; font-size:1.25rem; color:var(--accent-primary);">Anchor BusinessOS</div>
-            <span class="badge badge-info" style="text-transform:uppercase;">${session.workspace} WORKSPACE</span>
+            <span class="badge ${session.workspace === 'superadmin' ? 'badge-warning' : 'badge-info'}" style="text-transform:uppercase;">${session.workspace} WORKSPACE</span>
           </div>
 
           <div class="flex items-center gap-md" style="flex-wrap:wrap;">
@@ -164,7 +165,10 @@ export class ApplicationShell {
       platformEventBus: this.platformEventBus
     };
 
-    if (session.workspace === 'admin') {
+    if (session.workspace === 'superadmin') {
+      const superAdminWs = new SuperAdminWorkspaceView(opts);
+      superAdminWs.render(rootMount, session);
+    } else if (session.workspace === 'admin') {
       const adminWs = new AdminWorkspaceView(opts);
       adminWs.render(rootMount, session);
     } else {
