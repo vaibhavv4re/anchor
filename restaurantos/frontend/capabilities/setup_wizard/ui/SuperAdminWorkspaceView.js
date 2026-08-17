@@ -95,7 +95,7 @@ export class SuperAdminWorkspaceView {
                     <button class="btn-secondary btn-reset-pin" data-id="${t.tenantId || t.tenant_id || t.id}" data-name="${t.name}" data-pin="${t.adminPin || t.admin_pin || '999999'}" style="padding:6px 10px; font-size:0.8rem;">
                       ✏️ Reset PIN
                     </button>
-                    <button class="btn-secondary btn-delete-tenant" data-id="${t.tenantId || t.tenant_id || t.id}" style="color:var(--status-danger); padding:6px 10px; font-size:0.8rem;">Delete</button>
+                    <button class="btn-secondary btn-delete-tenant" data-id="${t.tenantId || t.tenant_id || t.id}" data-name="${t.name}" style="color:var(--status-danger); padding:6px 10px; font-size:0.8rem; border-color:var(--status-danger);">Delete</button>
                   </div>
                 </div>
               `).join('') : `
@@ -174,6 +174,23 @@ export class SuperAdminWorkspaceView {
   bindEvents(mount, session) {
     const gw = this._getDataGateway();
 
+    // Reset All Data & Start Fresh Slate
+    const resetDbBtn = mount.querySelector('#btn-reset-db');
+    if (resetDbBtn) {
+      resetDbBtn.addEventListener('click', async () => {
+        if (confirm('🗑️ Are you sure you want to clear local data cache and re-hydrate fresh slate from Supabase Cloud DB?')) {
+          if (typeof localStorage !== 'undefined') {
+            localStorage.clear();
+          }
+          if (gw && typeof gw.hydrateCollections === 'function') {
+            await gw.hydrateCollections(['tenants', 'identities', 'employees', 'roles']);
+          }
+          alert('✅ Cache cleared and re-hydrated from Supabase Cloud DB!');
+          await this.render(mount, session);
+        }
+      });
+    }
+
     // Switch to Admin
     const switchBtns = mount.querySelectorAll('.btn-switch-admin');
     switchBtns.forEach(btn => {
@@ -220,6 +237,36 @@ export class SuperAdminWorkspaceView {
         }
 
         alert(`✅ Admin PIN for "${tName}" updated to: ${cleanPin}`);
+        await this.render(mount, session);
+      });
+    });
+
+    // Delete Tenant
+    const deleteBtns = mount.querySelectorAll('.btn-delete-tenant');
+    deleteBtns.forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const tId = btn.dataset.id;
+        const tName = btn.dataset.name || 'this restaurant';
+
+        if (!confirm(`🗑️ Are you sure you want to delete restaurant "${tName}" (${tId}) from Supabase?`)) {
+          return;
+        }
+
+        if (gw && typeof gw.delete === 'function') {
+          await gw.delete('tenants', tId);
+        }
+
+        if (gw && gw.localAdapter && typeof gw.localAdapter.setCollection === 'function') {
+          const currentTenants = gw.getCachedCollection('tenants') || [];
+          const updated = currentTenants.filter(t => (t.tenantId || t.tenant_id || t.id) !== tId);
+          gw.localAdapter.setCollection('tenants', updated);
+        }
+
+        if (gw && typeof gw.getCollection === 'function') {
+          await gw.getCollection('tenants');
+        }
+
+        alert(`🗑️ Restaurant "${tName}" deleted successfully.`);
         await this.render(mount, session);
       });
     });

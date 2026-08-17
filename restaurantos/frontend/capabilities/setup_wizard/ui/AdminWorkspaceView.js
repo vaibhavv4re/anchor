@@ -1,6 +1,6 @@
 /**
  * AdminWorkspaceView.js
- * Comprehensive Super Admin & Executive Management Workspace Composition
+ * Tenant Administration & Executive Management Workspace Composition (PIN 999999)
  * Assembles developed Admin components:
  * - 📌 Admin Home Dashboard & Workspace Health (AdminDashboardView)
  * - 👥 Staff & Role Management (UserManagementView)
@@ -27,10 +27,19 @@ export class AdminWorkspaceView {
     this.activeSubView = 'dashboard'; // 'dashboard' | 'users' | 'devices' | 'config' | 'attendance'
   }
 
+  _getDataGateway() {
+    if (this.dataGateway) return this.dataGateway;
+    if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.dataGateway) {
+      return window.__APP__.platform.dataGateway;
+    }
+    return null;
+  }
+
   render(mount, session) {
     if (!mount) return;
 
-    const isSupabase = this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function' && this.dataGateway.getCachedCollection('employees').length > 0;
+    const gw = this._getDataGateway();
+    const isSupabase = gw && gw.cloudAdapter && typeof gw.cloudAdapter.getCollection === 'function';
 
     mount.innerHTML = `
       <div class="admin-workspace-container flex-col animate-fade-in" style="width:100%; min-height:100vh; gap:0;">
@@ -52,10 +61,10 @@ export class AdminWorkspaceView {
         <div class="admin-top-cockpit" style="background:var(--bg-surface-1); padding:16px 20px; border-bottom:1px solid var(--border-subtle);">
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
             <div>
-              <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">🛡️ EXECUTIVE & SYSTEM ADMINISTRATION</div>
-              <h2 style="font-size:1.6rem; margin-top:2px; margin-bottom:0;">Super Admin Workspace</h2>
+              <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">🛡️ TENANT ADMINISTRATION & MANAGEMENT</div>
+              <h2 style="font-size:1.6rem; margin-top:2px; margin-bottom:0;">Tenant Admin Workspace</h2>
               <div style="font-size:0.85rem; color:var(--text-muted); margin-top:4px;">
-                Complete platform control tower: Operational readiness, Staff roles, Terminal devices & System configuration.
+                Restaurant administration control tower: Operational readiness, Staff roles, Terminal devices & System configuration.
               </div>
             </div>
             <div style="display:flex; gap:8px;">
@@ -78,21 +87,22 @@ export class AdminWorkspaceView {
               ⚙️ System Config
             </button>
             <button class="btn-admin-tab ${this.activeSubView === 'attendance' ? 'active' : ''}" data-tab="attendance" style="padding:8px 16px; font-size:0.85rem; font-weight:700; border-radius:6px; cursor:pointer; background:${this.activeSubView === 'attendance' ? 'var(--accent-primary)' : 'var(--bg-surface-2)'}; color:${this.activeSubView === 'attendance' ? '#fff' : 'var(--text-primary)'}; border:1px solid var(--border-subtle);">
-              ⏱️ Attendance & Timesheets
+              ⏱️ Staff Timesheet
             </button>
           </div>
         </div>
 
-        <!-- Main Body Workspace Body Mount -->
+        <!-- Main Body Workspace Mount -->
         <main id="admin-workspace-body" style="padding:20px; flex:1;"></main>
       </div>
     `;
 
     const bodyMount = mount.querySelector('#admin-workspace-body');
-    this.mountSubTab(bodyMount, session);
+    this.mountSubView(bodyMount, session);
 
-    // Bind subtab buttons
-    mount.querySelectorAll('.btn-admin-tab').forEach(btn => {
+    // Event binding for tab switches
+    const tabBtns = mount.querySelectorAll('.btn-admin-tab');
+    tabBtns.forEach(btn => {
       btn.addEventListener('click', () => {
         this.activeSubView = btn.dataset.tab;
         this.render(mount, session);
@@ -100,25 +110,26 @@ export class AdminWorkspaceView {
     });
   }
 
-  mountSubTab(container, session) {
+  mountSubView(container, session) {
     if (!container) return;
     container.innerHTML = '';
 
     const opts = {
-      dataGateway: this.dataGateway,
+      repositories: this.repositories,
+      dataGateway: this._getDataGateway(),
       authEngine: this.authEngine,
-      platformEventBus: this.platformEventBus,
-      repositories: this.repositories
+      platformEventBus: this.platformEventBus
     };
 
     if (this.activeSubView === 'dashboard') {
       const view = new AdminDashboardView({
-        onNavigateWorkspace: (ws) => {
-          alert(`Deep-linking directly to ${ws.toUpperCase()} Workspace to complete setup...`);
+        onNavigateWorkspace: (targetView) => {
+          this.activeSubView = targetView;
+          const mount = container.closest('#workspace-root-mount');
+          if (mount) this.render(mount, session);
         }
       });
-      const el = view.render();
-      if (el) container.appendChild(el);
+      container.appendChild(view.render());
     } else if (this.activeSubView === 'users') {
       const view = new UserManagementView(opts);
       container.appendChild(view.render());
