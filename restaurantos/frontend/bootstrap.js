@@ -46,11 +46,16 @@ export function startModularApp(options = {}) {
     console.log('🚀 [Anchor Modular Runtime] Initialized successfully.');
     console.log('💡 Access global app graph in devtools via: window.__APP__');
 
-    // Trigger background cloud collection hydration for identities, employees, roles, tenants
+    // Trigger background cloud collection hydration for all tenant domain collections
     if (appGraph.platform.dataGateway && typeof appGraph.platform.dataGateway.hydrateCollections === 'function') {
-      appGraph.platform.dataGateway.hydrateCollections(['tenants', 'identities', 'employees', 'roles'])
+      appGraph.platform.dataGateway.hydrateCollections([
+        'tenants', 'identities', 'employees', 'roles',
+        'tables_master', 'dining_areas', 'menu_catalog',
+        'inventory', 'suppliers', 'storage_locations',
+        'devices', 'system_config'
+      ])
         .then(res => {
-          console.log('☁️ [DataGateway] Pre-hydrated collections from cloud:', Object.keys(res));
+          console.log('☁️ [DataGateway] Pre-hydrated 12 domain collections from cloud:', Object.keys(res));
         })
         .catch(err => {
           console.warn('⚠️ [DataGateway] Hydration fallback notice:', err.message || err);
