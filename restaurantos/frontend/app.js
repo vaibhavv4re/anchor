@@ -39,6 +39,7 @@ import { MenuBrowserView } from './capabilities/order_management/ui/MenuBrowserV
 import { ActiveSessionView } from './capabilities/guest_service/ui/ActiveSessionView.js';
 import { AdminWorkspaceView } from './capabilities/setup_wizard/ui/AdminWorkspaceView.js';
 import { SuperAdminWorkspaceView } from './capabilities/setup_wizard/ui/SuperAdminWorkspaceView.js';
+import { InventoryWorkspaceView } from './capabilities/inventory/ui/InventoryWorkspaceView.js';
 
 export class ApplicationShell {
   constructor(deps = {}) {
@@ -179,6 +180,9 @@ export class ApplicationShell {
     } else if (session.workspace === 'admin') {
       const adminWs = new AdminWorkspaceView(opts);
       await adminWs.render(rootMount, session);
+    } else if (session.workspace === 'inventory') {
+      const inventoryWs = new InventoryWorkspaceView(opts);
+      await inventoryWs.render(rootMount, session);
     } else {
       // Default / Navigation Layout for other workspaces
       rootMount.innerHTML = `
