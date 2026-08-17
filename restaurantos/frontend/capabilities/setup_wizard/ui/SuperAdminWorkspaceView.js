@@ -1,21 +1,20 @@
 /**
  * SuperAdminWorkspaceView.js
- * Platform Super Admin Console & Multi-Tenant Restaurant Onboarding (PIN 888888)
+ * Original Super Admin Console UI (PIN 888888)
  *
- * Dedicated workspace for System Superadmin to:
- * - View & manage all restaurant tenants across the platform
- * - Launch SuperAdminOnboardingModal to onboard new restaurant profiles & assign Admin PINs
- * - Switch context or reset database state
+ * Restores the canonical 2-Column Super Admin Console:
+ * - Left: Active Restaurant Tenants list with "⚡ Switch to Admin" & "Delete" buttons
+ * - Right: "✨ Onboard New Restaurant Tenant" inline onboarding form
+ * - Top Right: "🗑️ Reset All Data & Start Fresh Slate"
+ * 
+ * Connected directly to DataGateway / Supabase Cloud DB repositories.
  */
-
-import { SuperAdminOnboardingModal } from './SuperAdminOnboardingModal.js';
 
 export class SuperAdminWorkspaceView {
   constructor(deps = {}) {
     this.dataGateway = deps.dataGateway || (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform ? window.__APP__.platform.dataGateway : null);
     this.authEngine = deps.authEngine || null;
     this.platformEventBus = deps.platformEventBus || null;
-    this.showModal = false;
   }
 
   _getCollection(name, tenantId) {
@@ -37,11 +36,11 @@ export class SuperAdminWorkspaceView {
     const tenants = this._getCollection('tenants');
 
     mount.innerHTML = `
-      <div class="superadmin-workspace-container flex-col animate-fade-in" style="width:100%; min-height:100vh; gap:0;">
+      <div class="superadmin-workspace-container flex-col animate-fade-in" style="width:100%; min-height:100vh; padding:20px; gap:20px;">
         <!-- Data Source Diagnostic Bar -->
-        <div class="data-source-diagnostic-bar" style="background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); padding:6px 16px; font-size:0.75rem; display:flex; justify-content:space-between; align-items:center;">
+        <div class="data-source-diagnostic-bar" style="background:var(--bg-surface-2); border:1px solid var(--border-subtle); border-radius:8px; padding:10px 16px; font-size:0.8rem; display:flex; justify-content:space-between; align-items:center;">
           <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-            <span class="badge ${isSupabase ? 'badge-success' : 'badge-warning'}" style="font-weight:700; font-size:0.7rem; padding:3px 10px;">
+            <span class="badge ${isSupabase ? 'badge-success' : 'badge-warning'}" style="font-weight:700; font-size:0.75rem; padding:4px 10px;">
               ${isSupabase ? 'SUPABASE ●' : 'LOCAL_CACHE ⚠️'}
             </span>
             <span>Platform System</span>
@@ -49,101 +48,156 @@ export class SuperAdminWorkspaceView {
             <span>Role: <strong>${session.roleId}</strong></span>
             <span>Workspace: <strong style="text-transform:uppercase; color:var(--accent-secondary);">${session.workspace}</strong></span>
           </div>
-          <div style="color:var(--text-muted); font-weight:600;">Anchor Platform Gateway</div>
+          <div style="color:var(--text-muted); font-weight:600;">Anchor Platform DataGateway</div>
         </div>
 
-        <!-- Super Admin Header Cockpit -->
-        <div class="superadmin-top-cockpit" style="background:var(--bg-surface-1); padding:20px; border-bottom:1px solid var(--border-subtle);">
-          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
-            <div>
-              <div style="font-size:0.75rem; color:var(--accent-secondary); font-weight:700; text-transform:uppercase;">👑 SYSTEM CONTROL TOWER</div>
-              <h2 style="font-size:1.75rem; margin-top:2px; margin-bottom:0;">👑 Platform Super Admin Console</h2>
-              <div style="font-size:0.85rem; color:var(--text-muted); margin-top:4px;">
-                Multi-tenant restaurant provisioner: Onboard new restaurants, configure tenant currencies, and allocate General Manager credentials.
-              </div>
-            </div>
-            <div style="display:flex; gap:10px; align-items:center;">
-              <button class="btn-primary" id="btn-open-onboard-modal" style="padding:10px 18px; font-weight:700; background:var(--accent-secondary); color:#000;">
-                ➕ Onboard New Restaurant
-              </button>
-            </div>
+        <!-- Header Controls -->
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+          <div>
+            <h2 style="font-size:1.75rem; margin:0;">Super Admin Console</h2>
+            <p style="color:var(--text-muted); font-size:0.875rem; margin-top:2px; margin-bottom:0;">Multi-Tenant Onboarding & System Control (PIN 888888)</p>
           </div>
+          <button class="btn-secondary" id="btn-reset-db" style="color:var(--status-danger); border-color:var(--status-danger); font-weight:700; padding:10px 18px;">
+            🗑️ Reset All Data & Start Fresh Slate
+          </button>
         </div>
 
-        <!-- Main Body: Tenant List & Platform Metrics -->
-        <main style="padding:24px; flex:1;">
-          <div class="grid grid-cols-3 gap-md" style="margin-bottom:24px;">
-            <div class="card" style="background:var(--bg-surface-1); padding:16px;">
-              <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">PROVISIONED TENANTS</div>
-              <div style="font-size:1.8rem; font-weight:800; color:var(--accent-primary); margin-top:4px;">${tenants.length || 1}</div>
-              <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Active restaurant databases</div>
-            </div>
-
-            <div class="card" style="background:var(--bg-surface-1); padding:16px;">
-              <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">PLATFORM SECURITY PIN</div>
-              <div style="font-size:1.8rem; font-weight:800; color:var(--status-success); margin-top:4px;">888888</div>
-              <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Super Admin Credentials</div>
-            </div>
-
-            <div class="card" style="background:var(--bg-surface-1); padding:16px;">
-              <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">DEFAULT TENANT ADMIN PIN</div>
-              <div style="font-size:1.8rem; font-weight:800; color:var(--status-warning); margin-top:4px;">999999</div>
-              <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">General Manager Credentials</div>
-            </div>
-          </div>
-
-          <div class="card" style="background:var(--bg-surface-1); padding:24px;">
-            <h3 style="font-size:1.2rem; margin-top:0; margin-bottom:16px;">🏛️ Active Restaurant Tenants (${tenants.length || 1})</h3>
-            
-            <div class="flex-col gap-md">
+        <!-- 2-Column Responsive Layout -->
+        <div class="grid grid-cols-2 gap-lg" style="align-items:start;">
+          <!-- Left Column: Active Restaurant Tenants -->
+          <div>
+            <h3 style="font-size:1.2rem; margin-top:0; margin-bottom:12px;">Active Restaurant Tenants (${tenants.length || 1})</h3>
+            <div class="flex-col gap-sm">
               ${tenants.length > 0 ? tenants.map(t => `
-                <div class="card" style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface-2); padding:16px; border-radius:8px;">
+                <div class="card" style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface-1); padding:16px; border:1px solid var(--border-subtle); border-radius:8px;">
                   <div>
                     <h4 style="font-size:1.1rem; margin:0;">${t.name}</h4>
-                    <p style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">ID: <code>${t.tenantId || t.tenant_id || t.id}</code> • Currency: <strong>${t.currency || (t.regional ? t.regional.currency : 'INR (₹)')}</strong></p>
-                    <div style="font-size:0.82rem; margin-top:6px; background:var(--bg-surface-1); padding:4px 10px; border-radius:4px; display:inline-block; border:1px solid var(--border-subtle);">
-                      👤 General Manager: <strong>${t.adminName || 'General Manager'}</strong> | 🔑 Tenant Admin PIN: <strong style="color:var(--status-success); font-weight:700;">${t.adminPin || '999999'}</strong>
+                    <p style="font-size:0.8rem; color:var(--text-muted); margin-top:2px; margin-bottom:0;">ID: <code>${t.tenantId || t.tenant_id || t.id}</code> • ${t.currency || (t.regional ? t.regional.currency : 'INR')}</p>
+                    <div style="font-size:0.82rem; margin-top:6px; background:var(--bg-surface-2); padding:4px 8px; border-radius:4px; display:inline-block;">
+                      👤 Admin: <strong>${t.adminName || 'General Manager'}</strong> | 🔑 PIN: <strong style="color:var(--status-success); font-size:0.95rem;">${t.adminPin || '999999'}</strong>
                     </div>
                   </div>
-                  <div style="display:flex; gap:10px; align-items:center;">
-                    <span class="badge badge-success" style="font-weight:700; font-size:0.8rem; padding:6px 12px;">ACTIVE</span>
+                  <div style="display:flex; gap:8px; align-items:center;">
+                    <button class="btn-primary btn-switch-admin" data-pin="${t.adminPin || '999999'}" style="padding:6px 12px; font-size:0.85rem; font-weight:700;">
+                      ⚡ Switch to Admin
+                    </button>
+                    <button class="btn-secondary btn-delete-tenant" data-id="${t.tenantId || t.tenant_id || t.id}" style="color:var(--status-danger); padding:6px 10px;">Delete</button>
                   </div>
                 </div>
               `).join('') : `
-                <div class="card" style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface-2); padding:16px; border-radius:8px;">
+                <div class="card" style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface-1); padding:16px; border:1px solid var(--border-subtle); border-radius:8px;">
                   <div>
                     <h4 style="font-size:1.1rem; margin:0;">Anchor Bistro & Cafe</h4>
-                    <p style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">ID: <code>tenant_h0qc7wf</code> • Currency: <strong>INR (₹)</strong></p>
-                    <div style="font-size:0.82rem; margin-top:6px; background:var(--bg-surface-1); padding:4px 10px; border-radius:4px; display:inline-block; border:1px solid var(--border-subtle);">
-                      👤 General Manager: <strong>General Manager</strong> | 🔑 Tenant Admin PIN: <strong style="color:var(--status-success); font-weight:700;">999999</strong>
+                    <p style="font-size:0.8rem; color:var(--text-muted); margin-top:2px; margin-bottom:0;">ID: <code>tenant_h0qc7wf</code> • INR (₹)</p>
+                    <div style="font-size:0.82rem; margin-top:6px; background:var(--bg-surface-2); padding:4px 8px; border-radius:4px; display:inline-block;">
+                      👤 Admin: <strong>General Manager</strong> | 🔑 PIN: <strong style="color:var(--status-success); font-size:0.95rem;">999999</strong>
                     </div>
                   </div>
-                  <div style="display:flex; gap:10px; align-items:center;">
-                    <span class="badge badge-success" style="font-weight:700; font-size:0.8rem; padding:6px 12px;">ACTIVE</span>
+                  <div style="display:flex; gap:8px; align-items:center;">
+                    <button class="btn-primary btn-switch-admin" data-pin="999999" style="padding:6px 12px; font-size:0.85rem; font-weight:700;">
+                      ⚡ Switch to Admin
+                    </button>
                   </div>
                 </div>
               `}
             </div>
           </div>
-        </main>
-      </div>
 
-      <!-- Super Admin Onboarding Modal Container -->
-      <div id="modal-container"></div>
+          <!-- Right Column: Inline Tenant Creation Form -->
+          <div class="card" style="background:var(--bg-surface-1); padding:20px; border:1px solid var(--border-subtle); border-radius:8px;">
+            <h3 style="font-size:1.2rem; margin-top:0; margin-bottom:12px;">✨ Onboard New Restaurant Tenant</h3>
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <div>
+                <label style="display:block; font-size:0.8rem; margin-bottom:4px;">Restaurant Name</label>
+                <input type="text" id="inp-sa-name" placeholder="e.g. Coastal Bistro" style="width:100%; padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle);">
+              </div>
+
+              <div class="grid grid-cols-2 gap-sm">
+                <div>
+                  <label style="display:block; font-size:0.8rem; margin-bottom:4px;">Currency</label>
+                  <select id="inp-sa-curr" style="width:100%; padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle);">
+                    <option value="INR">INR (₹)</option>
+                    <option value="USD">USD ($)</option>
+                  </select>
+                </div>
+                <div>
+                  <label style="display:block; font-size:0.8rem; margin-bottom:4px;">Timezone</label>
+                  <select id="inp-sa-tz" style="width:100%; padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle);">
+                    <option value="Asia/Kolkata">Asia/Kolkata</option>
+                    <option value="America/New_York">America/New_York</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style="border-top:1px solid var(--border-subtle); padding-top:12px; margin-top:4px;">
+                <div style="font-size:0.85rem; font-weight:600; margin-bottom:8px;">Admin Credentials Setup</div>
+                <div>
+                  <label style="display:block; font-size:0.75rem; margin-bottom:2px;">Admin Name</label>
+                  <input type="text" id="inp-sa-admin-name" placeholder="e.g. Priya Mehta" style="width:100%; padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle);">
+                </div>
+                <div style="margin-top:8px;">
+                  <label style="display:block; font-size:0.75rem; margin-bottom:2px;">Admin PIN (Set Custom 6-Digits)</label>
+                  <input type="text" id="inp-sa-admin-pin" placeholder="e.g. 999999" maxlength="6" style="width:100%; padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle);">
+                </div>
+              </div>
+
+              <button class="btn-primary" id="btn-sa-submit" style="margin-top:12px; padding:12px; font-weight:700;">
+                🚀 Create Restaurant & Generate Credentials
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
     `;
 
-    const btnOpenModal = mount.querySelector('#btn-open-onboard-modal');
-    if (btnOpenModal) {
-      btnOpenModal.addEventListener('click', () => {
-        const modalContainer = mount.querySelector('#modal-container');
-        const modal = new SuperAdminOnboardingModal({
-          onClose: () => { modalContainer.innerHTML = ''; },
-          onCreated: () => {
-            modalContainer.innerHTML = '';
-            this.render(mount, session);
+    this.bindEvents(mount, session);
+  }
+
+  bindEvents(mount, session) {
+    const switchBtns = mount.querySelectorAll('.btn-switch-admin');
+    switchBtns.forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const pin = btn.dataset.pin || '999999';
+        if (this.authEngine) {
+          const res = await this.authEngine.authenticate(pin, 'DEV-FLOOR-01');
+          if (res.success) {
+            window.location.reload();
+          } else {
+            alert('Could not switch to Admin: ' + res.error);
           }
-        });
-        modalContainer.appendChild(modal.render());
+        }
+      });
+    });
+
+    const submitBtn = mount.querySelector('#btn-sa-submit');
+    if (submitBtn) {
+      submitBtn.addEventListener('click', async () => {
+        const name = mount.querySelector('#inp-sa-name').value.trim();
+        const curr = mount.querySelector('#inp-sa-curr').value;
+        const tz = mount.querySelector('#inp-sa-tz').value;
+        const adminName = mount.querySelector('#inp-sa-admin-name').value.trim() || 'General Manager';
+        const adminPin = mount.querySelector('#inp-sa-admin-pin').value.trim() || '999999';
+
+        if (!name) {
+          alert('Please enter a restaurant name.');
+          return;
+        }
+
+        const newTenant = {
+          tenantId: 'tenant_' + Math.random().toString(36).substring(2, 9),
+          name,
+          currency: curr,
+          timezone: tz,
+          adminName,
+          adminPin,
+          createdAt: new Date().toISOString()
+        };
+
+        if (this.dataGateway && typeof this.dataGateway.create === 'function') {
+          await this.dataGateway.create('tenants', newTenant);
+        }
+        alert(`✅ Restaurant "${name}" onboarded successfully!\nAdmin PIN: ${adminPin}`);
+        this.render(mount, session);
       });
     }
   }
