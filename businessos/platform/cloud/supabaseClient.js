@@ -254,6 +254,17 @@ export function formatRecordForTable(entityName, job) {
     return formatted;
   }
 
+  if (entityName === 'inventory_requests' || entityName === 'stock_requisitions') {
+    return {
+      id: p.id || ('req-' + Math.random().toString(36).substring(2, 9)),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || '',
+      request_number: p.requestNumber || p.request_number || p.reqCode || p.id || '',
+      department: p.department || p.requestedBy || 'Kitchen Production',
+      status: p.status || 'PENDING',
+      data: p
+    };
+  }
+
   if (entityName === 'stock_balances') {
     return {
       id: p.id || ('sb-' + Math.random().toString(36).substring(2, 7)),
@@ -263,6 +274,81 @@ export function formatRecordForTable(entityName, job) {
       quantity: parseFloat(p.quantity) || 0,
       unit_cost: parseFloat(p.unitCost || p.unit_cost) || 0,
       valuation: parseFloat(p.valuation) || 0,
+      data: p
+    };
+  }
+
+  if (entityName === 'kitchen_menu_items') {
+    return {
+      id: p.id || ('menu-item-' + Math.random().toString(36).substring(2, 9)),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || '',
+      item_code: p.itemCode || p.item_code || '',
+      item_name: p.itemName || p.item_name || '',
+      category: p.category || 'GENERAL',
+      description: p.description || '',
+      selling_price: parseFloat(p.sellingPrice || p.selling_price) || 0,
+      tax_profile: p.taxProfile || p.tax_profile || 'GST_5',
+      dietary_type: p.dietaryType || p.dietary_type || 'VEG',
+      portion_size: p.portionSize || p.portion_size || '1 Portion',
+      availability_status: p.availabilityStatus || p.availability_status || 'AVAILABLE',
+      lifecycle_status: p.lifecycleStatus || p.lifecycle_status || 'ACTIVE',
+      recipe_id: p.recipeId || p.recipe_id || null,
+      routing: p.routing || 'KITCHEN_LINE',
+      recipe_notes: p.recipeNotes || p.recipe_notes || '',
+      spiciness_level: p.spicinessLevel || p.spiciness_level || 'MEDIUM',
+      region: p.region || '',
+      data: p
+    };
+  }
+
+  if (entityName === 'recipes') {
+    return {
+      id: p.id || ('rcp-' + Math.random().toString(36).substring(2, 9)),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || '',
+      recipe_code: p.recipeCode || p.recipe_code || '',
+      recipe_name: p.recipeName || p.recipe_name || '',
+      menu_item_id: p.menuItemId || p.menu_item_id || null,
+      version: p.version || 'v1.0',
+      status: p.status || 'DRAFT',
+      yield_quantity: parseFloat(p.yieldQuantity || p.yield_quantity) || 1,
+      yield_uom: p.yieldUom || p.yield_uom || 'PORTION',
+      portion_count: parseInt(p.portionCount || p.portion_count) || 1,
+      prep_time_minutes: parseInt(p.prepTimeMinutes || p.prep_time_minutes) || 15,
+      cook_time_minutes: parseInt(p.cookTimeMinutes || p.cook_time_minutes) || 15,
+      total_cost: parseFloat(p.totalCost || p.total_cost) || 0,
+      cost_per_portion: parseFloat(p.costPerPortion || p.cost_per_portion) || 0,
+      cost_snapshot_at_approval: p.costSnapshotAtApproval || p.cost_snapshot_at_approval || null,
+      instructions: p.instructions || '',
+      data: p
+    };
+  }
+
+  if (entityName === 'recipe_ingredients') {
+    return {
+      id: p.id || ('ri-' + Math.random().toString(36).substring(2, 9)),
+      recipe_id: p.recipeId || p.recipe_id || '',
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || '',
+      inventory_item_code: p.inventoryItemCode || p.inventory_item_code || '',
+      inventory_item_name: p.inventoryItemName || p.inventory_item_name || '',
+      item_type: p.itemType || p.item_type || 'RAW_MATERIAL',
+      quantity: parseFloat(p.quantity) || 0,
+      uom: p.uom || p.baseUom || p.base_uom || 'KG',
+      unit_cost_snapshot: parseFloat(p.unitCostSnapshot || p.unitCost || p.unit_cost_snapshot || p.unit_cost) || 0,
+      line_cost: parseFloat(p.lineCost || p.line_cost) || 0,
+      recipe_wastage_percent: parseFloat(p.recipeWastagePercent || p.recipe_wastage_percent || p.wastage_percent) || 0,
+      data: p
+    };
+  }
+
+  if (entityName === 'orders') {
+    return {
+      id: p.id || ('ord-' + Math.random().toString(36).substring(2, 9)),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || '',
+      order_number: p.orderNumber || p.order_number || '',
+      table_code: p.tableCode || p.table_code || '',
+      session_id: p.sessionId || p.session_id || null,
+      status: p.status || 'OPEN',
+      total_amount: parseFloat(p.totalAmount || p.total_amount) || 0,
       data: p
     };
   }

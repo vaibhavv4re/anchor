@@ -45,7 +45,11 @@ export class InventoryWorkspaceView {
       const gw = this._getDataGateway();
       if (gw && typeof gw.getCachedCollection === 'function') {
         const list = gw.getCachedCollection(name, tenantId);
-        if (Array.isArray(list)) return list;
+        if (Array.isArray(list) && list.length > 0) return list;
+      }
+      if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.offlineStore) {
+        const offList = window.__APP__.platform.offlineStore.getCollection(name, tenantId);
+        if (Array.isArray(offList) && offList.length > 0) return offList;
       }
     } catch (e) {
       console.warn(`[InventoryWorkspaceView] Error fetching collection "${name}":`, e);
@@ -72,7 +76,18 @@ export class InventoryWorkspaceView {
       const items = this._getCollection('inventory', tenantId);
       const suppliers = this._getCollection('suppliers', tenantId);
       const locations = this._getCollection('storage_locations', tenantId);
-      const requests = this._getCollection('inventory_requests', tenantId);
+
+      // Sourced from both inventory_requests and stock_requisitions keys for complete resilience
+      const reqs1 = this._getCollection('inventory_requests', tenantId);
+      const reqs2 = this._getCollection('stock_requisitions', tenantId);
+      const requestsMap = new Map();
+      [...reqs2, ...reqs1].forEach(r => {
+        if (r && (r.id || r.reqCode || r.requestNumber)) {
+          requestsMap.set(r.id || r.reqCode || r.requestNumber, r);
+        }
+      });
+      const requests = Array.from(requestsMap.values());
+
       const balances = this._getCollection('stock_balances', tenantId);
       const categories = this._getCollection('inventory_categories', tenantId);
       const uoms = this._getCollection('inventory_uoms', tenantId);
@@ -560,37 +575,135 @@ export class InventoryWorkspaceView {
       `;
     } else if (tabKey === 'inv-live-stock' || tabKey === 'inv-live-balances') {
       const activeBalances = balances.filter(b => (!tenantId || b.tenantId === tenantId || b.tenant_id === tenantId));
+      const allRecipes = this._getCollection('recipes', tenantId);
+      const allBatches = this._getCollection('production_batches', tenantId);
+
+      const normalizeLoc = (locCode) => {
+        if (!locCode) return 'LOC-805';
+        const c = String(locCode).toUpperCase().trim();
+        if (c === 'LOC-805' || c === 'LOC-MWH' || c === 'MAIN' || c === 'MAIN_WAREHOUSE' || c === 'LOC-MAIN') return 'LOC-805';
+        if (c === 'LOC-886' || c === 'LOC-KIT' || c === 'LOC-901' || c === 'LOC-KITCHEN' || c === 'KITCHEN_STORE') return 'LOC-886';
+        if (c === 'LOC-314' || c.includes('BAR')) return 'LOC-314';
+        return locCode;
+      };
+
+      const resolveItemDetails = (itemCode, rawRecord = {}) => {
+        const clean = String(itemCode || '').trim();
+
+        // 1. Check Master Inventory
+        const master = items.find(i => String(i.itemCode || i.item_code || '').trim() === clean);
+        if (master) {
+          return {
+            name: master.itemName || master.item_name || clean,
+            category: master.categoryCode || master.category_code || 'RAW_MATERIALS',
+            uom: master.baseUom || master.base_uom || 'KG',
+            unitCost: parseFloat(master.unitValuation || master.unit_valuation || master.lastPurchasePrice) || 0,
+            reorderLevel: parseFloat(master.reorderLevel || master.reorder_level) || 0
+          };
+        }
+
+        // 2. Check Recipes / Preparation BOMs
+        const recipe = allRecipes.find(r => 
+          String(r.recipeCode || r.bomCode || '').trim() === clean ||
+          String(r.inventoryItemCode || '').trim() === clean ||
+          String(r.id || '').trim() === clean
+        );
+        if (recipe) {
+          return {
+            name: recipe.inventoryItemName || recipe.recipeName || clean,
+            category: 'SEMI-FINISHED',
+            uom: recipe.yieldUom || recipe.standardYieldUom || 'KG',
+            unitCost: parseFloat(recipe.costPerPortion || recipe.totalCost) || 0,
+            reorderLevel: 0
+          };
+        }
+
+        // 3. Check Production Batches
+        const batch = allBatches.find(b =>
+          String(b.inventoryItemCode || '').trim() === clean ||
+          String(b.batchCode || '').trim() === clean ||
+          String(b.recipeCode || '').trim() === clean
+        );
+        if (batch) {
+          return {
+            name: batch.inventoryItemName || batch.recipeName || clean,
+            category: 'SEMI-FINISHED',
+            uom: batch.actualYieldUom || batch.targetUom || 'KG',
+            unitCost: 0,
+            reorderLevel: 0
+          };
+        }
+
+        // 4. Raw record embedded name / data blob
+        const embeddedName = rawRecord.itemName || rawRecord.item_name || rawRecord.inventoryItemName || rawRecord.data?.itemName || rawRecord.data?.inventoryItemName;
+        return {
+          name: embeddedName || clean,
+          category: clean.startsWith('PREP') || clean.startsWith('SF') ? 'SEMI-FINISHED' : 'GENERAL',
+          uom: rawRecord.baseUom || rawRecord.base_uom || rawRecord.uom || 'KG',
+          unitCost: parseFloat(rawRecord.unitCost || rawRecord.unit_cost) || 0,
+          reorderLevel: 0
+        };
+      };
 
       let stockLines = [];
       if (activeBalances.length > 0) {
-        stockLines = activeBalances.map(b => {
-          const itemCode = b.itemCode || b.item_code;
-          const locationCode = b.locationCode || b.location_code;
-          const item = items.find(i => (i.itemCode === itemCode || i.item_code === itemCode)) || {};
-          const loc = locations.find(l => (l.locationCode === locationCode || l.location_code === locationCode)) || {};
-          const qty = parseFloat(b.quantity) || 0;
-          const unitCost = parseFloat(b.unitCost || b.unit_cost || item.unitValuation || item.unit_valuation || 0);
-          const valuation = b.valuation !== undefined ? parseFloat(b.valuation) : (qty * unitCost);
-          const reorderLevel = parseFloat(item.reorderLevel || item.reorder_level || 0);
+        // Aggregate balances strictly by unique (locationCode, itemCode) to eliminate double entries
+        const balanceGroups = new Map();
+
+        activeBalances.forEach(b => {
+          const iCode = String(b.itemCode || b.item_code || '').trim();
+          const lCode = normalizeLoc(b.locationCode || b.location_code);
+          if (!iCode) return;
+          const key = `${lCode}::${iCode}`;
+
+          if (!balanceGroups.has(key)) {
+            balanceGroups.set(key, {
+              id: key,
+              itemCode: iCode,
+              locationCode: lCode,
+              quantity: 0,
+              unitCost: parseFloat(b.unitCost || b.unit_cost) || 0,
+              valuation: 0,
+              baseUom: b.baseUom || b.base_uom || b.uom || 'KG',
+              lastUpdatedAt: b.lastUpdatedAt || b.updated_at || b.updatedAt || '',
+              rawRecord: b
+            });
+          }
+
+          const group = balanceGroups.get(key);
+          const qty = parseFloat(b.quantity !== undefined ? b.quantity : b.currentStock) || 0;
+          group.quantity += qty;
+          const cost = parseFloat(b.unitCost || b.unit_cost) || group.unitCost;
+          if (cost > 0) group.unitCost = cost;
+          group.valuation += (b.valuation !== undefined ? parseFloat(b.valuation) : (qty * group.unitCost));
+        });
+
+        stockLines = Array.from(balanceGroups.values()).map(b => {
+          const loc = locations.find(l => normalizeLoc(l.locationCode || l.location_code) === b.locationCode) || {};
+          const itemMeta = resolveItemDetails(b.itemCode, b.rawRecord);
+          const qty = b.quantity;
+          const unitCost = b.unitCost || itemMeta.unitCost || 0;
+          const valuation = b.valuation > 0 ? b.valuation : (qty * unitCost);
+          const reorderLevel = itemMeta.reorderLevel;
 
           let status = 'IN_STOCK';
           if (qty <= 0) status = 'OUT_OF_STOCK';
           else if (reorderLevel > 0 && qty <= reorderLevel) status = 'LOW_STOCK';
 
           return {
-            id: b.id || `${itemCode}_${locationCode}`,
-            itemCode: itemCode,
-            itemName: item.itemName || item.item_name || itemCode,
-            categoryCode: item.categoryCode || item.category_code || 'GENERAL',
-            locationCode: locationCode,
-            locationName: loc.locationName || loc.location_name || locationCode,
+            id: b.id,
+            itemCode: b.itemCode,
+            itemName: itemMeta.name,
+            categoryCode: itemMeta.category,
+            locationCode: b.locationCode,
+            locationName: loc.locationName || loc.location_name || (b.locationCode === 'LOC-805' ? 'Main Warehouse' : (b.locationCode === 'LOC-886' ? 'Kitchen Store' : b.locationCode)),
             quantity: qty,
-            baseUom: b.baseUom || b.base_uom || item.baseUom || item.base_uom || 'KG',
+            baseUom: itemMeta.uom || b.baseUom || 'KG',
             unitCost: unitCost,
             valuation: valuation,
             reorderLevel: reorderLevel,
             status: status,
-            lastUpdatedAt: b.lastUpdatedAt || b.updated_at || ''
+            lastUpdatedAt: b.lastUpdatedAt
           };
         });
       } else {
@@ -803,6 +916,8 @@ export class InventoryWorkspaceView {
       if (statusSel) statusSel.addEventListener('change', updateLiveRows);
     } else if (tabKey === 'inv-transfers') {
       const activeTransfers = stockTransfers.filter(t => (!tenantId || t.tenantId === tenantId || t.tenant_id === tenantId));
+      const activeRequests = requests.filter(r => (!tenantId || r.tenantId === tenantId || r.tenant_id === tenantId));
+      const pendingTransferReqs = activeRequests.filter(r => r.status === 'PENDING' || r.status === 'PENDING_WAREHOUSE_FULFILLMENT');
       const totalTransferredLines = activeTransfers.reduce((sum, t) => sum + (Array.isArray(t.lines) ? t.lines.length : (t.itemCode ? 1 : 0)), 0);
       const totalValuation = activeTransfers.reduce((sum, t) => sum + (parseFloat(t.totalValuation || t.total_valuation || t.grandTotal) || 0), 0);
 
@@ -818,6 +933,89 @@ export class InventoryWorkspaceView {
             <button class="btn-primary nav-inv-btn" data-tab="inv-transfers-create" style="padding:10px 18px; font-weight:700; background:linear-gradient(135deg, var(--accent-primary), #6366f1); border-radius:6px; border:none; cursor:pointer; color:#fff;">
               🔄 + Post Stock Transfer Screen
             </button>
+          </div>
+
+          <!-- Kitchen Stock Shortage Requisitions Section -->
+          <div class="card" style="background:${pendingTransferReqs.length > 0 ? 'rgba(234, 179, 8, 0.08)' : 'var(--bg-surface-2)'}; border:1px solid ${pendingTransferReqs.length > 0 ? 'var(--status-warning)' : 'var(--border-subtle)'}; padding:18px; margin-bottom:20px; border-radius:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:${pendingTransferReqs.length > 0 ? '12px' : '0'};">
+              <div>
+                <h4 style="margin:0; color:${pendingTransferReqs.length > 0 ? 'var(--status-warning)' : 'var(--text-main)'}; font-size:1.1rem; font-weight:700;">
+                  📦 Kitchen Stock Shortage Requisitions (${pendingTransferReqs.length} Pending)
+                </h4>
+                <div style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">
+                  ${pendingTransferReqs.length > 0 ? 'Shortage requisitions raised by Kitchen Chef during production batch setup.' : 'No pending shortage requisitions from Kitchen right now. Requisitions raised by the Chef will appear here.'}
+                </div>
+              </div>
+              ${pendingTransferReqs.length > 0 ? `
+                <span class="badge badge-warning" style="font-weight:700; font-size:0.8rem;">⚠️ ${pendingTransferReqs.length} Action Required</span>
+              ` : `
+                <span class="badge badge-success" style="font-size:0.8rem;">✓ All Kitchen Requisitions Fulfilled</span>
+              `}
+            </div>
+            ${pendingTransferReqs.length > 0 ? `
+              <div class="table-responsive" style="margin-top:12px;">
+                <table class="data-table" style="width:100%; border-collapse:collapse; font-size:0.85rem; background:var(--bg-surface-1);">
+                  <thead>
+                    <tr style="border-bottom:1px solid var(--border-subtle); text-align:left; background:var(--bg-surface-2);">
+                      <th style="padding:8px 10px;">Req #</th>
+                      <th style="padding:8px 10px;">Department</th>
+                      <th style="padding:8px 10px;">For Production</th>
+                      <th style="padding:8px 10px;">Required Items & Live Warehouse Stock</th>
+                      <th style="padding:8px 10px;">Route</th>
+                      <th style="padding:8px 10px; text-align:right;">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${pendingTransferReqs.map(r => {
+                      const reqItems = r.items || [];
+                      let allItemsInStock = true;
+
+                      const itemRows = reqItems.map(i => {
+                        const iCode = String(i.itemCode || i.inventoryItemCode || '').trim();
+                        const reqQty = parseFloat(i.quantity || i.shortageQty || i.scaledBaseQty) || 0;
+                        const uom = i.uom || i.baseUom || 'KG';
+                        
+                        // Live check in Main Warehouse (LOC-805)
+                        const liveBals = this._getCollection('stock_balances', tenantId);
+                        const matchBals = liveBals.filter(b => {
+                          const bItem = String(b.itemCode || b.item_code || b.itemId || b.id || '').trim();
+                          const bLoc = String(b.locationCode || b.location_code || '').trim().toUpperCase();
+                          const isMwh = bLoc === 'LOC-805' || bLoc === 'LOC-MWH' || bLoc === 'MAIN' || bLoc === 'MAIN_WAREHOUSE';
+                          return (bItem === iCode || bItem.includes(iCode) || iCode.includes(bItem)) && isMwh;
+                        });
+                        const mwhAvail = matchBals.reduce((sum, b) => sum + (parseFloat(b.quantity !== undefined ? b.quantity : b.currentStock) || 0), 0);
+                        if (mwhAvail < reqQty) allItemsInStock = false;
+
+                        return `
+                          <div style="font-size:0.8rem; margin-bottom:3px;">
+                            • <strong>${i.itemName || i.inventoryItemName || iCode}</strong>: 
+                            <span style="font-weight:700;">${reqQty} ${uom}</span> 
+                            <span style="font-size:0.75rem; color:${mwhAvail >= reqQty ? 'var(--status-success)' : 'var(--status-danger)'}; font-weight:700; margin-left:4px;">
+                              (${mwhAvail > 0 ? `🟢 ${mwhAvail} ${uom} in Main Warehouse` : `🔴 0 ${uom} in Warehouse - GRN needed`})
+                            </span>
+                          </div>
+                        `;
+                      }).join('');
+
+                      return `
+                        <tr style="border-bottom:1px solid var(--border-subtle);">
+                          <td style="padding:8px 10px; font-weight:700; font-family:monospace; color:var(--accent-primary);">${r.requestNumber || r.reqCode || r.id}</td>
+                          <td style="padding:8px 10px;"><span class="badge badge-info">${r.department || r.requestedBy || 'Kitchen'}</span></td>
+                          <td style="padding:8px 10px; font-weight:600;">${r.inventoryItemName || r.recipeCode || 'Production'}</td>
+                          <td style="padding:8px 10px;">${itemRows}</td>
+                          <td style="padding:8px 10px;"><span class="badge badge-secondary">Main Warehouse (LOC-805) → Kitchen Store (LOC-886)</span></td>
+                          <td style="padding:8px 10px; text-align:right;">
+                            <button class="btn-primary btn-fulfill-req-trf" data-reqid="${r.id}" style="padding:6px 14px; font-size:0.8rem; font-weight:700; background:${allItemsInStock ? 'linear-gradient(135deg, var(--status-success), #059669)' : 'linear-gradient(135deg, var(--accent-primary), #6366f1)'}; border:none; color:#fff; border-radius:4px; cursor:pointer;">
+                              ${allItemsInStock ? '✓ 🔄 Transfer Stock to Kitchen' : '🔄 Transfer Stock Studio'}
+                            </button>
+                          </td>
+                        </tr>
+                      `;
+                    }).join('')}
+                  </tbody>
+                </table>
+              </div>
+            ` : ''}
           </div>
 
           <!-- KPI Summary Cards -->
@@ -895,6 +1093,14 @@ export class InventoryWorkspaceView {
           </div>
         </div>
       `;
+
+      mount.querySelectorAll('.btn-fulfill-req-trf').forEach(b => {
+        b.addEventListener('click', () => {
+          const reqId = b.dataset.reqid;
+          const reqObj = pendingTransferReqs.find(r => r.id === reqId);
+          this.renderStockTransferFormScreen(mount, tenantId, items, locations, balances, session, reqObj);
+        });
+      });
     } else if (tabKey === 'inv-adjustments') {
       const activeAdjustments = stockAdjustments.filter(a => (!tenantId || a.tenantId === tenantId || a.tenant_id === tenantId));
       const totalAdjustedLines = activeAdjustments.reduce((sum, a) => sum + (Array.isArray(a.lines) ? a.lines.length : (a.itemCode ? 1 : 0)), 0);
@@ -1710,6 +1916,130 @@ export class InventoryWorkspaceView {
           </div>
         </div>
       `;
+    } else if (tabKey === 'inv-requests') {
+      const activeReqs = requests.filter(r => (!tenantId || r.tenantId === tenantId || r.tenant_id === tenantId));
+      const pendingReqs = activeReqs.filter(r => r.status === 'PENDING' || r.status === 'PENDING_WAREHOUSE_FULFILLMENT');
+      const fulfilledReqs = activeReqs.filter(r => r.status === 'TRANSFERRED' || r.status === 'PO_FULFILLED');
+
+      mount.innerHTML = `
+        <div class="card animate-fade-in" style="background:var(--bg-surface-1); padding:24px; border-radius:8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
+            <div>
+              <h3 style="margin:0; color:var(--accent-primary); font-size:1.4rem;">📋 Stock Requisitions & Transfer Requests (${activeReqs.length})</h3>
+              <p style="color:var(--text-muted); font-size:0.85rem; margin-top:2px;">
+                Internal material requisitions submitted by Kitchen and Department staff for Warehouse stock fulfillment.
+              </p>
+            </div>
+            <button class="btn-primary nav-inv-btn" data-tab="inv-transfers-create" style="padding:10px 18px; font-weight:700; background:linear-gradient(135deg, var(--accent-primary), #6366f1); border-radius:6px; border:none; cursor:pointer; color:#fff;">
+              🔄 + New Stock Transfer Screen
+            </button>
+          </div>
+
+          <!-- KPI Summary Cards -->
+          <div class="grid grid-cols-3 gap-md" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-bottom:20px;">
+            <div style="background:var(--bg-surface-2); padding:14px; border-radius:6px; text-align:center;">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">TOTAL REQUISITIONS</div>
+              <div style="font-size:1.4rem; font-weight:700; color:var(--accent-primary); margin-top:2px;">${activeReqs.length}</div>
+            </div>
+            <div style="background:var(--bg-surface-2); padding:14px; border-radius:6px; text-align:center;">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">PENDING FULFILLMENT</div>
+              <div style="font-size:1.4rem; font-weight:700; color:${pendingReqs.length > 0 ? 'var(--status-warning)' : 'var(--status-success)'}; margin-top:2px;">${pendingReqs.length}</div>
+            </div>
+            <div style="background:var(--bg-surface-2); padding:14px; border-radius:6px; text-align:center;">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">TRANSFERRED / FULFILLED</div>
+              <div style="font-size:1.4rem; font-weight:700; color:var(--status-success); margin-top:2px;">${fulfilledReqs.length}</div>
+            </div>
+          </div>
+
+          <!-- Requisitions Table -->
+          <div class="table-responsive">
+            <table class="data-table" style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+              <thead>
+                <tr style="border-bottom:1px solid var(--border-subtle); text-align:left; background:var(--bg-surface-2);">
+                  <th style="padding:10px;">Req #</th>
+                  <th style="padding:10px;">Department</th>
+                  <th style="padding:10px;">Purpose / Dish</th>
+                  <th style="padding:10px;">Required Line Items</th>
+                  <th style="padding:10px;">Transfer Route</th>
+                  <th style="padding:10px;">Status</th>
+                  <th style="padding:10px; text-align:right;">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${activeReqs.length ? activeReqs.map(r => {
+                  const reqNum = r.requestNumber || r.request_number || r.reqCode || r.id;
+                  const isPending = r.status === 'PENDING' || r.status === 'PENDING_WAREHOUSE_FULFILLMENT';
+
+                  const itemRows = (r.items || []).map(i => {
+                    const iCode = String(i.itemCode || i.inventoryItemCode || '').trim();
+                    const reqQty = parseFloat(i.quantity || i.shortageQty || i.scaledBaseQty) || 0;
+                    const uom = i.uom || i.baseUom || 'KG';
+
+                    const liveBals = this._getCollection('stock_balances', tenantId);
+                    const matchBals = liveBals.filter(b => {
+                      const bItem = String(b.itemCode || b.item_code || b.itemId || b.id || '').trim();
+                      const bLoc = String(b.locationCode || b.location_code || '').trim().toUpperCase();
+                      const isMwh = bLoc === 'LOC-805' || bLoc === 'LOC-MWH' || bLoc === 'MAIN' || bLoc === 'MAIN_WAREHOUSE';
+                      return (bItem === iCode || bItem.includes(iCode) || iCode.includes(bItem)) && isMwh;
+                    });
+                    const mwhAvail = matchBals.reduce((sum, b) => sum + (parseFloat(b.quantity !== undefined ? b.quantity : b.currentStock) || 0), 0);
+
+                    return `
+                      <div style="font-size:0.8rem; margin-bottom:3px;">
+                        • <strong>${i.itemName || i.inventoryItemName || iCode}</strong>: 
+                        <span style="font-weight:700;">${reqQty} ${uom}</span>
+                        <span style="font-size:0.75rem; color:${mwhAvail >= reqQty ? 'var(--status-success)' : 'var(--status-danger)'}; font-weight:700; margin-left:4px;">
+                          (${mwhAvail > 0 ? `🟢 ${mwhAvail} ${uom} in Main Warehouse` : `🔴 0 ${uom} in Warehouse`})
+                        </span>
+                      </div>
+                    `;
+                  }).join('');
+
+                  return `
+                    <tr style="border-bottom:1px solid var(--border-subtle);">
+                      <td style="padding:10px; font-weight:700; font-family:monospace; color:var(--accent-primary);">${reqNum}</td>
+                      <td style="padding:10px;"><span class="badge badge-info">${r.department || r.requestedBy || 'Kitchen'}</span></td>
+                      <td style="padding:10px; font-weight:600;">${r.inventoryItemName || r.recipeCode || 'Production'}</td>
+                      <td style="padding:10px;">${itemRows}</td>
+                      <td style="padding:10px;"><span class="badge badge-secondary">Main Warehouse (LOC-805) → Kitchen Store (LOC-886)</span></td>
+                      <td style="padding:10px;">
+                        <span class="badge ${isPending ? 'badge-warning' : 'badge-success'}">
+                          ${isPending ? '⏳ PENDING TRANSFER' : '✓ TRANSFERRED'}
+                        </span>
+                      </td>
+                      <td style="padding:10px; text-align:right;">
+                        ${isPending ? `
+                          <button class="btn-primary btn-fulfill-req-trf" data-reqid="${r.id}" style="padding:6px 14px; font-size:0.8rem; font-weight:700; background:linear-gradient(135deg, var(--accent-primary), #6366f1); border:none; color:#fff; border-radius:4px; cursor:pointer;">
+                            🔄 Transfer Stock
+                          </button>
+                        ` : `
+                          <span style="font-size:0.75rem; color:var(--text-muted);">Fulfilled</span>
+                        `}
+                      </td>
+                    </tr>
+                  `;
+                }).join('') : `
+                  <tr>
+                    <td colspan="7" style="padding:24px; text-align:center; color:var(--text-muted);">
+                      No material requisitions found. Requisitions generated from Kitchen production shortages will appear here.
+                    </td>
+                  </tr>
+                `}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+      mount.querySelectorAll('.btn-fulfill-req-trf').forEach(btn => {
+        btn.addEventListener('click', () => {
+          const reqId = btn.dataset.reqid;
+          const reqObj = activeReqs.find(r => r.id === reqId);
+          if (reqObj) {
+            this.renderStockTransferFormScreen(mount, tenantId, items, locations, balances, session, reqObj);
+          }
+        });
+      });
     }
   }
 
@@ -1940,24 +2270,47 @@ export class InventoryWorkspaceView {
     });
   }
 
-  // --- 1. FULL-SCREEN STOCK TRANSFER WORKSPACE ---
-
-  renderStockTransferFormScreen(mount, tenantId, items, locations, balances, session) {
+  renderStockTransferFormScreen(mount, tenantId, items, locations, balances, session, reqObj = null) {
     this.trfDraftLines = [];
 
+    const normalizeLoc = (locCode) => {
+      if (!locCode) return 'LOC-805';
+      const c = String(locCode).toUpperCase().trim();
+      if (c === 'LOC-805' || c === 'LOC-MWH' || c === 'MAIN' || c === 'MAIN_WAREHOUSE' || c === 'LOC-MAIN') return 'LOC-805';
+      if (c === 'LOC-886' || c === 'LOC-KIT' || c === 'LOC-901' || c === 'LOC-KITCHEN' || c === 'KITCHEN_STORE') return 'LOC-886';
+      if (c === 'LOC-314' || c.includes('BAR')) return 'LOC-314';
+      return locCode;
+    };
+
     const getStockAtLoc = (itemCode, locCode) => {
-      const bal = balances.find(b => 
-        (b.itemCode === itemCode || b.item_code === itemCode) && 
-        (b.locationCode === locCode || b.location_code === locCode) &&
-        (!tenantId || b.tenantId === tenantId || b.tenant_id === tenantId)
-      );
-      if (bal) return parseFloat(bal.quantity) || 0;
-      if (locCode === 'LOC-805' || locCode === 'LOC-901' || locCode === 'MAIN') {
-        const itemObj = items.find(i => (i.itemCode === itemCode || i.item_code === itemCode));
-        return parseFloat(itemObj?.openingStock || itemObj?.opening_stock || 0);
+      const targetLoc = normalizeLoc(locCode);
+      const cleanItem = String(itemCode || '').trim();
+
+      // Dynamic fetch from live cached collections to ensure immediate GRN reflection
+      const liveBals = this._getCollection('stock_balances', tenantId);
+      const balRecords = liveBals.filter(b => {
+        const bItem = String(b.itemCode || b.item_code || b.itemId || b.id || '').trim();
+        const bLoc = normalizeLoc(b.locationCode || b.location_code);
+        const matchItem = bItem === cleanItem || (cleanItem.includes(bItem) || bItem.includes(cleanItem));
+        const matchTenant = (!tenantId || b.tenantId === tenantId || b.tenant_id === tenantId);
+        return matchItem && bLoc === targetLoc && matchTenant;
+      });
+
+      if (balRecords.length > 0) {
+        return balRecords.reduce((sum, b) => sum + (parseFloat(b.quantity !== undefined ? b.quantity : b.currentStock) || 0), 0);
+      }
+
+      // Fallback to opening stock for Main Warehouse if no balance record exists
+      if (targetLoc === 'LOC-805') {
+        const itemObj = items.find(i => String(i.itemCode || i.item_code || '').trim() === cleanItem);
+        return parseFloat(itemObj?.openingStock || itemObj?.opening_stock || itemObj?.currentStock || 0) || 0;
       }
       return 0;
     };
+
+    // Determine default source and destination locations based on reqObj if provided
+    const defaultFromLoc = reqObj ? normalizeLoc(reqObj.sourceLocation || reqObj.source_location || 'LOC-805') : 'LOC-805';
+    const defaultToLoc = reqObj ? normalizeLoc(reqObj.destinationLocation || reqObj.destination_location || 'LOC-886') : 'LOC-886';
 
     mount.innerHTML = `
       <div class="card animate-fade-in" style="background:var(--bg-surface-1); padding:24px; border-radius:8px;">
@@ -1969,9 +2322,11 @@ export class InventoryWorkspaceView {
           <div style="font-weight:700; color:var(--text-muted); font-size:0.85rem;">🔄 Inter-Store Stock Transfer Form Screen</div>
         </div>
 
-        <h3 style="margin-top:0; color:var(--accent-primary); font-size:1.5rem;">🔄 Inter-Store Stock Transfer Studio</h3>
+        <h3 style="margin-top:0; color:var(--accent-primary); font-size:1.5rem;">
+          🔄 Inter-Store Stock Transfer Studio ${reqObj ? `<span class="badge badge-warning" style="font-size:0.8rem; margin-left:8px;">Fulfilling ${reqObj.requestNumber || reqObj.reqCode || reqObj.id}</span>` : ''}
+        </h3>
         <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:20px;">
-          Transfer inventory stock between warehouses with live source stock availability validation and dual-ended before/after stock level ledgering.
+          ${reqObj ? `Fulfilling requisition for <strong>${reqObj.inventoryItemName || 'Kitchen Production'}</strong> (${reqObj.department || 'Kitchen'}).` : 'Transfer inventory stock between warehouses with live source stock availability validation and dual-ended before/after stock level ledgering.'}
         </p>
 
         <div style="display:flex; flex-direction:column; gap:16px;">
@@ -1979,13 +2334,21 @@ export class InventoryWorkspaceView {
             <div>
               <label style="display:block; font-size:0.85rem; margin-bottom:6px; font-weight:600;">From Source Location *</label>
               <select id="trf-from-loc" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-2);">
-                ${locations.map(l => `<option value="${l.locationCode || l.location_code}">${l.locationName || l.location_name} (${l.locationCode || l.location_code})</option>`).join('')}
+                ${locations.map(l => {
+                  const locCode = l.locationCode || l.location_code;
+                  const isSel = normalizeLoc(locCode) === defaultFromLoc;
+                  return `<option value="${locCode}" ${isSel ? 'selected' : ''}>${l.locationName || l.location_name} (${locCode})</option>`;
+                }).join('')}
               </select>
             </div>
             <div>
               <label style="display:block; font-size:0.85rem; margin-bottom:6px; font-weight:600;">To Destination Location *</label>
               <select id="trf-to-loc" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-2);">
-                ${locations.map((l, idx) => `<option value="${l.locationCode || l.location_code}" ${idx === 1 ? 'selected' : ''}>${l.locationName || l.location_name} (${l.locationCode || l.location_code})</option>`).join('')}
+                ${locations.map((l, idx) => {
+                  const locCode = l.locationCode || l.location_code;
+                  const isSel = normalizeLoc(locCode) === defaultToLoc;
+                  return `<option value="${locCode}" ${isSel ? 'selected' : ''}>${l.locationName || l.location_name} (${locCode})</option>`;
+                }).join('')}
               </select>
             </div>
           </div>
@@ -2058,13 +2421,6 @@ export class InventoryWorkspaceView {
       }).join('');
     };
 
-    updateItemOptions();
-    mount.querySelector('#trf-from-loc').addEventListener('change', () => {
-      this.trfDraftLines = [];
-      updateItemOptions();
-      renderDraftLines();
-    });
-
     const renderDraftLines = () => {
       const tbody = mount.querySelector('#trf-lines-tbody');
       if (!tbody) return;
@@ -2082,7 +2438,7 @@ export class InventoryWorkspaceView {
           <td style="padding:10px; font-weight:700; color:var(--status-info);">${l.quantity} ${l.baseUom}</td>
           <td style="padding:10px; font-size:0.82rem;">
             <span style="color:var(--text-muted); text-decoration:line-through;">${l.fromBeforeQty}</span>
-            ➔ <strong style="color:${l.fromAfterQty === 0 ? 'var(--status-danger)' : 'var(--accent-primary)'};">${l.fromAfterQty} ${l.baseUom}</strong>
+            ➔ <strong style="color:${l.fromAfterQty === 0 ? 'var(--status-danger)' : 'var(--status-success)'};">${l.fromAfterQty} ${l.baseUom}</strong>
           </td>
           <td style="padding:10px; font-size:0.82rem;">
             <span style="color:var(--text-muted); text-decoration:line-through;">${l.toBeforeQty}</span>
@@ -2102,6 +2458,61 @@ export class InventoryWorkspaceView {
         });
       });
     };
+
+    const refreshDraftLinesStock = () => {
+      const fromLoc = mount.querySelector('#trf-from-loc')?.value || defaultFromLoc;
+      const toLoc = mount.querySelector('#trf-to-loc')?.value || defaultToLoc;
+      this.trfDraftLines.forEach(line => {
+        const availFrom = getStockAtLoc(line.itemCode, fromLoc);
+        const availTo = getStockAtLoc(line.itemCode, toLoc);
+        line.fromBeforeQty = availFrom;
+        line.fromAfterQty = Math.max(0, availFrom - line.quantity);
+        line.toBeforeQty = availTo;
+        line.toAfterQty = availTo + line.quantity;
+      });
+      renderDraftLines();
+    };
+
+    updateItemOptions();
+
+    mount.querySelector('#trf-from-loc').addEventListener('change', () => {
+      updateItemOptions();
+      refreshDraftLinesStock();
+    });
+
+    mount.querySelector('#trf-to-loc').addEventListener('change', () => {
+      refreshDraftLinesStock();
+    });
+
+    // If fulfilling a requisition, pre-populate the lines from reqObj.items
+    if (reqObj && Array.isArray(reqObj.items)) {
+      const fromLoc = mount.querySelector('#trf-from-loc').value;
+      const toLoc = mount.querySelector('#trf-to-loc').value;
+
+      reqObj.items.forEach(item => {
+        const itemCode = item.inventoryItemCode || item.itemCode;
+        const masterItem = items.find(i => (i.itemCode === itemCode || i.item_code === itemCode)) || {};
+        const itemName = item.inventoryItemName || item.itemName || masterItem.itemName || itemCode;
+        const baseUom = item.baseUom || item.uom || masterItem.baseUom || 'KG';
+        const qty = parseFloat(item.shortageQty || item.quantity || item.scaledBaseQty) || 1;
+
+        const availableAtSource = getStockAtLoc(itemCode, fromLoc);
+        const availableAtDest = getStockAtLoc(itemCode, toLoc);
+
+        this.trfDraftLines.push({
+          itemCode,
+          itemName,
+          quantity: qty,
+          baseUom,
+          fromBeforeQty: availableAtSource,
+          fromAfterQty: Math.max(0, availableAtSource - qty),
+          toBeforeQty: availableAtDest,
+          toAfterQty: availableAtDest + qty
+        });
+      });
+
+      renderDraftLines();
+    }
 
     mount.querySelector('#btn-add-trf-line').addEventListener('click', () => {
       const fromLoc = mount.querySelector('#trf-from-loc').value;
@@ -2205,8 +2616,14 @@ export class InventoryWorkspaceView {
       if (gw) {
         await gw.create('stock_transfers', newTransfer);
 
+        const liveBals = this._getCollection('stock_balances', tenantId);
+
         for (const line of this.trfDraftLines) {
-          const fromBal = balances.find(b => (b.itemCode === line.itemCode || b.item_code === line.itemCode) && (b.locationCode === fromLocationCode || b.location_code === fromLocationCode));
+          const fromBal = liveBals.find(b => {
+            const bItem = String(b.itemCode || b.item_code || '').trim();
+            const bLoc = normalizeLoc(b.locationCode || b.location_code);
+            return (bItem === line.itemCode || bItem.includes(line.itemCode) || line.itemCode.includes(bItem)) && bLoc === normalizeLoc(fromLocationCode);
+          });
           if (fromBal) {
             const currentFromQty = parseFloat(fromBal.quantity) || 0;
             const newFromQty = Math.max(0, currentFromQty - line.quantity);
@@ -2219,7 +2636,11 @@ export class InventoryWorkspaceView {
             });
           }
 
-          const toBal = balances.find(b => (b.itemCode === line.itemCode || b.item_code === line.itemCode) && (b.locationCode === toLocationCode || b.location_code === toLocationCode));
+          const toBal = liveBals.find(b => {
+            const bItem = String(b.itemCode || b.item_code || '').trim();
+            const bLoc = normalizeLoc(b.locationCode || b.location_code);
+            return (bItem === line.itemCode || bItem.includes(line.itemCode) || line.itemCode.includes(bItem)) && bLoc === normalizeLoc(toLocationCode);
+          });
           if (toBal) {
             const currentToQty = parseFloat(toBal.quantity) || 0;
             const newToQty = currentToQty + line.quantity;
@@ -2237,12 +2658,12 @@ export class InventoryWorkspaceView {
               tenant_id: tenantId,
               itemCode: line.itemCode,
               item_code: line.itemCode,
-              locationCode: toLocationCode,
-              location_code: toLocationCode,
+              locationCode: normalizeLoc(toLocationCode),
+              location_code: normalizeLoc(toLocationCode),
               quantity: line.quantity,
-              unitCost: 100,
-              unit_cost: 100,
-              valuation: line.quantity * 100,
+              unitCost: 40,
+              unit_cost: 40,
+              valuation: line.quantity * 40,
               lastUpdatedAt: new Date().toISOString()
             });
           }
@@ -2250,6 +2671,17 @@ export class InventoryWorkspaceView {
           stockBreakdownText += `• ${line.itemName} (${line.quantity} ${line.baseUom})\n` +
             `   Source (${fromLocationCode}): ${line.fromBeforeQty} ➔ ${line.fromAfterQty} ${line.baseUom}\n` +
             `   Target (${toLocationCode}): ${line.toBeforeQty} ➔ ${line.toAfterQty} ${line.baseUom}\n`;
+        }
+
+        // If this transfer was fulfilling a requisition, mark the requisition as TRANSFERRED
+        if (reqObj) {
+          await gw.update('inventory_requests', reqObj.id, {
+            ...reqObj,
+            status: 'TRANSFERRED',
+            fulfilledByTransferNo: transferNo,
+            updatedAt: new Date().toISOString()
+          }, session);
+          stockBreakdownText += `\n✓ Requisition "${reqObj.requestNumber || reqObj.reqCode || reqObj.id}" marked as FULFILLED (TRANSFERRED).`;
         }
       }
 

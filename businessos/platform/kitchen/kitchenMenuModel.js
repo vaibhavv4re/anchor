@@ -1,14 +1,45 @@
 /**
  * BusinessOS Platform - Kitchen & Menu Domain Model (K-02 Menu)
- * Manages kitchen_menu_items collection in offlineStore.
+ * Manages kitchen_menu_items collection via DataGateway (Supabase + offlineStore cache).
  * Implements CRUD, Excel/CSV bulk parsing & validation, availability line controls,
  * controlled lifecycle archiving, and recipe linkage pointer tracking.
+ *
+ * ARCHITECTURE: Reads from offlineStore (populated by DataGateway bootstrap hydration).
+ * Writes go through DataGateway → Supabase + local cache synchronously.
+ * actualMenuData.js (demo seed) is kept as a utility but MUST NOT be called in the live path.
  */
 
 import { offlineStore } from '../offline_store/offlineStore.js';
 import { ACTUAL_ANCHOR_MENU } from '../../../restaurantos/frontend/capabilities/kitchen/data/actualMenuData.js';
 
 class KitchenMenuModel {
+  /**
+   * Lazily resolve DataGateway from global app graph.
+   * Returns null if not yet initialized (safe to call at any time).
+   * @returns {DataGateway|null}
+   */
+  _getDataGateway() {
+    if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform) {
+      return window.__APP__.platform.dataGateway || null;
+    }
+    return null;
+  }
+
+  /**
+   * Fire-and-forget cloud sync for a single menu item.
+   * Writes to Supabase via DataGateway without blocking the synchronous model API.
+   * @param {'create'|'update'} op
+   * @param {Object} record
+   */
+  _syncToCloud(op, record) {
+    const dg = this._getDataGateway();
+    if (!dg) return;
+    const promise = op === 'create'
+      ? dg.create('kitchen_menu_items', record)
+      : dg.update('kitchen_menu_items', record.id, record);
+    promise.catch(e => console.warn('[kitchenMenuModel] Cloud sync error:', e.message));
+  }
+
   /**
    * Retrieve all menu items for a tenant, applying optional filters.
    * @param {string|null} tenantId 
@@ -100,8 +131,10 @@ class KitchenMenuModel {
 
     if (existingIndex >= 0) {
       list[existingIndex] = cleanedItem;
+      this._syncToCloud('update', cleanedItem);
     } else {
       list.push(cleanedItem);
+      this._syncToCloud('create', cleanedItem);
     }
 
     offlineStore.setCollection('kitchen_menu_items', list);
@@ -122,6 +155,7 @@ class KitchenMenuModel {
     item.availabilityStatus = newStatus;
     item.updatedAt = new Date().toISOString();
     offlineStore.setCollection('kitchen_menu_items', list);
+    this._syncToCloud('update', item);
     return item;
   }
 
@@ -138,6 +172,7 @@ class KitchenMenuModel {
     item.lifecycleStatus = 'ARCHIVED';
     item.updatedAt = new Date().toISOString();
     offlineStore.setCollection('kitchen_menu_items', list);
+    this._syncToCloud('update', item);
     return item;
   }
 

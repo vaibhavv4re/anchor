@@ -1,12 +1,18 @@
 /**
- * BusinessOS / RestaurantOS - Kitchen Domain (K-04 Production Platform Model)
- * Manages Preparation BOMs, Batch Executions, Scaling, Yield Variance Tracking,
- * Stock Ledger Transactions, and Main Warehouse Stock Requisitions.
+ * BusinessOS / RestaurantOS - Kitchen Domain (K-07 Production Platform Model)
+ *
+ * Canonical Production Engine Implementation:
+ * 1. Single Source of Truth: Consumes APPROVED Recipe BOMs from recipes collection.
+ * 2. Location-Aware Consumption: Ingredients checked and deducted STRICTLY from Kitchen Store (LOC-KIT).
+ * 3. Shortage Guards: Prevents batch start if LOC-KIT is short; generates warehouse requisitions without auto-transferring.
+ * 4. Production Output: Semi-finished / prepared output yield added to LOC-KIT stock.
+ * 5. DataGateway Integration: All batch states, stock balances, and stock ledger entries persist through DataGateway.
  */
 
 import { offlineStore } from '../offline_store/offlineStore.js';
+import { recipeModel } from './recipeModel.js';
 
-function convertRecipeUomToNormalized(qty, recipeUom, baseUom) {
+export function convertRecipeUomToNormalized(qty, recipeUom, baseUom) {
   const q = parseFloat(qty) || 0;
   const rUom = String(recipeUom || 'G').trim().toUpperCase();
   const bUom = String(baseUom || 'KG').trim().toUpperCase();
@@ -16,17 +22,92 @@ function convertRecipeUomToNormalized(qty, recipeUom, baseUom) {
     if (rUom === 'MG' || rUom === 'MILLIGRAM') return q / 1000000;
     if (rUom === 'KG' || rUom === 'KILOGRAM') return q;
   }
-  if (bUom === 'LTR' || bUom === 'L' || bUom === 'LITRE') {
-    if (rUom === 'ML' || rUom === 'MILLILITRE') return q / 1000;
+  if (bUom === 'G' || bUom === 'GM') {
+    if (rUom === 'KG') return q * 1000;
+    if (rUom === 'MG') return q / 1000;
+    if (rUom === 'G' || rUom === 'GM') return q;
+  }
+  if (bUom === 'LTR' || bUom === 'L' || bUom === 'LITRE' || bUom === 'LITER') {
+    if (rUom === 'ML' || rUom === 'MILLILITRE' || rUom === 'MILLILITER') return q / 1000;
     if (rUom === 'LTR' || rUom === 'L') return q;
+  }
+  if (bUom === 'ML') {
+    if (rUom === 'LTR' || rUom === 'L') return q * 1000;
+    if (rUom === 'ML') return q;
   }
   return q;
 }
 
 export class ProductionModel {
-  // --- PREPARATION BOMS ---
+  /**
+   * Lazily resolve DataGateway from global app graph.
+   * @returns {DataGateway|null}
+   */
+  _getDataGateway() {
+    if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform) {
+      return window.__APP__.platform.dataGateway || null;
+    }
+    return null;
+  }
+
+  // --- 1. APPROVED RECIPES (BOM SOURCE OF TRUTH) ---
+
+  /**
+   * Retrieve all APPROVED recipes available for production.
+   * Each recipe defines standard yield and ingredient requirements referencing Master Inventory.
+   * @param {string|null} tenantId
+   * @returns {Array<Object>}
+   */
+  getProductionRecipes(tenantId = null) {
+    const recipes = recipeModel.getAll(tenantId, { status: 'APPROVED' });
+    return recipes;
+  }
+
+  /**
+   * Get single recipe by ID
+   * @param {string} recipeId
+   * @param {string|null} tenantId
+   * @returns {Object|null}
+   */
+  getRecipeById(recipeId, tenantId = null) {
+    return recipeModel.getById(recipeId);
+  }
+
+  /**
+   * Compatibility alias for legacy UI callers (maps prep BOM to recipes).
+   * Shows all recipes (DRAFT and APPROVED) for production items.
+   */
   getPrepBoms(tenantId = null) {
-    return offlineStore.getCollection('prep_boms', tenantId) || [];
+    const allRecipes = recipeModel.getAll(tenantId);
+    const uniqueMap = new Map();
+    allRecipes.forEach(r => {
+      const code = String(r.recipeCode || r.bomCode || r.id || '').trim();
+      if (!uniqueMap.has(code)) {
+        uniqueMap.set(code, r);
+      }
+    });
+
+    return Array.from(uniqueMap.values()).map(r => ({
+      id: r.id,
+      bomCode: r.recipeCode || r.bomCode,
+      inventoryItemCode: r.inventoryItemCode || r.menuItemCode || r.recipeCode,
+      inventoryItemName: r.inventoryItemName || r.recipeName,
+      standardYieldQuantity: r.yieldQuantity || 1,
+      standardYieldUom: r.yieldUom || 'KG',
+      version: r.version || 'v1.0',
+      status: r.status,
+      ingredients: (r.ingredients || []).map(i => ({
+        inventoryItemCode: i.inventoryItemCode,
+        inventoryItemName: i.inventoryItemName,
+        recipeQty: i.recipeQty !== undefined ? i.recipeQty : (i.quantity || 0),
+        recipeUom: i.recipeUom || i.uom || 'G',
+        baseUom: i.baseUom || i.uom || 'KG',
+        unitCost: i.unitCost || 0,
+        recipeWastagePercent: i.recipeWastagePercent || 0
+      })),
+      tenantId: r.tenantId,
+      rawRecipe: r
+    }));
   }
 
   getPrepBomById(id, tenantId = null) {
@@ -34,451 +115,500 @@ export class ProductionModel {
     return list.find(b => b.id === id) || null;
   }
 
-  getPrepBomByItemCode(itemCode, tenantId = null) {
-    const list = this.getPrepBoms(tenantId);
-    return list.find(b => String(b.inventoryItemCode || b.inventory_item_code).toUpperCase() === String(itemCode).toUpperCase()) || null;
-  }
-
+  /**
+   * Saves a Preparation BOM as a canonical recipe record referencing Master Inventory.
+   * Directly writes to recipeModel -> Supabase recipes & recipe_ingredients.
+   * @param {Object} data
+   * @param {string|null} tenantId
+   * @returns {Object}
+   */
   savePrepBom(data, tenantId = null) {
-    const list = this.getPrepBoms(tenantId);
-    const now = new Date().toISOString();
-    const id = data.id || `pbom-${Math.random().toString(36).substring(2, 9)}`;
+    const targetTenantId = data.tenantId || tenantId || 'tenant_h0qc7wf';
+    const masterInv = offlineStore.getCollection('inventory', targetTenantId) || [];
+    const invItem = masterInv.find(i => String(i.itemCode || i.item_code || i.id || '') === String(data.inventoryItemCode));
 
-    const bomObj = {
-      id,
-      bomCode: data.bomCode || `PREP-${data.inventoryItemCode || 'SF0001'}`,
+    const recipeData = {
+      id: data.id || `rcp-${Math.random().toString(36).substring(2, 9)}`,
+      recipeCode: data.bomCode || `RCP-${data.inventoryItemCode || Math.floor(1000 + Math.random() * 9000)}`,
+      recipeName: data.inventoryItemName || (invItem ? invItem.itemName : 'Preparation Recipe'),
       inventoryItemCode: data.inventoryItemCode,
-      inventoryItemName: data.inventoryItemName || data.inventoryItemCode,
-      standardYieldQuantity: parseFloat(data.standardYieldQuantity) || 1,
-      standardYieldUom: data.standardYieldUom || 'KG',
+      inventoryItemName: data.inventoryItemName || (invItem ? invItem.itemName : data.inventoryItemCode),
+      yieldQuantity: parseFloat(data.standardYieldQuantity) || 1,
+      yieldUom: data.standardYieldUom || 'KG',
+      portionCount: parseInt(data.standardYieldQuantity) || 1,
       version: data.version || 'v1.0',
-      status: data.status || 'APPROVED', // DRAFT | APPROVED
-      ingredients: data.ingredients || [],
-      tenantId: data.tenantId || tenantId,
-      createdAt: data.createdAt || now,
-      updatedAt: now
+      status: data.status || 'APPROVED',
+      tenantId: targetTenantId,
+      ingredients: (data.ingredients || []).map(ing => {
+        const ingCode = String(ing.inventoryItemCode || ing.itemCode || '');
+        const ingMaster = masterInv.find(i => String(i.itemCode || i.item_code || i.id || '') === ingCode);
+        return {
+          id: ing.id || `ri-${Math.random().toString(36).substring(2, 9)}`,
+          inventoryItemCode: ingCode,
+          inventoryItemName: ing.inventoryItemName || (ingMaster ? (ingMaster.itemName || ingMaster.item_name) : ingCode),
+          itemType: ingMaster ? (ingMaster.itemType || ingMaster.item_type || 'RAW_MATERIAL') : 'RAW_MATERIAL',
+          quantity: convertRecipeUomToNormalized(ing.recipeQty || ing.quantity || 0, ing.recipeUom || ing.uom || 'G', ing.baseUom || (ingMaster ? (ingMaster.baseUom || ingMaster.base_uom) : 'KG') || 'KG'),
+          recipeQty: parseFloat(ing.recipeQty || ing.quantity) || 0,
+          recipeUom: ing.recipeUom || ing.uom || 'G',
+          baseUom: ing.baseUom || (ingMaster ? (ingMaster.baseUom || ingMaster.base_uom) : 'KG') || 'KG',
+          uom: ing.baseUom || (ingMaster ? (ingMaster.baseUom || ingMaster.base_uom) : 'KG') || 'KG',
+          unitCost: ingMaster ? (parseFloat(ingMaster.unitValuation || ingMaster.unit_valuation || ingMaster.lastPurchasePrice) || 0) : (parseFloat(ing.unitCost) || 0),
+          recipeWastagePercent: parseFloat(ing.recipeWastagePercent) || 0
+        };
+      })
     };
 
-    const existingIdx = list.findIndex(b => b.id === id);
-    if (existingIdx >= 0) {
-      list[existingIdx] = bomObj;
+    let savedRecipe;
+    const existing = recipeModel.getById(recipeData.id);
+    if (existing) {
+      savedRecipe = recipeModel.updateRecipe(recipeData.id, recipeData);
     } else {
-      list.unshift(bomObj);
+      savedRecipe = recipeModel.createRecipe(recipeData);
     }
 
-    offlineStore.setCollection('prep_boms', list);
-    return bomObj;
+    if (data.status === 'APPROVED') {
+      savedRecipe = recipeModel.approveRecipe(savedRecipe.id);
+    }
+
+    return {
+      id: savedRecipe.id,
+      bomCode: savedRecipe.recipeCode,
+      inventoryItemCode: savedRecipe.inventoryItemCode,
+      inventoryItemName: savedRecipe.inventoryItemName || savedRecipe.recipeName,
+      standardYieldQuantity: savedRecipe.yieldQuantity,
+      standardYieldUom: savedRecipe.yieldUom,
+      version: savedRecipe.version,
+      status: savedRecipe.status,
+      ingredients: savedRecipe.ingredients,
+      tenantId: savedRecipe.tenantId,
+      rawRecipe: savedRecipe
+    };
   }
 
+  /**
+   * Approves a preparation BOM / recipe.
+   * @param {string} id
+   * @param {string|null} tenantId
+   * @returns {Object}
+   */
   approvePrepBom(id, tenantId = null) {
-    const list = this.getPrepBoms(tenantId);
-    const bom = list.find(b => b.id === id);
-    if (bom) {
-      bom.status = 'APPROVED';
-      bom.updatedAt = new Date().toISOString();
-      offlineStore.setCollection('prep_boms', list);
-    }
-    return bom;
+    const approved = recipeModel.approveRecipe(id);
+    return approved;
   }
 
+  /**
+   * Archives / deletes a preparation BOM / recipe.
+   * @param {string} id
+   * @param {string|null} tenantId
+   * @returns {boolean}
+   */
   deletePrepBom(id, tenantId = null) {
-    const list = this.getPrepBoms(tenantId);
-    const filtered = list.filter(b => b.id !== id);
-    offlineStore.setCollection('prep_boms', filtered);
+    const targetTenantId = tenantId || 'tenant_h0qc7wf';
+    const list = offlineStore.getCollection('recipes', targetTenantId) || [];
+    const filtered = list.filter(r => r.id !== id);
+    offlineStore.setCollection('recipes', filtered);
+    const dg = this._getDataGateway();
+    if (dg) {
+      dg.update('recipes', id, { status: 'ARCHIVED' }).catch(() => {});
+    }
     return true;
   }
 
-  // --- PRODUCTION BATCHES ---
+  // --- 2. LOCATION-AWARE STOCK CHECK (KITCHEN STORE: LOC-KIT) ---
+
+  /**
+   * Evaluates scaled ingredient requirements against physical stock in Kitchen Store (LOC-KIT).
+   * Does NOT auto-transfer or alter stock.
+   * @param {Object} params { recipeId, targetQuantity }
+   * @param {string|null} tenantId
+   * @returns {{ recipe: Object, targetQuantity: number, targetUom: string, scalingFactor: number, scaledIngredients: Array<Object>, hasSufficientStock: boolean, shortages: Array<Object> }}
+   */
+  checkStockAvailability({ recipeId, targetQuantity }, tenantId = null) {
+    const recipe = this.getRecipeById(recipeId, tenantId) || this.getPrepBomById(recipeId, tenantId);
+    if (!recipe) throw new Error(`Recipe with ID "${recipeId}" not found or not approved.`);
+
+    const stdYield = parseFloat(recipe.yieldQuantity || recipe.standardYieldQuantity) || 1;
+    const targetQty = parseFloat(targetQuantity) || stdYield;
+    const scalingFactor = targetQty / stdYield;
+
+    const stockBalances = offlineStore.getCollection('stock_balances', tenantId) || [];
+    const masterInv = offlineStore.getCollection('inventory', tenantId) || [];
+
+    const shortages = [];
+    const scaledIngredients = (recipe.ingredients || []).map(ing => {
+      const lineCode = String(ing.inventoryItemCode || ing.inventory_item_code || '');
+      const rawQty = parseFloat(ing.quantity || ing.recipeQty) || 0;
+      const ingUom = String(ing.uom || ing.recipeUom || 'G').toUpperCase();
+      const baseUom = String(ing.baseUom || ing.uom || 'KG').toUpperCase();
+
+      const normalizedBaseQty = convertRecipeUomToNormalized(rawQty, ingUom, baseUom);
+      const scaledBaseQty = parseFloat((normalizedBaseQty * scalingFactor).toFixed(4));
+      const scaledRecipeQty = parseFloat((rawQty * scalingFactor).toFixed(2));
+
+      // Find stock specifically in KITCHEN STORE (LOC-886 / LOC-KIT)
+      const kitStockRec = stockBalances.find(s => {
+        const itemMatch = String(s.itemCode || s.item_code || s.itemId || s.id) === lineCode || lineCode.includes(String(s.itemCode || s.item_code || ''));
+        const loc = String(s.locationCode || s.location_code || '').toUpperCase().trim();
+        const locMatch = loc === 'LOC-886' || loc === 'LOC-KIT' || loc === 'LOC-901' || loc === 'LOC-KITCHEN' || loc === 'KITCHEN_STORE';
+        return itemMatch && locMatch;
+      });
+      const kitchenStock = kitStockRec ? (parseFloat(kitStockRec.currentStock || kitStockRec.quantity || 0)) : 0;
+
+      // Find stock in Main Warehouse (LOC-805 / LOC-MWH) for informational transfer availability
+      const mwhStockRec = stockBalances.find(s => {
+        const itemMatch = String(s.itemCode || s.item_code || s.itemId || s.id) === lineCode || lineCode.includes(String(s.itemCode || s.item_code || ''));
+        const loc = String(s.locationCode || s.location_code || '').toUpperCase().trim();
+        const locMatch = loc === 'LOC-805' || loc === 'LOC-MWH' || loc === 'MAIN' || loc === 'MAIN_WAREHOUSE';
+        return itemMatch && locMatch;
+      });
+      const mwhStock = mwhStockRec ? (parseFloat(mwhStockRec.currentStock || mwhStockRec.quantity || 0)) : 0;
+
+      const hasSufficientStock = kitchenStock >= scaledBaseQty;
+      const shortageQty = hasSufficientStock ? 0 : parseFloat((scaledBaseQty - kitchenStock).toFixed(4));
+
+      const lineItem = {
+        inventoryItemCode: lineCode,
+        inventoryItemName: ing.inventoryItemName || lineCode,
+        recipeQty: rawQty,
+        recipeUom: ingUom,
+        scaledRecipeQty,
+        scaledBaseQty,
+        baseUom,
+        kitchenStock,
+        mwhStock,
+        hasSufficientStock,
+        shortageQty
+      };
+
+      if (!hasSufficientStock) {
+        shortages.push(lineItem);
+      }
+
+      return lineItem;
+    });
+
+    return {
+      recipe,
+      targetQuantity: targetQty,
+      targetUom: recipe.yieldUom || recipe.standardYieldUom || 'KG',
+      scalingFactor: parseFloat(scalingFactor.toFixed(2)),
+      scaledIngredients,
+      hasSufficientStock: shortages.length === 0,
+      shortages
+    };
+  }
+
+  // --- 3. BATCH EXECUTION & KITCHEN STORE CONSUMPTION ---
+
+  /**
+   * Retrieve all production batches for tenant
+   * @param {string|null} tenantId
+   * @returns {Array<Object>}
+   */
   getBatches(tenantId = null) {
     return offlineStore.getCollection('production_batches', tenantId) || [];
   }
 
+  /**
+   * Get single batch by ID
+   * @param {string} id
+   * @param {string|null} tenantId
+   * @returns {Object|null}
+   */
   getBatchById(id, tenantId = null) {
     const list = this.getBatches(tenantId);
     return list.find(b => b.id === id) || null;
   }
 
+  /**
+   * Starts a new production batch if Kitchen Store has sufficient stock.
+   * Persists IN_PROGRESS batch to DataGateway.
+   * @param {Object} data { recipeId, prepBomId, targetQuantity, tenantId, notes, startedBy }
+   * @param {string|null} tenantId
+   * @returns {Object} Started batch record
+   */
   startBatch(data, tenantId = null) {
-    const list = this.getBatches(tenantId);
+    const targetTenantId = data.tenantId || tenantId || 'tenant_h0qc7wf';
+    const recipeId = data.recipeId || data.prepBomId;
+    const targetQuantity = parseFloat(data.targetQuantity) || 1;
+
+    // 1. Evaluate Kitchen Store Stock
+    const evalResult = this.checkStockAvailability({ recipeId, targetQuantity }, targetTenantId);
+    if (!evalResult.hasSufficientStock) {
+      const details = evalResult.shortages
+        .map(s => `• ${s.inventoryItemName}: Kitchen Store has ${s.kitchenStock} ${s.baseUom}, Required: ${s.scaledBaseQty} ${s.baseUom} (Shortage: ${s.shortageQty} ${s.baseUom})`)
+        .join('\n');
+      throw new Error(`Cannot start production batch! Insufficient stock in Kitchen Store (LOC-KIT):\n\n${details}\n\nPlease request a stock transfer from Main Warehouse.`);
+    }
+
+    const list = this.getBatches(targetTenantId);
     const now = new Date();
     const batchNum = list.length + 1;
-    const batchCode = data.batchCode || `PB-2026-${String(batchNum).padStart(4, '0')}`;
-    const prepBom = this.getPrepBomById(data.prepBomId, tenantId);
-
-    if (!prepBom) throw new Error('Selected Preparation BOM not found.');
-
-    const targetQuantity = parseFloat(data.targetQuantity) || prepBom.standardYieldQuantity || 1;
-    const scalingFactor = targetQuantity / prepBom.standardYieldQuantity;
-
-    const masterInv = offlineStore.getCollection('inventory', tenantId) || [];
-    const stockBalances = offlineStore.getCollection('stock_balances', tenantId) || [];
-
-    const scaledIngredients = (prepBom.ingredients || []).map(ing => {
-      const lineCode = String(ing.inventoryItemCode || ing.inventory_item_code || '');
-      const baseQty = convertRecipeUomToNormalized(ing.recipeQty, ing.recipeUom, ing.baseUom);
-      const scaledBaseQty = parseFloat((baseQty * scalingFactor).toFixed(4));
-      const scaledRecipeQty = parseFloat((ing.recipeQty * scalingFactor).toFixed(2));
-
-      const stockRec = stockBalances.find(s => String(s.itemCode || s.item_code || s.itemId || s.id) === lineCode);
-      const currentStock = stockRec ? (parseFloat(stockRec.currentStock || stockRec.quantity || 0)) : 0;
-
-      return {
-        ...ing,
-        scaledRecipeQty,
-        scaledBaseQty,
-        currentStock,
-        hasSufficientStock: currentStock >= scaledBaseQty,
-        shortageQty: currentStock < scaledBaseQty ? parseFloat((scaledBaseQty - currentStock).toFixed(4)) : 0
-      };
-    });
-
-    // Check for stock shortages
-    const shortages = scaledIngredients.filter(i => !i.hasSufficientStock);
-    if (shortages.length > 0) {
-      const summary = shortages.map(s => `${s.inventoryItemName} (Shortage: ${s.shortageQty} ${s.baseUom})`).join(', ');
-      throw new Error(`Cannot start production batch: Insufficient stock for ${summary}. Please raise a stock requisition first.`);
-    }
+    const batchCode = data.batchCode || `PB-${now.getFullYear()}-${String(batchNum).padStart(4, '0')}`;
+    const recipe = evalResult.recipe;
 
     const newBatch = {
       id: batchCode,
       batchCode,
-      prepBomId: prepBom.id,
-      prepBomCode: prepBom.bomCode,
-      inventoryItemCode: prepBom.inventoryItemCode,
-      inventoryItemName: prepBom.inventoryItemName,
-      targetQuantity,
-      targetUom: prepBom.standardYieldUom || 'KG',
-      scalingFactor: parseFloat(scalingFactor.toFixed(2)),
+      recipeId: recipe.id,
+      recipeCode: recipe.recipeCode || recipe.bomCode,
+      recipeName: recipe.recipeName || recipe.inventoryItemName,
+      inventoryItemCode: recipe.inventoryItemCode || recipe.menuItemCode || recipe.recipeCode,
+      inventoryItemName: recipe.inventoryItemName || recipe.recipeName,
+      targetQuantity: evalResult.targetQuantity,
+      targetUom: evalResult.targetUom,
+      scalingFactor: evalResult.scalingFactor,
       status: 'IN_PROGRESS',
       startedAt: now.toISOString(),
       completedAt: null,
-      scaledIngredients,
+      scaledIngredients: evalResult.scaledIngredients,
       actualYield: null,
-      actualYieldUom: prepBom.standardYieldUom || 'KG',
+      actualYieldUom: evalResult.targetUom,
       yieldVariance: null,
       yieldPercent: null,
       varianceReason: null,
-      notes: '',
-      startedBy: 'Chef Vaibhav',
-      tenantId: data.tenantId || tenantId,
+      notes: data.notes || '',
+      startedBy: data.startedBy || 'Chef',
+      tenantId: targetTenantId,
       createdAt: now.toISOString(),
       updatedAt: now.toISOString()
     };
 
     list.unshift(newBatch);
     offlineStore.setCollection('production_batches', list);
+
+    // Sync to cloud via DataGateway
+    const dg = this._getDataGateway();
+    if (dg) {
+      dg.create('production_batches', newBatch).catch(e => console.warn('[productionModel] Cloud batch sync error:', e.message));
+    }
+
     return newBatch;
   }
 
+  /**
+   * Completes a production batch:
+   * 1. Consumes scaled raw material ingredients STRICTLY from Kitchen Store (LOC-KIT).
+   * 2. Adds produced output yield to Kitchen Store (LOC-KIT) if item exists in master inventory.
+   * 3. Appends stock ledger transactions (PRODUCTION_CONSUMPTION, PRODUCTION_OUTPUT).
+   * 4. Updates batch status to COMPLETED and persists via DataGateway.
+   * @param {string} batchId
+   * @param {Object} completionData { actualYield, varianceReason, notes }
+   * @param {string|null} tenantId
+   * @returns {Object} Completed batch record
+   */
   completeBatch(batchId, { actualYield, varianceReason, notes }, tenantId = null) {
-    const list = this.getBatches(tenantId);
+    const targetTenantId = tenantId || 'tenant_h0qc7wf';
+    const list = this.getBatches(targetTenantId);
     const idx = list.findIndex(b => b.id === batchId);
-    if (idx === -1) throw new Error(`Batch ${batchId} not found.`);
+    if (idx === -1) throw new Error(`Production batch "${batchId}" not found.`);
 
     const batch = list[idx];
-    if (batch.status === 'COMPLETED') throw new Error(`Batch ${batchId} is already completed.`);
+    if (batch.status === 'COMPLETED') throw new Error(`Batch "${batchId}" is already completed.`);
 
     const now = new Date().toISOString();
     const yieldNum = parseFloat(actualYield) || batch.targetQuantity;
     const yieldVariance = parseFloat((yieldNum - batch.targetQuantity).toFixed(4));
     const yieldPercent = parseFloat(((yieldNum / batch.targetQuantity) * 100).toFixed(1));
 
-    const stockBalances = offlineStore.getCollection('stock_balances', tenantId) || [];
-    const stockTxns = offlineStore.getCollection('stock_transactions', tenantId) || [];
+    const stockBalances = offlineStore.getCollection('stock_balances', targetTenantId) || [];
+    const stockTxns = offlineStore.getCollection('stock_transactions', targetTenantId) || [];
+    const masterInv = offlineStore.getCollection('inventory', targetTenantId) || [];
+    const dg = this._getDataGateway();
 
-    // 1. Deduct consumed raw material ingredients from stock balances
+    // 1. Deduct consumed ingredients STRICTLY from Kitchen Store (LOC-KIT)
     batch.scaledIngredients.forEach(ing => {
-      const lineCode = String(ing.inventoryItemCode || ing.inventory_item_code);
+      const lineCode = String(ing.inventoryItemCode);
       const qtyToDeduct = ing.scaledBaseQty;
 
-      stockTxns.unshift({
+      // Append PRODUCTION_CONSUMPTION ledger entry
+      const txnRecord = {
         id: `txn-cons-${Math.random().toString(36).substring(2, 9)}`,
         referenceNo: batch.batchCode,
         transactionType: 'PRODUCTION_CONSUMPTION',
         itemCode: lineCode,
         itemName: ing.inventoryItemName,
+        locationCode: 'LOC-KIT',
         quantity: -qtyToDeduct,
         uom: ing.baseUom,
-        notes: `Raw ingredient consumption for batch ${batch.batchCode} (${batch.inventoryItemName})`,
+        notes: `Production consumption for batch ${batch.batchCode} (${batch.inventoryItemName})`,
         timestamp: now,
-        tenantId
+        tenantId: targetTenantId
+      };
+      // Deduct from Kitchen Store (LOC-886 / LOC-KIT) stock balance
+      let kitBalIdx = stockBalances.findIndex(s => {
+        const itemMatch = String(s.itemCode || s.item_code || s.itemId || s.id) === lineCode || lineCode.includes(String(s.itemCode || s.item_code || ''));
+        const loc = String(s.locationCode || s.location_code || '').toUpperCase().trim();
+        const locMatch = loc === 'LOC-886' || loc === 'LOC-KIT' || loc === 'LOC-901' || loc === 'LOC-KITCHEN' || loc === 'KITCHEN_STORE';
+        return itemMatch && locMatch;
       });
 
-      const balIdx = stockBalances.findIndex(s => String(s.itemCode || s.item_code || s.itemId || s.id) === lineCode);
-      if (balIdx >= 0) {
-        const cur = parseFloat(stockBalances[balIdx].currentStock || stockBalances[balIdx].quantity || 0);
-        stockBalances[balIdx].currentStock = Math.max(0, parseFloat((cur - qtyToDeduct).toFixed(4)));
-        stockBalances[balIdx].updatedAt = now;
+      if (kitBalIdx >= 0) {
+        const cur = parseFloat(stockBalances[kitBalIdx].currentStock || stockBalances[kitBalIdx].quantity || 0);
+        stockBalances[kitBalIdx].currentStock = Math.max(0, parseFloat((cur - qtyToDeduct).toFixed(4)));
+        stockBalances[kitBalIdx].quantity = stockBalances[kitBalIdx].currentStock;
+        stockBalances[kitBalIdx].updatedAt = now;
+        if (dg) dg.update('stock_balances', stockBalances[kitBalIdx].id, stockBalances[kitBalIdx]).catch(() => {});
       }
     });
 
-    // 2. Post semi-finished output yield to stock balances
-    const sfCode = String(batch.inventoryItemCode);
-    stockTxns.unshift({
-      id: `txn-out-${Math.random().toString(36).substring(2, 9)}`,
-      referenceNo: batch.batchCode,
-      transactionType: 'PRODUCTION_OUTPUT',
-      itemCode: sfCode,
-      itemName: batch.inventoryItemName,
-      quantity: yieldNum,
-      uom: batch.targetUom,
-      notes: `Semi-finished stock yield produced by batch ${batch.batchCode}`,
-      timestamp: now,
-      tenantId
-    });
+    // 2. Post produced semi-finished/finished output yield to Kitchen Store (LOC-886 / LOC-KIT)
+    const outputItemCode = String(batch.inventoryItemCode);
+    const masterItem = masterInv.find(i => String(i.itemCode || i.item_code || i.id || '') === outputItemCode);
 
-    const sfBalIdx = stockBalances.findIndex(s => String(s.itemCode || s.item_code || s.itemId || s.id) === sfCode);
-    if (sfBalIdx >= 0) {
-      const cur = parseFloat(stockBalances[sfBalIdx].currentStock || stockBalances[sfBalIdx].quantity || 0);
-      stockBalances[sfBalIdx].currentStock = parseFloat((cur + yieldNum).toFixed(4));
-      sfBalIdx.updatedAt = now;
-    } else {
-      stockBalances.push({
-        id: `bal-${sfCode}`,
-        itemCode: sfCode,
+    if (outputItemCode && (masterItem || outputItemCode.startsWith('SF') || outputItemCode.startsWith('PREP'))) {
+      const outputTxn = {
+        id: `txn-out-${Math.random().toString(36).substring(2, 9)}`,
+        referenceNo: batch.batchCode,
+        transactionType: 'PRODUCTION_OUTPUT',
+        itemCode: outputItemCode,
         itemName: batch.inventoryItemName,
-        currentStock: yieldNum,
+        locationCode: 'LOC-886',
+        quantity: yieldNum,
         uom: batch.targetUom,
-        tenantId,
-        updatedAt: now
+        notes: `Production output yield for batch ${batch.batchCode}`,
+        timestamp: now,
+        tenantId: targetTenantId
+      };
+      stockTxns.unshift(outputTxn);
+
+      let outputBalIdx = stockBalances.findIndex(s => {
+        const itemMatch = String(s.itemCode || s.item_code || s.itemId || s.id) === outputItemCode || outputItemCode.includes(String(s.itemCode || s.item_code || ''));
+        const loc = String(s.locationCode || s.location_code || '').toUpperCase().trim();
+        const locMatch = loc === 'LOC-886' || loc === 'LOC-KIT' || loc === 'LOC-901' || loc === 'LOC-KITCHEN' || loc === 'KITCHEN_STORE';
+        return itemMatch && locMatch;
       });
+
+      if (outputBalIdx >= 0) {
+        const cur = parseFloat(stockBalances[outputBalIdx].currentStock || stockBalances[outputBalIdx].quantity || 0);
+        stockBalances[outputBalIdx].currentStock = parseFloat((cur + yieldNum).toFixed(4));
+        stockBalances[outputBalIdx].quantity = stockBalances[outputBalIdx].currentStock;
+        stockBalances[outputBalIdx].updatedAt = now;
+        if (dg) dg.update('stock_balances', stockBalances[outputBalIdx].id, stockBalances[outputBalIdx]).catch(() => {});
+      } else {
+        const newBal = {
+          id: `sb-${outputItemCode}-kit`,
+          tenant_id: targetTenantId,
+          tenantId: targetTenantId,
+          item_code: outputItemCode,
+          itemCode: outputItemCode,
+          itemName: batch.inventoryItemName,
+          inventoryItemName: batch.inventoryItemName,
+          location_code: 'LOC-886',
+          locationCode: 'LOC-886',
+          quantity: yieldNum,
+          currentStock: yieldNum,
+          uom: batch.targetUom,
+          unit_cost: masterItem ? (parseFloat(masterItem.unitValuation || masterItem.unit_valuation) || 0) : 0,
+          valuation: (masterItem ? (parseFloat(masterItem.unitValuation || masterItem.unit_valuation) || 0) : 0) * yieldNum,
+          updatedAt: now
+        };
+        stockBalances.push(newBal);
+        if (dg) dg.create('stock_balances', newBal).catch(() => {});
+      }
     }
 
     offlineStore.setCollection('stock_transactions', stockTxns);
     offlineStore.setCollection('stock_balances', stockBalances);
 
-    const updatedBatch = {
+    const completedBatch = {
       ...batch,
       status: 'COMPLETED',
       completedAt: now,
       actualYield: yieldNum,
       yieldVariance,
       yieldPercent,
-      varianceReason: varianceReason || 'Normal Preparation Loss',
-      notes: notes || '',
+      varianceReason: varianceReason || 'Normal Preparation Yield',
+      notes: notes || batch.notes || '',
       updatedAt: now
     };
 
-    list[idx] = updatedBatch;
+    list[idx] = completedBatch;
     offlineStore.setCollection('production_batches', list);
-    return updatedBatch;
+
+    if (dg) {
+      dg.update('production_batches', completedBatch.id, completedBatch).catch(e => console.warn('[productionModel] Cloud batch update error:', e.message));
+    }
+
+    return completedBatch;
   }
 
-  // --- STOCK REQUISITIONS (KITCHEN <-> MAIN WAREHOUSE) ---
+  /**
+   * Retrieves all stock requisitions / inventory requests.
+   * @param {string|null} tenantId
+   * @returns {Array<Object>}
+   */
   getStockRequisitions(tenantId = null) {
-    return offlineStore.getCollection('stock_requisitions', tenantId) || [];
+    const list = offlineStore.getCollection('inventory_requests', tenantId) || offlineStore.getCollection('stock_requisitions', tenantId) || [];
+    return list;
   }
 
-  createStockRequisition({ prepBomId, prepBomCode, inventoryItemName, targetQuantity, targetUom, items, notes }, tenantId = null) {
-    const list = this.getStockRequisitions(tenantId);
+  /**
+   * Creates a stock requisition request from Main Warehouse (LOC-MWH) to Kitchen Store (LOC-KIT).
+   * Persists to inventory_requests (Supabase + local cache).
+   * Does NOT alter physical stock automatically.
+   * @param {Object} reqData
+   * @param {string|null} tenantId
+   * @returns {Object}
+   */
+  createStockRequisition({ recipeId, recipeCode, inventoryItemName, targetQuantity, targetUom, items, notes }, tenantId = null) {
+    const targetTenantId = tenantId || 'tenant_h0qc7wf';
+    const list = offlineStore.getCollection('inventory_requests', targetTenantId) || [];
     const now = new Date();
     const reqNum = list.length + 1;
-    const reqCode = `REQ-2026-${String(reqNum).padStart(4, '0')}`;
+    const reqCode = `REQ-${now.getFullYear()}-${String(reqNum).padStart(4, '0')}`;
 
     const newReq = {
       id: reqCode,
+      requestNumber: reqCode,
+      request_number: reqCode,
       reqCode,
-      requestedBy: 'Kitchen Production Dept (Chef Vaibhav)',
-      sourceLocation: 'MAIN_WAREHOUSE',
-      destinationLocation: 'KITCHEN_STORE',
-      prepBomId,
-      prepBomCode,
+      department: 'Kitchen Production',
+      requestedBy: 'Kitchen Chef (Production)',
+      sourceLocation: 'LOC-805',
+      source_location: 'LOC-805',
+      destinationLocation: 'LOC-886',
+      destination_location: 'LOC-886',
+      recipeId,
+      recipeCode,
       inventoryItemName,
       targetQuantity,
       targetUom,
-      status: 'PENDING_WAREHOUSE_FULFILLMENT', // PENDING_WAREHOUSE_FULFILLMENT | TRANSFERRED | PO_FULFILLED | REJECTED
+      status: 'PENDING', // PENDING | TRANSFERRED | REJECTED
+      tenantId: targetTenantId,
+      tenant_id: targetTenantId,
       items: items.map(item => ({
+        itemCode: item.inventoryItemCode || item.itemCode,
         inventoryItemCode: item.inventoryItemCode || item.itemCode,
+        itemName: item.inventoryItemName || item.itemName,
         inventoryItemName: item.inventoryItemName || item.itemName,
         scaledRecipeQty: item.scaledRecipeQty || item.recipeQty,
         recipeUom: item.recipeUom,
         scaledBaseQty: item.scaledBaseQty,
+        quantity: item.shortageQty > 0 ? item.shortageQty : item.scaledBaseQty,
+        uom: item.baseUom,
         baseUom: item.baseUom,
-        currentStock: item.currentStock,
-        shortageQty: item.shortage || Math.max(0, parseFloat((item.scaledBaseQty - item.currentStock).toFixed(4)))
+        kitchenStock: item.kitchenStock || item.currentStock || 0,
+        mwhStock: item.mwhStock || 0,
+        shortageQty: item.shortageQty || item.shortage || 0
       })),
-      notes: notes || `Stock requisition for production batch of ${inventoryItemName} (${targetQuantity} ${targetUom})`,
+      notes: notes || `Production requisition for ${inventoryItemName} (${targetQuantity} ${targetUom})`,
       createdAt: now.toISOString(),
       updatedAt: now.toISOString()
     };
 
     list.unshift(newReq);
+    offlineStore.setCollection('inventory_requests', list);
     offlineStore.setCollection('stock_requisitions', list);
-    return newReq;
-  }
 
-  fulfillRequisitionViaTransfer(reqId, tenantId = null) {
-    const list = this.getStockRequisitions(tenantId);
-    const idx = list.findIndex(r => r.id === reqId);
-    if (idx === -1) throw new Error(`Requisition ${reqId} not found.`);
-
-    const req = list[idx];
-    if (req.status === 'TRANSFERRED') throw new Error(`Requisition ${reqId} is already fulfilled.`);
-
-    const now = new Date().toISOString();
-    const stockBalances = offlineStore.getCollection('stock_balances', tenantId) || [];
-    const stockTxns = offlineStore.getCollection('stock_transactions', tenantId) || [];
-
-    const sourceLoc = req.sourceLocation || 'LOC-MWH';
-    const destLoc = req.destinationLocation || 'LOC-KITCHEN';
-
-    // 1. Strict Stock Availability Check at Main Warehouse before transferring
-    const unfulfilledItems = [];
-    req.items.forEach(item => {
-      const code = String(item.inventoryItemCode);
-      const qtyToTransfer = item.shortageQty > 0 ? item.shortageQty : item.scaledBaseQty;
-
-      // Find Main Warehouse stock balance
-      const mwhBal = stockBalances.find(s => 
-        String(s.itemCode || s.item_code || s.itemId || s.id) === code && 
-        (s.locationCode === sourceLoc || s.locationCode === 'LOC-MWH' || s.locationCode === 'MAIN_WAREHOUSE')
-      );
-
-      const mwhQty = mwhBal ? parseFloat(mwhBal.currentStock || mwhBal.quantity || 0) : 0;
-      if (mwhQty < qtyToTransfer) {
-        unfulfilledItems.push({
-          itemName: item.inventoryItemName,
-          available: mwhQty,
-          required: qtyToTransfer,
-          uom: item.baseUom
-        });
-      }
-    });
-
-    if (unfulfilledItems.length > 0) {
-      const details = unfulfilledItems.map(u => `• ${u.itemName}: On-Hand ${u.available} ${u.uom}, Required Shortage ${u.required} ${u.uom}`).join('\n');
-      throw new Error(`Cannot fulfill via Stock Transfer! Insufficient stock available in Main Warehouse:\n\n${details}\n\nPlease raise a Supplier Purchase Order (PO) to procure required stock.`);
+    const dg = this._getDataGateway();
+    if (dg) {
+      dg.create('inventory_requests', newReq).catch(e => console.warn('[productionModel] Cloud requisition sync error:', e.message));
     }
 
-    // 2. Perform Transfer: Deduct from Main Warehouse & Credit to Kitchen Store
-    req.items.forEach(item => {
-      const code = String(item.inventoryItemCode);
-      const qtyToTransfer = item.shortageQty > 0 ? item.shortageQty : item.scaledBaseQty;
-
-      // Deduct from Main Warehouse
-      const mwhBalIdx = stockBalances.findIndex(s => 
-        String(s.itemCode || s.item_code || s.itemId || s.id) === code && 
-        (s.locationCode === sourceLoc || s.locationCode === 'LOC-MWH' || s.locationCode === 'MAIN_WAREHOUSE')
-      );
-      if (mwhBalIdx >= 0) {
-        const curMwh = parseFloat(stockBalances[mwhBalIdx].currentStock || stockBalances[mwhBalIdx].quantity || 0);
-        stockBalances[mwhBalIdx].currentStock = Math.max(0, parseFloat((curMwh - qtyToTransfer).toFixed(4)));
-        stockBalances[mwhBalIdx].updatedAt = now;
-      }
-
-      // Credit to Kitchen Store
-      let kitchenBalIdx = stockBalances.findIndex(s => 
-        String(s.itemCode || s.item_code || s.itemId || s.id) === code && 
-        (s.locationCode === destLoc || s.locationCode === 'LOC-KITCHEN' || s.locationCode === 'KITCHEN_STORE')
-      );
-      
-      if (kitchenBalIdx >= 0) {
-        const curKit = parseFloat(stockBalances[kitchenBalIdx].currentStock || stockBalances[kitchenBalIdx].quantity || 0);
-        stockBalances[kitchenBalIdx].currentStock = parseFloat((curKit + qtyToTransfer).toFixed(4));
-        stockBalances[kitchenBalIdx].updatedAt = now;
-      } else {
-        stockBalances.push({
-          id: `bal-${code}-kit`,
-          itemCode: code,
-          itemName: item.inventoryItemName,
-          locationCode: destLoc,
-          currentStock: qtyToTransfer,
-          uom: item.baseUom,
-          tenantId,
-          updatedAt: now
-        });
-      }
-
-      // Record Stock Ledger Entry
-      stockTxns.unshift({
-        id: `txn-trin-${Math.random().toString(36).substring(2, 9)}`,
-        referenceNo: req.reqCode,
-        transactionType: 'STOCK_TRANSFER_IN',
-        itemCode: code,
-        itemName: item.inventoryItemName,
-        quantity: qtyToTransfer,
-        uom: item.baseUom,
-        fromLocationCode: sourceLoc,
-        toLocationCode: destLoc,
-        notes: `Stock transfer from Main Warehouse to Kitchen Store for Requisition ${req.reqCode}`,
-        timestamp: now,
-        tenantId
-      });
-    });
-
-    offlineStore.setCollection('stock_transactions', stockTxns);
-    offlineStore.setCollection('stock_balances', stockBalances);
-
-    req.status = 'TRANSFERRED';
-    req.fulfilledAt = now;
-    req.fulfillmentType = 'MAIN_WAREHOUSE_TRANSFER';
-    req.updatedAt = now;
-
-    list[idx] = req;
-    offlineStore.setCollection('stock_requisitions', list);
-    return req;
-  }
-
-  fulfillRequisitionViaPO(reqId, poDetails = {}, tenantId = null) {
-    const list = this.getStockRequisitions(tenantId);
-    const idx = list.findIndex(r => r.id === reqId);
-    if (idx === -1) throw new Error(`Requisition ${reqId} not found.`);
-
-    const req = list[idx];
-    const now = new Date().toISOString();
-    const poNumber = poDetails.poNumber || `PO-2026-${Math.floor(1000 + Math.random() * 9000)}`;
-
-    const stockBalances = offlineStore.getCollection('stock_balances', tenantId) || [];
-    const stockTxns = offlineStore.getCollection('stock_transactions', tenantId) || [];
-
-    req.items.forEach(item => {
-      const code = String(item.inventoryItemCode);
-      const qtyToAdd = item.shortageQty > 0 ? item.shortageQty : item.scaledBaseQty;
-
-      stockTxns.unshift({
-        id: `txn-po-${Math.random().toString(36).substring(2, 9)}`,
-        referenceNo: poNumber,
-        transactionType: 'PURCHASE_ORDER_RECEIPT',
-        itemCode: code,
-        itemName: item.inventoryItemName,
-        quantity: qtyToAdd,
-        uom: item.baseUom,
-        notes: `Supplier PO Receipt for Kitchen Requisition ${req.reqCode} (PO #${poNumber})`,
-        timestamp: now,
-        tenantId
-      });
-
-      const balIdx = stockBalances.findIndex(s => String(s.itemCode || s.item_code || s.itemId || s.id) === code);
-      if (balIdx >= 0) {
-        const cur = parseFloat(stockBalances[balIdx].currentStock || stockBalances[balIdx].quantity || 0);
-        stockBalances[balIdx].currentStock = parseFloat((cur + qtyToAdd).toFixed(4));
-        stockBalances[balIdx].updatedAt = now;
-      } else {
-        stockBalances.push({
-          id: `bal-${code}`,
-          itemCode: code,
-          itemName: item.inventoryItemName,
-          currentStock: qtyToAdd,
-          uom: item.baseUom,
-          tenantId,
-          updatedAt: now
-        });
-      }
-    });
-
-    offlineStore.setCollection('stock_transactions', stockTxns);
-    offlineStore.setCollection('stock_balances', stockBalances);
-
-    req.status = 'PO_FULFILLED';
-    req.fulfilledAt = now;
-    req.fulfillmentType = 'SUPPLIER_PURCHASE_ORDER';
-    req.poNumber = poNumber;
-    req.updatedAt = now;
-
-    list[idx] = req;
-    offlineStore.setCollection('stock_requisitions', list);
-    return req;
+    return newReq;
   }
 }
 
 export const productionModel = new ProductionModel();
+

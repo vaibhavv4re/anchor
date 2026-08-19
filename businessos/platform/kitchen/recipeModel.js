@@ -1,15 +1,94 @@
 /**
  * BusinessOS Platform - Kitchen Domain Model (K-03 Recipes & BOM)
- * Manages recipes and recipe_ingredients collections in offlineStore.
+ * Manages recipes and recipe_ingredients collections via DataGateway (Supabase + offlineStore cache).
  * Enforces strict reference to Master Inventory itemCode (PD-024).
  * Calculates dynamic costing from inventory valuation, yield %, and wastage %.
  * Implements immutable approval locking, historical cost snapshots, and revision cloning.
+ *
+ * ARCHITECTURE: Reads from offlineStore cache (populated by bootstrap hydration).
+ * All writes go through DataGateway -> Supabase. Ingredient arrays stay embedded
+ * in the recipe data blob until recipe_ingredients table schema is confirmed.
  */
 
 import { offlineStore } from '../offline_store/offlineStore.js';
 import { kitchenMenuModel } from './kitchenMenuModel.js';
 
 class RecipeModel {
+  /**
+   * Lazily resolve DataGateway from global app graph.
+   * @returns {DataGateway|null}
+   */
+  _getDataGateway() {
+    if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform) {
+      return window.__APP__.platform.dataGateway || null;
+    }
+    return null;
+  }
+
+  /**
+   * Fire-and-forget cloud sync for a recipe record.
+   * Syncs the recipe header to 'recipes' and all ingredient lines to 'recipe_ingredients'.
+   * @param {'create'|'update'} op
+   * @param {Object} recipe
+   */
+  _syncToCloud(op, recipe) {
+    const dg = this._getDataGateway();
+    if (!dg) return;
+
+    // 1. Sync Recipe Header
+    const promise = op === 'create'
+      ? dg.create('recipes', recipe)
+      : dg.update('recipes', recipe.id, recipe);
+    promise
+      .then(() => console.log(`[recipeModel] Cloud sync ${op} succeeded for recipe ${recipe.id} (${recipe.recipeName})`))
+      .catch(e => console.warn('[recipeModel] Cloud sync error for recipes:', e.message));
+
+    // 2. Sync Recipe Ingredients to recipe_ingredients table
+    if (Array.isArray(recipe.ingredients) && recipe.ingredients.length > 0) {
+      recipe.ingredients.forEach(ing => {
+        const ingId = ing.id || `ri-${recipe.id}-${ing.inventoryItemCode || ing.inventory_item_code}`;
+        const ingRecord = {
+          id: ingId,
+          recipeId: recipe.id,
+          tenantId: recipe.tenantId || ing.tenantId,
+          inventoryItemCode: ing.inventoryItemCode || ing.inventory_item_code,
+          inventoryItemName: ing.inventoryItemName || ing.inventory_item_name,
+          itemType: ing.itemType || ing.item_type || 'RAW_MATERIAL',
+          quantity: parseFloat(ing.quantity) || 0,
+          uom: ing.uom || ing.baseUom || 'KG',
+          unitCost: parseFloat(ing.unitCost) || 0,
+          lineCost: parseFloat(ing.lineCost) || 0,
+          recipeWastagePercent: parseFloat(ing.recipeWastagePercent) || 0,
+          data: ing
+        };
+        dg.create('recipe_ingredients', ingRecord)
+          .catch(e => console.warn('[recipeModel] Cloud sync error for recipe_ingredients:', e.message));
+      });
+    }
+  }
+
+  /**
+   * Syncs any locally saved recipes and their ingredients to Supabase.
+   * Useful when recipes were drafted while offline or prior to schema mapping.
+   * @param {string|null} tenantId
+   */
+  syncOfflineRecipesToCloud(tenantId = null) {
+    const list = offlineStore.getCollection('recipes', tenantId) || [];
+    if (!Array.isArray(list) || list.length === 0) return;
+    console.log(`[recipeModel] Syncing ${list.length} local recipes to cloud...`);
+    list.forEach(recipe => {
+      this._syncToCloud('create', recipe);
+      if (recipe.menuItemId && recipe.status === 'APPROVED') {
+        const menuList = offlineStore.getCollection('kitchen_menu_items') || [];
+        const menuItem = menuList.find(m => m.id === recipe.menuItemId || m.itemCode === recipe.menuItemCode);
+        if (menuItem) {
+          menuItem.recipeId = recipe.id;
+          kitchenMenuModel._syncToCloud('update', menuItem);
+        }
+      }
+    });
+  }
+
   /**
    * Retrieve recipes for tenant with optional filters
    * @param {string|null} tenantId 
@@ -76,6 +155,9 @@ class RecipeModel {
     const recipeId = data.id || `rcp-${Math.random().toString(36).substring(2, 9)}`;
     const recipeCode = data.recipeCode || `RCP-${Math.floor(1000 + Math.random() * 9000)}`;
 
+    const session = typeof sessionStorage !== 'undefined' ? JSON.parse(sessionStorage.getItem('ros_session') || '{}') : {};
+    const tenantId = data.tenantId || session.tenantId || 'tenant_h0qc7wf';
+
     const newRecipe = {
       id: recipeId,
       recipeCode,
@@ -94,13 +176,14 @@ class RecipeModel {
       totalCost: 0,
       costPerPortion: 0,
       costSnapshotAtApproval: null,
-      tenantId: data.tenantId || null,
+      tenantId,
       createdAt: now,
       updatedAt: now
     };
 
     list.push(newRecipe);
     offlineStore.setCollection('recipes', list);
+    this._syncToCloud('create', newRecipe);
     return newRecipe;
   }
 
@@ -135,6 +218,7 @@ class RecipeModel {
 
     list[idx] = updated;
     offlineStore.setCollection('recipes', list);
+    this._syncToCloud('update', updated);
     return updated;
   }
 
@@ -253,10 +337,13 @@ class RecipeModel {
         menuItem.recipeId = recipe.id;
         menuItem.updatedAt = now;
         offlineStore.setCollection('kitchen_menu_items', menuList);
+        // Sync the updated menu item pointer to Supabase
+        kitchenMenuModel._syncToCloud('update', menuItem);
       }
     }
 
     offlineStore.setCollection('recipes', list);
+    this._syncToCloud('update', recipe);
     return recipe;
   }
 

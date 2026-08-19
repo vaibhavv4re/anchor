@@ -55,10 +55,19 @@ export function startModularApp(options = {}) {
         'stock_balances', 'purchase_orders', 'goods_receipt_notes',
         'inventory_requests', 'inventory_categories', 'inventory_uoms',
         'stock_issues', 'stock_transfers', 'stock_adjustments', 'stock_counts',
-        'supplier_catalog', 'devices', 'system_config'
+        'supplier_catalog', 'devices', 'system_config',
+        // Kitchen domain collections
+        'kitchen_menu_items', 'recipes', 'recipe_ingredients', 'orders',
+        'production_batches', 'stock_transactions', 'stock_requisitions'
       ])
         .then(res => {
-          console.log('☁️ [DataGateway] Pre-hydrated 12 domain collections from cloud:', Object.keys(res));
+          console.log('☁️ [DataGateway] Pre-hydrated 16 domain collections from cloud:', Object.keys(res));
+          // Sync any locally drafted/approved recipes into Supabase
+          import('../../businessos/platform/kitchen/recipeModel.js').then(({ recipeModel }) => {
+            if (recipeModel && typeof recipeModel.syncOfflineRecipesToCloud === 'function') {
+              recipeModel.syncOfflineRecipesToCloud();
+            }
+          }).catch(() => {});
         })
         .catch(err => {
           console.warn('⚠️ [DataGateway] Hydration fallback notice:', err.message || err);

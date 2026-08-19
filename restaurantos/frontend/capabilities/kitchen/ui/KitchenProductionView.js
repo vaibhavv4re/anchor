@@ -769,33 +769,17 @@ export class KitchenProductionView {
     }
 
     let activeBom = boms.find(b => b.id === this.selectedBomId) || boms[0];
-    const targetQty = this.newBatchTargetQty || activeBom.standardYieldQuantity;
-    const scalingFactor = targetQty / activeBom.standardYieldQuantity;
+    const targetQty = this.newBatchTargetQty || activeBom.standardYieldQuantity || 1;
 
-    const masterInv = this._getCollection('inventory', tenantId);
-    const stockBalances = this._getCollection('stock_balances', tenantId);
+    // Location-aware stock check specifically in Kitchen Store (LOC-KIT)
+    const evalResult = productionModel.checkStockAvailability({
+      recipeId: activeBom.id,
+      targetQuantity: targetQty
+    }, tenantId);
 
-    const ingredientRequirements = activeBom.ingredients.map(ing => {
-      const lineCode = String(ing.inventoryItemCode || ing.inventory_item_code);
-      const baseQty = ing.recipeUom === 'G' ? ing.recipeQty / 1000 : (ing.recipeUom === 'ML' ? ing.recipeQty / 1000 : ing.recipeQty);
-      const scaledBaseQty = parseFloat((baseQty * scalingFactor).toFixed(4));
-      const scaledRecipeQty = parseFloat((ing.recipeQty * scalingFactor).toFixed(2));
-
-      const stockRec = stockBalances.find(s => String(s.itemCode || s.item_code || s.itemId || s.id) === lineCode);
-      const currentStock = stockRec ? (parseFloat(stockRec.currentStock || stockRec.quantity || 0)) : 0;
-      const isAvailable = currentStock >= scaledBaseQty;
-
-      return {
-        ...ing,
-        scaledRecipeQty,
-        scaledBaseQty,
-        currentStock,
-        isAvailable,
-        shortage: isAvailable ? 0 : parseFloat((scaledBaseQty - currentStock).toFixed(4))
-      };
-    });
-
-    const hasStockShortage = ingredientRequirements.some(i => !i.isAvailable);
+    const scalingFactor = evalResult.scalingFactor;
+    const ingredientRequirements = evalResult.scaledIngredients;
+    const hasStockShortage = !evalResult.hasSufficientStock;
 
     container.innerHTML = `
       <div style="display:flex; flex-direction:column; gap:20px;">
@@ -858,7 +842,8 @@ export class KitchenProductionView {
                   <th>Raw Material Ingredient</th>
                   <th>Standard Recipe Qty</th>
                   <th>Scaled Required Qty</th>
-                  <th>Available Inventory Stock</th>
+                  <th>Kitchen Store Stock (LOC-KIT)</th>
+                  <th>Main Warehouse (LOC-MWH)</th>
                   <th>Stock Availability Status</th>
                 </tr>
               </thead>
@@ -871,12 +856,13 @@ export class KitchenProductionView {
                     </td>
                     <td style="font-size:0.85rem; color:var(--text-muted);">${ing.recipeQty} ${ing.recipeUom}</td>
                     <td style="font-weight:700; color:var(--text-main);">${ing.scaledRecipeQty} ${ing.recipeUom} <span style="font-size:0.75rem; color:var(--text-muted);">(${ing.scaledBaseQty} ${ing.baseUom})</span></td>
-                    <td style="font-weight:600;">${ing.currentStock} ${ing.baseUom}</td>
+                    <td style="font-weight:700; color:${ing.hasSufficientStock ? 'var(--status-success)' : 'var(--status-danger)'};">${ing.kitchenStock} ${ing.baseUom}</td>
+                    <td style="font-size:0.85rem; color:var(--text-muted);">${ing.mwhStock} ${ing.baseUom}</td>
                     <td>
-                      ${ing.isAvailable ? `
-                        <span class="badge badge-success">✓ Available in Stock</span>
+                      ${ing.hasSufficientStock ? `
+                        <span class="badge badge-success">✓ Available in Kitchen Store</span>
                       ` : `
-                        <span class="badge badge-danger">⚠️ SHORTAGE: ${ing.shortage} ${ing.baseUom}</span>
+                        <span class="badge badge-danger">⚠️ SHORTAGE: ${ing.shortageQty} ${ing.baseUom}</span>
                       `}
                     </td>
                   </tr>
@@ -941,18 +927,18 @@ export class KitchenProductionView {
     const raiseReqBtn = container.querySelector('#btn-raise-stock-requisition');
     if (raiseReqBtn) {
       raiseReqBtn.addEventListener('click', () => {
-        const shortages = ingredientRequirements.filter(i => !i.isAvailable);
+        const shortageList = ingredientRequirements.filter(i => !i.hasSufficientStock);
 
         const req = productionModel.createStockRequisition({
-          prepBomId: activeBom.id,
-          prepBomCode: activeBom.bomCode,
+          recipeId: activeBom.id,
+          recipeCode: activeBom.bomCode,
           inventoryItemName: activeBom.inventoryItemName,
           targetQuantity: targetQty,
           targetUom: activeBom.standardYieldUom,
           items: ingredientRequirements
         }, tenantId);
 
-        alert(`📦 Stock Requisition "${req.reqCode}" Raised Successfully!\n\nRequisition for ${shortages.length} shortage items submitted to Inventory Manager.\nDestination: Kitchen Store\nSource: Main Warehouse`);
+        alert(`📦 Stock Requisition "${req.reqCode}" Raised Successfully!\n\nRequisition for ${shortageList.length} shortage items submitted to Inventory Manager.\nDestination: Kitchen Store (LOC-KIT)\nSource: Main Warehouse (LOC-MWH)`);
 
         this.activeTab = 'REQUISITIONS';
         this.render(container.closest('.animate-fade-in').parentNode, session);

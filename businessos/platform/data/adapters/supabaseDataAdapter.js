@@ -36,6 +36,47 @@ export class SupabaseDataAdapter {
         if (item.item_code && !item.itemCode) item.itemCode = item.item_code;
         if (item.location_code && !item.locationCode) item.locationCode = item.location_code;
         if (item.unit_cost && !item.unitCost) item.unitCost = parseFloat(item.unit_cost);
+
+        // Kitchen domain: kitchen_menu_items
+        if (item.item_name && !item.itemName) item.itemName = item.item_name;
+        if (item.selling_price !== undefined && item.sellingPrice === undefined) item.sellingPrice = parseFloat(item.selling_price);
+        if (item.tax_profile && !item.taxProfile) item.taxProfile = item.tax_profile;
+        if (item.dietary_type && !item.dietaryType) item.dietaryType = item.dietary_type;
+        if (item.portion_size && !item.portionSize) item.portionSize = item.portion_size;
+        if (item.availability_status && !item.availabilityStatus) item.availabilityStatus = item.availability_status;
+        if (item.lifecycle_status && !item.lifecycleStatus) item.lifecycleStatus = item.lifecycle_status;
+        if (item.recipe_id !== undefined && item.recipeId === undefined) item.recipeId = item.recipe_id;
+        if (item.recipe_notes !== undefined && item.recipeNotes === undefined) item.recipeNotes = item.recipe_notes;
+        if (item.spiciness_level && !item.spicinessLevel) item.spicinessLevel = item.spiciness_level;
+
+        // Kitchen domain: recipes
+        if (item.recipe_code && !item.recipeCode) item.recipeCode = item.recipe_code;
+        if (item.recipe_name && !item.recipeName) item.recipeName = item.recipe_name;
+        if (item.menu_item_id && !item.menuItemId) item.menuItemId = item.menu_item_id;
+        if (item.menu_item_code && !item.menuItemCode) item.menuItemCode = item.menu_item_code;
+        if (item.yield_quantity !== undefined && item.yieldQuantity === undefined) item.yieldQuantity = parseFloat(item.yield_quantity);
+        if (item.yield_uom && !item.yieldUom) item.yieldUom = item.yield_uom;
+        if (item.portion_count !== undefined && item.portionCount === undefined) item.portionCount = parseInt(item.portion_count);
+        if (item.total_cost !== undefined && item.totalCost === undefined) item.totalCost = parseFloat(item.total_cost);
+        if (item.cost_per_portion !== undefined && item.costPerPortion === undefined) item.costPerPortion = parseFloat(item.cost_per_portion);
+
+        // Kitchen domain: recipe_ingredients
+        if (item.inventory_item_code && !item.inventoryItemCode) item.inventoryItemCode = item.inventory_item_code;
+        if (item.inventory_item_name && !item.inventoryItemName) item.inventoryItemName = item.inventory_item_name;
+        if (item.unit_cost_snapshot !== undefined && item.unitCost === undefined) item.unitCost = parseFloat(item.unit_cost_snapshot);
+        if (item.recipe_wastage_percent !== undefined && item.recipeWastagePercent === undefined) item.recipeWastagePercent = parseFloat(item.recipe_wastage_percent);
+        if (item.line_cost !== undefined && item.lineCost === undefined) item.lineCost = parseFloat(item.line_cost);
+
+        // Kitchen domain: orders
+        if (item.order_number && !item.orderNumber) item.orderNumber = item.order_number;
+        if (item.table_code && !item.tableCode) item.tableCode = item.table_code;
+        if (item.session_id && !item.sessionId) item.sessionId = item.session_id;
+
+        // Inventory Requests domain: inventory_requests
+        if (item.request_number && !item.requestNumber) item.requestNumber = item.request_number;
+        if (item.request_number && !item.reqCode) item.reqCode = item.request_number;
+        if (item.source_location && !item.sourceLocation) item.sourceLocation = item.source_location;
+        if (item.destination_location && !item.destinationLocation) item.destinationLocation = item.destination_location;
         
         // Normalize tenant restaurant name from patchObj or default
         if (collection === 'tenants') {

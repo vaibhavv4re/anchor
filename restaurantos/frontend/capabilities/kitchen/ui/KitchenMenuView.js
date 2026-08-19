@@ -12,10 +12,13 @@
 import { kitchenMenuModel } from '../../../../../businessos/platform/kitchen/kitchenMenuModel.js';
 
 export class KitchenMenuView {
-  constructor({ onNavigate }) {
+  constructor(deps = {}) {
     this.container = null;
     this.activeTab = 'catalog'; // default tab inside Menu view
-    this.onNavigate = onNavigate || (() => {});
+    // Accept full opts object (dataGateway, authEngine, etc.) or legacy { onNavigate }
+    this.dataGateway = deps.dataGateway || (typeof window !== 'undefined' && window.__APP__?.platform?.dataGateway) || null;
+    this.onNavigate = deps.onNavigate || (() => {});
+    this._session = null; // set at render time
 
     // Filters for Catalog tab
     this.filters = {
@@ -35,7 +38,26 @@ export class KitchenMenuView {
     this.importFileName = '';
   }
 
-  render() {
+  /**
+   * Primary render entry point — matches app.js calling convention:
+   *   const view = new KitchenMenuView(opts);
+   *   view.render(mount, session);       ← mount to DOM element, session from AuthEngine
+   *
+   * Also supports legacy no-arg form for standalone use:
+   *   mount.appendChild(view.render());  ← returns self-contained div
+   */
+  render(mount, session) {
+    if (session) this._session = session;
+
+    if (mount && mount.nodeType === Node.ELEMENT_NODE) {
+      // Called by app.js: render directly into the supplied mount element
+      this.container = mount;
+      this.container.className = 'kitchen-menu-container animate-fade-in';
+      this.updateContent();
+      return this.container;
+    }
+
+    // Legacy: create own container and return it
     this.container = document.createElement('div');
     this.container.className = 'kitchen-menu-container animate-fade-in';
     this.updateContent();
@@ -43,7 +65,8 @@ export class KitchenMenuView {
   }
 
   updateContent() {
-    const session = JSON.parse(sessionStorage.getItem('ros_session') || '{}');
+    // Prefer session passed at render() time; fall back to sessionStorage for legacy callers
+    const session = this._session || JSON.parse(sessionStorage.getItem('ros_session') || '{}');
     const tenantId = session.tenantId || null;
 
     const stats = kitchenMenuModel.getStats(tenantId);
