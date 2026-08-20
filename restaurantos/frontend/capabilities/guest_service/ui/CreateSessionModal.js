@@ -127,7 +127,8 @@ export class CreateSessionModal {
       const guestCount = parseInt(this.modalEl.querySelector('#inp-custom-guests').value) || 2;
       const guestNotes = this.modalEl.querySelector('#inp-notes').value;
       const currentAuth = authEngine.getCurrentSession();
-      const waiterId = currentAuth ? currentAuth.employeeId : 'emp-rahul';
+      const waiterId = currentAuth ? (currentAuth.employeeId || currentAuth.id || currentAuth.employee_code || currentAuth.employeeName) : 'emp-suresh';
+      const tenantId = currentAuth ? (currentAuth.tenantId || currentAuth.tenant_id) : 'tenant_h0qc7wf';
 
       // 1. Create Session Entity
       const session = sessionModel.createSession({
@@ -136,7 +137,8 @@ export class CreateSessionModal {
         assignedWaiterId: waiterId,
         guestNotes,
         dietaryTags: Array.from(this.selectedDietaryTags),
-        celebrationFlag: this.selectedCelebration
+        celebrationFlag: this.selectedCelebration,
+        tenantId
       });
 
       // 2. Transition Table Physical Asset to OCCUPIED

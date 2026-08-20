@@ -10,6 +10,7 @@ import { diningAreaModel } from '../../../../../businessos/platform/layout/dinin
 
 import { DiningAreaTabs } from './DiningAreaTabs.js';
 import { TimelineWidget } from './TimelineWidget.js';
+import { TableInspectorModal } from './TableInspectorModal.js';
 import { ActiveSessionView } from '../../guest_service/ui/ActiveSessionView.js';
 
 export class FloorViewerView {
@@ -59,7 +60,7 @@ export class FloorViewerView {
     }
 
     this.container.innerHTML = `
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--space-md);">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--space-md); margin-bottom:12px;">
         <div>
           <h2 style="font-size:1.5rem; margin:0;">Restaurant Layout & Live Floor</h2>
           <p style="color:var(--text-muted); font-size:0.875rem; margin-top:2px;">Single unified table state projection across all workspaces (PD-006 & PD-009)</p>
@@ -139,5 +140,36 @@ export class FloorViewerView {
         </div>
       </div>
     `).join('');
+
+    // Attach click listeners to open Table Inspector Modal
+    gridMount.querySelectorAll('.table-card').forEach(card => {
+      card.addEventListener('click', () => {
+        const tableNum = card.dataset.table;
+        const projection = tableProjectionService.getTableProjection(tableNum);
+        if (!projection) return;
+
+        const modalMount = this.container.querySelector('#inspector-modal-mount');
+        if (!modalMount) return;
+        modalMount.innerHTML = '';
+
+        const inspector = new TableInspectorModal({
+          projection,
+          onClose: () => {
+            modalMount.innerHTML = '';
+          },
+          onActionComplete: () => {
+            modalMount.innerHTML = '';
+            this.updateGridContent();
+          },
+          onOpenActiveSession: (sessionId) => {
+            modalMount.innerHTML = '';
+            this.activeSessionId = sessionId;
+            this.updateContent();
+          }
+        });
+
+        modalMount.appendChild(inspector.render());
+      });
+    });
   }
 }

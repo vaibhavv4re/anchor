@@ -43,7 +43,16 @@ class TableMasterModel {
 
   getTableMaster(tableNumber) {
     const tables = this.getAllMasterTables();
-    return tables.find(t => t.tableNumber === tableNumber || t.id === tableNumber) || null;
+    if (tableNumber === undefined || tableNumber === null) return null;
+    const num = parseInt(tableNumber);
+    const str = String(tableNumber).trim();
+    return tables.find(t => 
+      t.tableNumber === num || 
+      String(t.tableNumber) === str || 
+      t.id === str ||
+      t.tableCode === str ||
+      t.table_code === str
+    ) || null;
   }
 }
 

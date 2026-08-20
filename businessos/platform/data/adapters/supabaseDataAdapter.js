@@ -8,7 +8,12 @@ export class SupabaseDataAdapter {
   }
 
   async getCollection(collection, tenantId = null) {
-    if (!this.client || collection === 'roles' || collection === 'sessions') return [];
+    const virtualCollections = [
+      'roles', 'sessions', 'table_sessions', 'table_runtime_states',
+      'stock_transactions', 'stock_requisitions', 'menu_catalog',
+      'production_batches', 'devices', 'system_config'
+    ];
+    if (!this.client || virtualCollections.includes(collection)) return [];
     
     try {
       const res = await this.client.fetchTableData(collection);
@@ -68,9 +73,22 @@ export class SupabaseDataAdapter {
         if (item.line_cost !== undefined && item.lineCost === undefined) item.lineCost = parseFloat(item.line_cost);
 
         // Kitchen domain: orders
-        if (item.order_number && !item.orderNumber) item.orderNumber = item.order_number;
-        if (item.table_code && !item.tableCode) item.tableCode = item.table_code;
-        if (item.session_id && !item.sessionId) item.sessionId = item.session_id;
+        if (collection === 'orders') {
+          if (item.order_number && !item.orderNumber) item.orderNumber = item.order_number;
+          if (item.table_code && !item.tableCode) item.tableCode = item.table_code;
+          if (item.session_id && !item.sessionId) item.sessionId = item.session_id;
+          if (!item.orderId) item.orderId = item.id;
+          if (!item.tableNumber && item.tableCode) {
+            item.tableNumber = parseInt(item.tableCode.replace(/\D/g, '')) || 1;
+          }
+          if (item.data && Array.isArray(item.data.items) && (!item.items || item.items.length === 0)) {
+            item.items = item.data.items;
+          }
+          if (item.data && Array.isArray(item.data.tickets) && (!item.tickets || item.tickets.length === 0)) {
+            item.tickets = item.data.tickets;
+          }
+          if (!item.totalAmount && item.total_amount) item.totalAmount = parseFloat(item.total_amount);
+        }
 
         // Inventory Requests domain: inventory_requests
         if (item.request_number && !item.requestNumber) item.requestNumber = item.request_number;

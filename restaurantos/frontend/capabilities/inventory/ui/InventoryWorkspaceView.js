@@ -7,11 +7,13 @@
  * - Sourced 100% live from Supabase PostgreSQL tables via DataGateway.
  */
 
+import { platformEventBus } from '../../../../../businessos/platform/events/platformEvents.js';
+
 export class InventoryWorkspaceView {
   constructor(deps = {}) {
     this.dataGateway = deps.dataGateway || (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform ? window.__APP__.platform.dataGateway : null);
     this.authEngine = deps.authEngine || null;
-    this.platformEventBus = deps.platformEventBus || null;
+    this.platformEventBus = deps.platformEventBus || platformEventBus;
     this.repositories = deps.repositories || null;
 
     this.activeSubView = 'inv-dashboard';
@@ -23,6 +25,7 @@ export class InventoryWorkspaceView {
     this.trfDraftLines = [];
     this.adjDraftLines = [];
     this.rootMount = null;
+    this.isRealtimeSubscribed = false;
 
     // Filters for Live Store Balances
     this.liveInventorySearchQuery = '';
@@ -30,6 +33,34 @@ export class InventoryWorkspaceView {
     this.liveInventoryCategoryFilter = 'ALL';
     this.liveInventoryStatusFilter = 'ALL';
     this.liveInventorySort = 'VALUE_DESC';
+
+    this._initRealtimeSubscription();
+  }
+
+  _initRealtimeSubscription() {
+    if (this.isRealtimeSubscribed) return;
+    this.isRealtimeSubscribed = true;
+
+    platformEventBus.subscribe('stock:balance:updated', () => {
+      if (this.rootMount && (this.activeSubView === 'inv-live-stock' || this.activeSubView === 'inv-dashboard')) {
+        const session = this.authEngine ? this.authEngine.getCurrentSession() : null;
+        this.render(this.rootMount, session);
+      }
+    });
+
+    if (typeof BroadcastChannel !== 'undefined') {
+      try {
+        const bc = new BroadcastChannel('anchor_restaurantos_realtime');
+        bc.onmessage = (ev) => {
+          if (ev.data?.type === 'STOCK_BALANCE_UPDATED' || ev.data?.type === 'ORDER_CONFIRMED') {
+            if (this.rootMount && (this.activeSubView === 'inv-live-stock' || this.activeSubView === 'inv-dashboard')) {
+              const session = this.authEngine ? this.authEngine.getCurrentSession() : null;
+              this.render(this.rootMount, session);
+            }
+          }
+        };
+      } catch (_) {}
+    }
   }
 
   _getDataGateway() {

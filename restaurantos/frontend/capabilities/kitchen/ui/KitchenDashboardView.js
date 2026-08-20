@@ -1,4 +1,5 @@
 import { offlineStore as globalOfflineStore } from '../../../../../businessos/platform/offline_store/offlineStore.js';
+import { orderModel } from '../../../../../businessos/platform/ordering/orderModel.js';
 
 /**
  * Capability 1.3 - Kitchen & Chef Workspace: Tab 1 - 🏠 Dashboard
@@ -66,9 +67,9 @@ export class KitchenDashboardView {
 
     // 2. Fetch Operational Metrics
     const sessions = this._getCollection('sessions', tenantId);
-    const kots = this._getCollection('kots', tenantId);
+    const liveTickets = orderModel.getAllTickets(tenantId);
     const activeOrders = sessions.filter(s => s.status === 'ACTIVE').length;
-    const pendingKots = kots.filter(k => k.status === 'PENDING' || k.status === 'PREPARING').length;
+    const pendingKots = liveTickets.filter(k => k.destination === 'KITCHEN' && (k.status === 'QUEUED' || k.status === 'PREPARING' || k.status === 'PENDING')).length;
 
     const productionBatches = this._getCollection('production_batches', tenantId);
     const completedBatches = productionBatches.filter(b => b.status === 'COMPLETED');

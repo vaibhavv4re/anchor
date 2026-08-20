@@ -1,10 +1,12 @@
 /**
  * BusinessOS Platform - 6 Physical Table Runtime State Machine (PD-008)
  * Manages physical asset table states cleanly separated from session milestones.
+ * Dynamic state derivation from active guest sessions with ZERO static mock seeds.
  */
 
 import { offlineStore } from '../offline_store/offlineStore.js';
-import { platformEventBus, PlatformEventTypes } from '../events/platformEvents.js';
+import { platformEventBus } from '../events/platformEvents.js';
+import { sessionModel } from '../session/sessionModel.js';
 
 export const PhysicalTableStates = Object.freeze({
   AVAILABLE: 'AVAILABLE',
@@ -40,43 +42,71 @@ class TableStateMachine {
 
   _initSeedData() {
     if (!offlineStore.getCollection('table_runtime_states')) {
-      // Seed default initial runtime state for all tables as AVAILABLE
-      const initialRuntime = [
-        { tableNumber: 1, currentState: PhysicalTableStates.AVAILABLE, currentSessionId: null, assignedWaiterId: null, lastActivityAt: new Date().toISOString() },
-        { tableNumber: 2, currentState: PhysicalTableStates.AVAILABLE, currentSessionId: null, assignedWaiterId: null, lastActivityAt: new Date().toISOString() },
-        { tableNumber: 3, currentState: PhysicalTableStates.OCCUPIED, currentSessionId: 'sess_1001', assignedWaiterId: 'emp-rahul', lastActivityAt: new Date().toISOString() },
-        { tableNumber: 4, currentState: PhysicalTableStates.PAYMENT_PENDING, currentSessionId: 'sess_1002', assignedWaiterId: 'emp-rahul', lastActivityAt: new Date().toISOString() },
-        { tableNumber: 5, currentState: PhysicalTableStates.CLEANING, currentSessionId: null, assignedWaiterId: null, lastActivityAt: new Date().toISOString() },
-        { tableNumber: 6, currentState: PhysicalTableStates.AVAILABLE, currentSessionId: null, assignedWaiterId: null, lastActivityAt: new Date().toISOString() },
-        { tableNumber: 101, currentState: PhysicalTableStates.AVAILABLE, currentSessionId: null, assignedWaiterId: null, lastActivityAt: new Date().toISOString() },
-        { tableNumber: 102, currentState: PhysicalTableStates.RESERVED, currentSessionId: null, assignedWaiterId: null, lastActivityAt: new Date().toISOString() },
-        { tableNumber: 103, currentState: PhysicalTableStates.AVAILABLE, currentSessionId: null, assignedWaiterId: null, lastActivityAt: new Date().toISOString() },
-        { tableNumber: 201, currentState: PhysicalTableStates.AVAILABLE, currentSessionId: null, assignedWaiterId: null, lastActivityAt: new Date().toISOString() },
-        { tableNumber: 202, currentState: PhysicalTableStates.AVAILABLE, currentSessionId: null, assignedWaiterId: null, lastActivityAt: new Date().toISOString() },
-        { tableNumber: 301, currentState: PhysicalTableStates.AVAILABLE, currentSessionId: null, assignedWaiterId: null, lastActivityAt: new Date().toISOString() },
-        { tableNumber: 302, currentState: PhysicalTableStates.AVAILABLE, currentSessionId: null, assignedWaiterId: null, lastActivityAt: new Date().toISOString() },
-        { tableNumber: 303, currentState: PhysicalTableStates.AVAILABLE, currentSessionId: null, assignedWaiterId: null, lastActivityAt: new Date().toISOString() }
-      ];
-      offlineStore.setCollection('table_runtime_states', initialRuntime);
+      offlineStore.setCollection('table_runtime_states', []);
     }
   }
 
-  getTableRuntimeState(tableNumber) {
+  /**
+   * Get dynamic table runtime state.
+   * Derives state from active sessions first; falls back to manual operational overrides (CLEANING, RESERVED, OUT_OF_SERVICE) or AVAILABLE.
+   * @param {number|string} tableNumber 
+   * @param {string|null} tenantId 
+   * @returns {Object} Runtime state
+   */
+  getTableRuntimeState(tableNumber, tenantId = null) {
+    const tableNum = parseInt(tableNumber);
+    const activeSession = sessionModel.getActiveSessionForTable(tableNum, tenantId);
+
+    if (activeSession) {
+      const isPaymentPending = activeSession.status === 'BILL_GENERATED';
+      return {
+        tableNumber: tableNum,
+        currentState: isPaymentPending ? PhysicalTableStates.PAYMENT_PENDING : PhysicalTableStates.OCCUPIED,
+        currentSessionId: activeSession.id || activeSession.sessionId,
+        assignedWaiterId: activeSession.assignedWaiterId || null,
+        guestCount: activeSession.guestCount || 2,
+        lastActivityAt: activeSession.lastActivityAt || activeSession.createdAt || new Date().toISOString(),
+        correlationId: activeSession.correlationId || null
+      };
+    }
+
+    // No active session — check manual operational state overrides
     const states = offlineStore.getCollection('table_runtime_states') || [];
-    return states.find(s => s.tableNumber === parseInt(tableNumber)) || {
-      tableNumber: parseInt(tableNumber),
+    const manualState = states.find(s => s.tableNumber === tableNum);
+
+    if (manualState && (manualState.currentState === PhysicalTableStates.CLEANING || manualState.currentState === PhysicalTableStates.RESERVED || manualState.currentState === PhysicalTableStates.OUT_OF_SERVICE)) {
+      return {
+        tableNumber: tableNum,
+        currentState: manualState.currentState,
+        currentSessionId: null,
+        assignedWaiterId: manualState.assignedWaiterId || null,
+        guestCount: 0,
+        lastActivityAt: manualState.lastActivityAt || new Date().toISOString(),
+        correlationId: manualState.correlationId || null
+      };
+    }
+
+    return {
+      tableNumber: tableNum,
       currentState: PhysicalTableStates.AVAILABLE,
       currentSessionId: null,
       assignedWaiterId: null,
-      lastActivityAt: new Date().toISOString()
+      guestCount: 0,
+      lastActivityAt: new Date().toISOString(),
+      correlationId: null
     };
   }
 
   /**
    * Transition a table to a new physical state.
+   * @param {number|string} tableNumber 
+   * @param {string} newState 
+   * @param {Object} options { sessionId, waiterId, actorId }
+   * @returns {{ success: boolean, runtime?: Object, error?: string }}
    */
   transitionTableState(tableNumber, newState, { sessionId = null, waiterId = null, actorId = 'SYSTEM' } = {}) {
-    const currentRuntime = this.getTableRuntimeState(tableNumber);
+    const tableNum = parseInt(tableNumber);
+    const currentRuntime = this.getTableRuntimeState(tableNum);
     const currentState = currentRuntime.currentState;
 
     if (currentState === newState) return { success: true, runtime: currentRuntime };
@@ -98,7 +128,7 @@ class TableStateMachine {
     };
 
     const allStates = offlineStore.getCollection('table_runtime_states') || [];
-    const index = allStates.findIndex(s => s.tableNumber === parseInt(tableNumber));
+    const index = allStates.findIndex(s => s.tableNumber === tableNum);
     if (index >= 0) {
       allStates[index] = updatedRuntime;
     } else {
@@ -108,7 +138,7 @@ class TableStateMachine {
 
     // Publish platform event
     platformEventBus.publish('table:state:changed', {
-      tableNumber: parseInt(tableNumber),
+      tableNumber: tableNum,
       previousState: currentState,
       newState,
       sessionId: updatedRuntime.currentSessionId,

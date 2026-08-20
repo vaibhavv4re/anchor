@@ -88,20 +88,22 @@ export class TableInspectorModal {
 
         if (type === 'SEAT_GUESTS') {
           // Open Group 3 CreateSessionModal
-          const mount = this.modalEl.querySelector('#create-session-mount');
-          mount.innerHTML = '';
+          const parentMount = this.modalEl.parentElement;
+          if (parentMount) {
+            parentMount.innerHTML = '';
 
-          const sessionModal = new CreateSessionModal({
-            tableNumber: this.projection.tableNumber,
-            onClose: () => { mount.innerHTML = ''; },
-            onSessionCreated: (session) => {
-              mount.innerHTML = '';
-              if (this.onActionComplete) this.onActionComplete();
-              if (this.onOpenActiveSession) this.onOpenActiveSession(session.id);
-            }
-          });
+            const sessionModal = new CreateSessionModal({
+              tableNumber: this.projection.tableNumber,
+              onClose: () => { parentMount.innerHTML = ''; },
+              onSessionCreated: (session) => {
+                parentMount.innerHTML = '';
+                if (this.onActionComplete) this.onActionComplete();
+                if (this.onOpenActiveSession) this.onOpenActiveSession(session.id);
+              }
+            });
 
-          mount.appendChild(sessionModal.render());
+            parentMount.appendChild(sessionModal.render());
+          }
         } else if (type === 'OPEN_SESSION') {
           const activeProj = sessionProjectionService.getActiveProjectionForTable(this.projection.tableNumber);
           if (activeProj && this.onOpenActiveSession) {
@@ -110,8 +112,18 @@ export class TableInspectorModal {
             alert(`No active session found for Table ${this.projection.tableNumber}`);
           }
           if (this.onClose) this.onClose();
-        } else if (type === 'OPEN_BILL' || type === 'MARK_CLEAN' || type === 'RESTORE_SERVICE') {
+        } else if (type === 'OPEN_BILL') {
+          const activeProj = sessionProjectionService.getActiveProjectionForTable(this.projection.tableNumber);
+          if (activeProj && this.onOpenActiveSession) {
+            this.onOpenActiveSession(activeProj.sessionId);
+          } else {
+            alert(`No active bill session found for Table ${this.projection.tableNumber}`);
+          }
+          if (this.onClose) this.onClose();
+        } else if (type === 'MARK_CLEAN' || type === 'RESTORE_SERVICE') {
+          tableStateMachine.transitionTableState(this.projection.tableNumber, PhysicalTableStates.AVAILABLE);
           if (this.onActionComplete) this.onActionComplete();
+          if (this.onClose) this.onClose();
         }
       });
     }

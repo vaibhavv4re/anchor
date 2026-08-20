@@ -40,6 +40,10 @@ import { ActiveSessionView } from './capabilities/guest_service/ui/ActiveSession
 import { AdminWorkspaceView } from './capabilities/setup_wizard/ui/AdminWorkspaceView.js';
 import { SuperAdminWorkspaceView } from './capabilities/setup_wizard/ui/SuperAdminWorkspaceView.js';
 import { InventoryWorkspaceView } from './capabilities/inventory/ui/InventoryWorkspaceView.js';
+import { KitchenDisplaySystemView } from './capabilities/kitchen/ui/KitchenDisplaySystemView.js';
+import { WaiterWorkspaceView } from './capabilities/guest_service/ui/WaiterWorkspaceView.js';
+import { orderModel } from '../../businessos/platform/ordering/orderModel.js';
+import { productionRoutingEngine } from '../../businessos/platform/ordering/productionRoutingEngine.js';
 
 export class ApplicationShell {
   constructor(deps = {}) {
@@ -147,7 +151,7 @@ export class ApplicationShell {
             <button class="btn-secondary" id="btn-run-group4-tests" style="padding:8px 12px; border-color:var(--status-info); color:var(--status-info);">🧪 Group 4</button>
 
             <div class="employee-confirm-avatar" style="padding:4px 12px;">
-              <img src="${session.avatarUrl}" class="employee-avatar-img" alt="${session.employeeName}" style="width:32px; height:32px;">
+              <img src="${session.avatarUrl || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(session.employeeName || 'Staff')}" class="employee-avatar-img" alt="${session.employeeName}" style="width:32px; height:32px; border-radius:50%;">
               <div style="font-size:0.875rem;">
                 <span style="font-weight:600;">${session.employeeName}</span>
                 <span style="color:var(--text-muted); margin-left:4px;">(${session.roleName})</span>
@@ -184,6 +188,11 @@ export class ApplicationShell {
     } else if (session.workspace === 'inventory') {
       const inventoryWs = new InventoryWorkspaceView(opts);
       await inventoryWs.render(rootMount, session);
+    } else if (this.activeSubView === 'kds' || session.workspace === 'kds') {
+      this.renderKDSWorkspace(rootMount, session);
+    } else if (session.workspace === 'waiter' || session.roleId === 'role-waiter') {
+      const waiterWs = new WaiterWorkspaceView(opts);
+      await waiterWs.render(rootMount, session);
     } else {
       // Default / Navigation Layout for other workspaces
       rootMount.innerHTML = `
@@ -207,6 +216,7 @@ export class ApplicationShell {
       
       <button class="nav-item ${this.activeSubView === 'dashboard' ? 'active' : ''}" data-view="dashboard">📌 Main Overview</button>
       <button class="nav-item ${this.activeSubView === 'kitchen' ? 'active' : ''}" data-view="kitchen">👨‍🍳 Kitchen Tower</button>
+      <button class="nav-item ${this.activeSubView === 'kds' ? 'active' : ''}" data-view="kds">🔥 Live KDS Display</button>
       <button class="nav-item ${this.activeSubView === 'floor' ? 'active' : ''}" data-view="floor">🗺️ Floor & Layout</button>
       <button class="nav-item ${this.activeSubView === 'menu_browser' ? 'active' : ''}" data-view="menu_browser">🍽️ POS Menu Browser</button>
       <button class="nav-item ${this.activeSubView === 'active_sessions' ? 'active' : ''}" data-view="active_sessions">🛎️ Active Guest Sessions</button>
@@ -330,6 +340,8 @@ export class ApplicationShell {
 
     if (this.activeSubView === 'kitchen') {
       this.renderKitchenTower(mount, session, opts);
+    } else if (this.activeSubView === 'kds') {
+      this.renderKDSWorkspace(mount, session);
     } else if (this.activeSubView === 'floor') {
       const view = new FloorViewerView(opts);
       mount.appendChild(view.render());
@@ -366,7 +378,13 @@ export class ApplicationShell {
       const view = new MenuBrowserView(opts);
       mount.appendChild(view.render());
     } else if (this.activeSubView === 'active_sessions') {
-      const view = new ActiveSessionView(opts);
+      const view = new ActiveSessionView({
+        ...opts,
+        onClose: () => {
+          this.activeSubView = 'floor';
+          this.mountSubView(session);
+        }
+      });
       mount.appendChild(view.render());
     }
   }
@@ -455,7 +473,8 @@ export class ApplicationShell {
       const gotoKdsBtn = mount.querySelector('.btn-goto-kds');
       if (gotoKdsBtn) {
         gotoKdsBtn.addEventListener('click', () => {
-          this.renderKDSWorkspace(mount, session);
+          this.activeSubView = 'kds';
+          this.renderWorkspace(session);
         });
       }
     };
@@ -464,79 +483,18 @@ export class ApplicationShell {
   }
 
   renderKDSWorkspace(mount, session) {
-    const tickets = [
-      { id: 'KOT-101', table: 'T-01', time: '5 mins ago', status: 'NEW', items: [{ name: 'Paneer Butter Masala', qty: 2, note: 'Less spicy' }, { name: 'Butter Naan', qty: 4, note: 'Extra butter' }] },
-      { id: 'KOT-102', table: 'T-04', time: '12 mins ago', status: 'PREPARING', items: [{ name: 'Chicken Biryani (Handi)', qty: 1, note: 'Double Raita' }, { name: 'Garlic Naan', qty: 2, note: '' }] },
-      { id: 'KOT-103', table: 'T-06', time: '20 mins ago', status: 'READY', items: [{ name: 'Dal Makhani', qty: 1, note: '' }, { name: 'Jeera Rice', qty: 2, note: '' }] }
-    ];
-
-    mount.innerHTML = `
-      <div class="animate-fade-in" style="display:flex; flex-direction:column; gap:20px;">
-        <div style="display:flex; justify-content:space-between; align-items:center;">
-          <div>
-            <h2 style="font-size:1.75rem; margin:0;">👨‍🍳 Kitchen Display System (KDS)</h2>
-            <p style="color:var(--text-muted); font-size:0.875rem; margin-top:2px;">
-              Live Food Ticket Queue & Preparation Control Tower
-            </p>
-          </div>
-          <div style="display:flex; align-items:center; gap:12px;">
-            <button class="btn-secondary nav-route-btn" data-r="kitchen" style="padding:8px 16px;">👨‍🍳 Exit to Chef Workspace</button>
-            <span class="badge badge-info" style="font-size:0.85rem; padding:6px 12px;">🔥 Live Orders: ${tickets.length}</span>
-          </div>
-        </div>
-
-        <div class="grid grid-cols-3 gap-md">
-          ${tickets.map(t => {
-            const borderCol = t.status === 'NEW' ? 'var(--status-danger)' : (t.status === 'PREPARING' ? 'var(--status-warning)' : 'var(--status-success)');
-            const badgeCls = t.status === 'NEW' ? 'badge-warning' : (t.status === 'PREPARING' ? 'badge-info' : 'badge-success');
-            return `
-              <div class="card" style="background:var(--bg-surface-1); border-top:4px solid ${borderCol}; display:flex; flex-direction:column; justify-content:space-between;">
-                <div>
-                  <div style="display:flex; justify-content:space-between; align-items:center;">
-                    <strong style="font-size:1.1rem;">${t.id}</strong>
-                    <span class="badge ${badgeCls}">${t.status}</span>
-                  </div>
-                  <div style="font-size:0.8rem; color:var(--text-muted); margin-top:2px;">Table: <strong>${t.table}</strong> • ${t.time}</div>
-
-                  <div style="margin-top:12px; background:var(--bg-surface-2); padding:10px; border-radius:6px;">
-                    ${t.items.map(i => `
-                      <div style="display:flex; justify-content:space-between; font-size:0.9rem; margin-bottom:4px;">
-                        <span><strong>${i.qty}x</strong> ${i.name}</span>
-                      </div>
-                      ${i.note ? `<div style="font-size:0.75rem; color:var(--status-warning); font-style:italic; margin-bottom:4px;">Note: ${i.note}</div>` : ''}
-                    `).join('')}
-                  </div>
-                </div>
-
-                <div style="margin-top:14px;">
-                  ${t.status === 'NEW' ? `
-                    <button class="btn-primary btn-kot-state" data-id="${t.id}" data-state="PREPARING" style="width:100%;">🔥 Start Preparation</button>
-                  ` : (t.status === 'PREPARING' ? `
-                    <button class="btn-primary btn-kot-state" data-id="${t.id}" data-state="READY" style="width:100%; background:var(--status-success); border-color:var(--status-success);">✅ Mark Ticket Ready</button>
-                  ` : `
-                    <button class="btn-secondary" disabled style="width:100%; opacity:0.6;">✔ Ticket Ready & Dispatched</button>
-                  `)}
-                </div>
-              </div>
-            `;
-          }).join('')}
-        </div>
-      </div>
-    `;
-
-    mount.querySelectorAll('.nav-route-btn').forEach(b => {
-      b.addEventListener('click', () => {
+    if (this.currentKDSView && typeof this.currentKDSView.destroy === 'function') {
+      this.currentKDSView.destroy();
+    }
+    this.currentKDSView = new KitchenDisplaySystemView({
+      authEngine: this.authEngine,
+      onExit: () => {
         this.activeSubView = 'kitchen';
         const s = this.authEngine.getCurrentSession();
         this.renderWorkspace(s);
-      });
+      }
     });
-
-    mount.querySelectorAll('.btn-kot-state').forEach(b => {
-      b.addEventListener('click', () => {
-        alert(`✔ KOT ${b.dataset.id} status updated to ${b.dataset.state}!`);
-      });
-    });
+    this.currentKDSView.render(mount);
   }
 
   renderMainOverview(session) {

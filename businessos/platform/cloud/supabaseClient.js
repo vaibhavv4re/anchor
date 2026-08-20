@@ -342,13 +342,14 @@ export function formatRecordForTable(entityName, job) {
 
   if (entityName === 'orders') {
     return {
-      id: p.id || ('ord-' + Math.random().toString(36).substring(2, 9)),
-      tenant_id: job.tenantId || p.tenantId || p.tenant_id || '',
-      order_number: p.orderNumber || p.order_number || '',
-      table_code: p.tableCode || p.table_code || '',
-      session_id: p.sessionId || p.session_id || null,
-      status: p.status || 'OPEN',
-      total_amount: parseFloat(p.totalAmount || p.total_amount) || 0,
+      id: p.id || p.orderId || ('ord-' + Math.random().toString(36).substring(2, 9)),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      order_number: p.orderNumber || p.order_number || ('ORD-' + Math.floor(1000 + Math.random() * 9000)),
+      table_id: p.tableId || p.table_id || p.tableCode || p.table_code || null,
+      waiter_id: p.waiterId || p.waiter_id || null,
+      status: p.status || p.orderStatus || 'CONFIRMED',
+      total_amount: parseFloat(p.totalAmount || p.total_amount || p.subtotal) || 0,
+      items: Array.isArray(p.items) ? p.items : (p.data?.items || []),
       data: p
     };
   }

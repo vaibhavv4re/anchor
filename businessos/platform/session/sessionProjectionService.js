@@ -5,6 +5,7 @@
  */
 
 import { sessionModel } from './sessionModel.js';
+import { orderModel } from '../ordering/orderModel.js';
 import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
 
@@ -15,60 +16,177 @@ class SessionProjectionService {
 
   _initSubscribers() {
     platformEventBus.subscribe('session:created', (envelope) => {
-      const projection = this.getSessionProjection(envelope.payload.sessionId);
-      platformEventBus.publish('session:projection:updated', projection);
+      const payload = envelope.payload || envelope;
+      const projection = this.getSessionProjection(payload.sessionId);
+      if (projection) platformEventBus.publish('session:projection:updated', projection);
     });
 
     platformEventBus.subscribe('session:milestone:changed', (envelope) => {
-      const projection = this.getSessionProjection(envelope.payload.sessionId);
-      platformEventBus.publish('session:projection:updated', projection);
+      const payload = envelope.payload || envelope;
+      const projection = this.getSessionProjection(payload.sessionId);
+      if (projection) platformEventBus.publish('session:projection:updated', projection);
+    });
+
+    platformEventBus.subscribe('order:confirmed', (envelope) => {
+      const payload = envelope.payload || envelope;
+      if (payload.sessionId) {
+        const projection = this.getSessionProjection(payload.sessionId);
+        if (projection) platformEventBus.publish('session:projection:updated', projection);
+      }
+    });
+
+    platformEventBus.subscribe('ticket:status_changed', (envelope) => {
+      const payload = envelope.payload || envelope;
+      const ticket = payload.ticket;
+      if (ticket && ticket.sessionId) {
+        const projection = this.getSessionProjection(ticket.sessionId);
+        if (projection) platformEventBus.publish('session:projection:updated', projection);
+      }
+    });
+
+    platformEventBus.subscribe('ticket:item_status_changed', (envelope) => {
+      const payload = envelope.payload || envelope;
+      const ticket = payload.ticket;
+      if (ticket && ticket.sessionId) {
+        const projection = this.getSessionProjection(ticket.sessionId);
+        if (projection) platformEventBus.publish('session:projection:updated', projection);
+      }
     });
   }
 
   /**
-   * Generates a frozen schema SessionProjection object.
+   * Generates a frozen schema SessionProjection object with real order and ticket data.
    * @param {string} sessionId 
-   * @returns {Object} SessionProjection
+   * @param {string|null} tenantId 
+   * @returns {Object|null} SessionProjection
    */
-  getSessionProjection(sessionId) {
-    const session = sessionModel.getSession(sessionId);
+  getSessionProjection(sessionId, tenantId = null) {
+    const session = sessionModel.getSession(sessionId, tenantId);
     if (!session) return null;
 
-    const employees = offlineStore.getCollection('employees') || [];
-    const waiter = session.assignedWaiterId ? employees.find(e => e.id === session.assignedWaiterId) : null;
+    const targetTenantId = session.tenantId || tenantId;
+    const employees = offlineStore.getCollection('employees', targetTenantId) || offlineStore.getCollection('employees') || [];
+    const waiter = session.assignedWaiterId 
+      ? employees.find(e => e.id === session.assignedWaiterId || e.employeeId === session.assignedWaiterId || e.name === session.assignedWaiterId || e.employee_code === session.assignedWaiterId) 
+      : null;
 
-    const elapsedMs = session.createdAt ? (new Date() - new Date(session.createdAt)) : 0;
-    const elapsedMin = Math.floor(elapsedMs / (1000 * 60));
+    const orders = orderModel.getOrdersForSession(session.id || session.sessionId, targetTenantId);
+    const tickets = orderModel.getTicketsForSession(session.id || session.sessionId, targetTenantId);
+
+    const foodItems = [];
+    const drinkItems = [];
+    const readyItems = [];
+    const preparingItems = [];
+    const queuedItems = [];
+
+    // Extract items from dispatched tickets
+    tickets.forEach(t => {
+      (t.items || []).forEach(item => {
+        const itemStatus = item.itemStatus || item.status || t.status || 'QUEUED';
+        const entry = {
+          lineItemId: item.lineItemId || item.itemId || `${t.id}_${item.name}`,
+          itemId: item.itemId,
+          name: item.name || item.itemName || 'Dish',
+          quantity: item.quantity || item.qty || 1,
+          status: itemStatus,
+          itemStatus: itemStatus,
+          ticketId: t.ticketId || t.id,
+          ticketType: t.ticketType,
+          stationName: item.stationName || t.destination || 'KITCHEN',
+          isReady: itemStatus === 'READY',
+          isPreparing: itemStatus === 'PREPARING',
+          isQueued: itemStatus === 'QUEUED',
+          isServed: itemStatus === 'SERVED'
+        };
+        if (t.ticketType === 'BOT' || t.destination === 'BAR' || item.routing === 'BAR_LINE') {
+          drinkItems.push(entry);
+        } else {
+          foodItems.push(entry);
+        }
+        if (itemStatus === 'READY') {
+          readyItems.push(entry);
+        } else if (itemStatus === 'PREPARING') {
+          preparingItems.push(entry);
+        } else if (itemStatus === 'QUEUED') {
+          queuedItems.push(entry);
+        }
+      });
+    });
+
+    // Fallback: extract from raw orders if tickets have not been split
+    if (!foodItems.length && !drinkItems.length) {
+      orders.forEach(o => {
+        (o.items || []).forEach(item => {
+          const itemStatus = item.itemStatus || o.orderStatus || 'CONFIRMED';
+          const entry = {
+            lineItemId: item.lineItemId || item.itemId,
+            itemId: item.itemId,
+            name: item.name || item.itemName || 'Dish',
+            quantity: item.quantity || 1,
+            status: itemStatus,
+            itemStatus: itemStatus,
+            stationName: item.routing === 'BAR_LINE' ? 'BAR' : 'KITCHEN',
+            isReady: itemStatus === 'READY',
+            isPreparing: itemStatus === 'PREPARING',
+            isQueued: itemStatus === 'QUEUED' || itemStatus === 'CONFIRMED'
+          };
+          if (item.routing === 'BAR_LINE' || item.category === 'BEVERAGES & BAR') {
+            drinkItems.push(entry);
+          } else {
+            foodItems.push(entry);
+          }
+          if (itemStatus === 'READY') {
+            readyItems.push(entry);
+          }
+        });
+      });
+    }
+
+    const subtotal = orders.reduce((sum, o) => sum + (parseFloat(o.subtotal || o.totalAmount || o.total_amount) || 0), 0);
+    const guestNotes = session.guestNotes || session.notes || '';
+    const dietaryTags = session.dietaryTags || [];
+    const celebrationFlag = session.celebrationFlag || null;
+
+    const createdAt = session.createdAt ? new Date(session.createdAt) : new Date();
+    const elapsedMinutes = Math.max(0, Math.floor((new Date() - createdAt) / 60000));
+    const elapsedTime = `${elapsedMinutes} min`;
 
     return {
-      sessionId: session.id,
-      tableId: session.tableId,
+      sessionId: session.id || session.sessionId,
+      tableId: session.tableId || `tbl_${session.tableNumber}`,
       tableNumber: session.tableNumber,
-      guestCount: session.guestCount,
+      tableCode: session.tableCode || `T-${String(session.tableNumber || 1).padStart(2, '0')}`,
+      guestCount: session.guestCount || 2,
       waiter: {
         id: session.assignedWaiterId,
-        name: waiter ? waiter.name : 'Unassigned'
+        name: waiter ? waiter.name : (session.assignedWaiterId || 'Staff')
       },
-      status: session.status,
-      orderCount: 0,
-      foodItems: [],
-      drinkItems: [],
-      readyItems: [],
-      billStatus: session.status === 'BILL_GENERATED' ? 'GENERATED' : (session.status === 'PAYMENT_RECEIVED' ? 'PAID' : 'NONE'),
-      paymentStatus: session.status === 'PAYMENT_RECEIVED' ? 'COMPLETED' : 'PENDING',
-      elapsedTime: `${elapsedMin} min`,
-      lastActivity: session.lastActivityAt,
+      status: session.status || 'GUESTS_SEATED',
+      orderCount: orders.length,
+      orders,
+      tickets,
+      foodItems,
+      drinkItems,
+      readyItems,
+      preparingItems,
+      queuedItems,
+      subtotal,
+      billStatus: session.status === 'BILL_GENERATED' ? 'GENERATED' : (session.status === 'PAYMENT_RECEIVED' || session.status === 'CLOSED' ? 'PAID' : 'NONE'),
+      paymentStatus: session.status === 'PAYMENT_RECEIVED' || session.status === 'CLOSED' ? 'COMPLETED' : 'PENDING',
+      elapsedTime,
+      lastActivity: session.lastActivityAt || session.createdAt,
       guestNotes: session.guestNotes || '',
       dietaryTags: session.dietaryTags || [],
       celebrationFlag: session.celebrationFlag || null,
+      tenantId: targetTenantId,
       correlationId: session.correlationId
     };
   }
 
-  getActiveProjectionForTable(tableNumber) {
-    const activeSession = sessionModel.getActiveSessionForTable(tableNumber);
+  getActiveProjectionForTable(tableNumber, tenantId = null) {
+    const activeSession = sessionModel.getActiveSessionForTable(tableNumber, tenantId);
     if (!activeSession) return null;
-    return this.getSessionProjection(activeSession.id);
+    return this.getSessionProjection(activeSession.id, tenantId);
   }
 }
 

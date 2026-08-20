@@ -1,6 +1,7 @@
 /**
  * BusinessOS Platform - Session Entity & Persistence (PD-008)
  * Manages operational context: active table sessions, guest counts, notes, dietary tags, and celebration flags.
+ * ZERO static mock seed data.
  */
 
 import { offlineStore } from '../offline_store/offlineStore.js';
@@ -13,61 +14,77 @@ class SessionModel {
 
   _initSeedData() {
     if (!offlineStore.getCollection('table_sessions')) {
-      const defaultSessions = [
-        {
-          id: 'sess_1001',
-          tableNumber: 3,
-          tableId: 'tbl_3',
-          guestCount: 4,
-          assignedWaiterId: 'emp-rahul',
-          status: 'GUESTS_SEATED',
-          guestNotes: 'Near window preferred',
-          dietaryTags: ['Nut Allergy'],
-          celebrationFlag: 'Birthday',
-          createdAt: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
-          lastActivityAt: new Date(Date.now() - 25 * 60 * 1000).toISOString(),
-          correlationId: 'CID-55102'
-        },
-        {
-          id: 'sess_1002',
-          tableNumber: 4,
-          tableId: 'tbl_4',
-          guestCount: 2,
-          assignedWaiterId: 'emp-rahul',
-          status: 'BILL_GENERATED',
-          guestNotes: 'Separate check requested',
-          dietaryTags: [],
-          celebrationFlag: null,
-          createdAt: new Date(Date.now() - 50 * 60 * 1000).toISOString(),
-          lastActivityAt: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-          correlationId: 'CID-55103'
-        }
-      ];
-      offlineStore.setCollection('table_sessions', defaultSessions);
+      offlineStore.setCollection('table_sessions', []);
     }
   }
 
+  _getDataGateway() {
+    if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform) {
+      return window.__APP__.platform.dataGateway || null;
+    }
+    return null;
+  }
+
+  _getTenantId(providedTenantId = null) {
+    if (providedTenantId) return providedTenantId;
+    if (typeof sessionStorage !== 'undefined') {
+      try {
+        const session = JSON.parse(sessionStorage.getItem('ros_session') || '{}');
+        return session.tenantId || 'tenant_h0qc7wf';
+      } catch (_) {}
+    }
+    return 'tenant_h0qc7wf';
+  }
+
   /**
-   * Create a new table session (Recommendation 3.1).
+   * Create a new table session (Recommendation 3.1 & PD-008).
+   * @param {Object} params { tableNumber, guestCount, assignedWaiterId, guestNotes, dietaryTags, celebrationFlag, tenantId }
+   * @returns {Object} Created session
    */
-  createSession({ tableNumber, guestCount = 2, assignedWaiterId, guestNotes = '', dietaryTags = [], celebrationFlag = null }) {
+  createSession({ tableNumber, guestCount = 2, assignedWaiterId, guestNotes = '', dietaryTags = [], celebrationFlag = null, tenantId = null }) {
+    const targetTenantId = this._getTenantId(tenantId);
     const correlationId = 'CID-' + Math.floor(10000 + Math.random() * 90000);
+    const tableNum = parseInt(tableNumber) || 1;
+    const sessionId = 'sess_' + Math.random().toString(36).substring(2, 9);
+    const now = new Date().toISOString();
+
     const newSession = {
-      id: 'sess_' + Math.random().toString(36).substring(2, 9),
-      tableNumber: parseInt(tableNumber),
-      tableId: `tbl_${tableNumber}`,
-      guestCount: parseInt(guestCount),
-      assignedWaiterId,
+      id: sessionId,
+      sessionId,
+      tableNumber: tableNum,
+      tableId: `tbl_${tableNum}`,
+      tableCode: `T-${String(tableNum).padStart(2, '0')}`,
+      guestCount: parseInt(guestCount) || 2,
+      assignedWaiterId: assignedWaiterId || 'emp-waiter',
       status: 'GUESTS_SEATED',
-      guestNotes,
-      dietaryTags,
-      celebrationFlag,
-      createdAt: new Date().toISOString(),
-      lastActivityAt: new Date().toISOString(),
+      guestNotes: guestNotes || '',
+      dietaryTags: Array.isArray(dietaryTags) ? dietaryTags : [],
+      celebrationFlag: celebrationFlag || null,
+      createdAt: now,
+      lastActivityAt: now,
+      tenantId: targetTenantId,
       correlationId
     };
 
     offlineStore.appendItem('table_sessions', newSession);
+
+    // Sync to Supabase offline_journal for multi-device cross-replication
+    const dg = this._getDataGateway();
+    if (dg && typeof dg.create === 'function') {
+      const journalEntry = {
+        job_id: 'job_' + sessionId,
+        job_type: 'SESSION_OPENED',
+        tenant_id: targetTenantId,
+        entity_name: 'table_sessions',
+        payload: newSession,
+        device_id: typeof navigator !== 'undefined' ? navigator.userAgent.substring(0, 30) : 'POS-TERMINAL-01',
+        actor: assignedWaiterId || 'Staff',
+        correlation_id: correlationId,
+        sync_state: 'SYNCED',
+        created_at: now
+      };
+      dg.create('offline_journal', journalEntry).catch(e => console.warn('[sessionModel] Cloud session journal sync error:', e.message));
+    }
 
     // Publish platform event
     platformEventBus.publish('session:created', {
@@ -75,6 +92,7 @@ class SessionModel {
       tableNumber: newSession.tableNumber,
       guestCount: newSession.guestCount,
       assignedWaiterId: newSession.assignedWaiterId,
+      tenantId: newSession.tenantId,
       correlationId: newSession.correlationId,
       timestamp: newSession.createdAt
     });
@@ -82,31 +100,98 @@ class SessionModel {
     return newSession;
   }
 
-  getSession(sessionId) {
-    const sessions = offlineStore.getCollection('table_sessions') || [];
-    return sessions.find(s => s.id === sessionId) || null;
+  /**
+   * Retrieve session by ID
+   * @param {string} sessionId 
+   * @param {string|null} tenantId 
+   * @returns {Object|null}
+   */
+  getSession(sessionId, tenantId = null) {
+    const sessions = this.getAllSessions(tenantId);
+    return sessions.find(s => s.id === sessionId || s.sessionId === sessionId) || null;
   }
 
-  getActiveSessionForTable(tableNumber) {
-    const sessions = offlineStore.getCollection('table_sessions') || [];
-    return sessions.find(s => s.tableNumber === parseInt(tableNumber) && s.status !== 'CLOSED') || null;
+  /**
+   * Retrieve active (non-closed) session for a specific table
+   * @param {number|string} tableNumber 
+   * @param {string|null} tenantId 
+   * @returns {Object|null}
+   */
+  getActiveSessionForTable(tableNumber, tenantId = null) {
+    const sessions = this.getAllSessions(tenantId);
+    const tableNum = parseInt(tableNumber);
+    return sessions.find(s => (s.tableNumber === tableNum || s.table_number === tableNum) && s.status !== 'CLOSED') || null;
   }
 
-  getAllSessions() {
-    return offlineStore.getCollection('table_sessions') || [];
+  /**
+   * Retrieve all sessions (reconciled across local store, offline_journal, and Supabase orders)
+   * @param {string|null} tenantId 
+   * @returns {Array<Object>}
+   */
+  getAllSessions(tenantId = null) {
+    const localList = offlineStore.getCollection('table_sessions') || [];
+    const sessionMap = new Map();
+
+    // 1. Seed from local store
+    localList.forEach(s => {
+      if (s && (s.id || s.sessionId)) {
+        sessionMap.set(s.id || s.sessionId, s);
+      }
+    });
+
+    // 2. Reconcile active sessions from Supabase orders cache
+    const dg = this._getDataGateway();
+    const dgOrders = dg ? (dg.getCachedCollection('orders', tenantId) || []) : [];
+    const localOrders = offlineStore.getCollection('orders', tenantId) || [];
+    const allOrders = [...localOrders, ...dgOrders];
+
+    allOrders.forEach(o => {
+      const sId = o.sessionId || o.session_id || o.data?.sessionId;
+      const tNum = o.tableNumber || o.data?.tableNumber || (o.tableCode ? parseInt(o.tableCode.replace(/\D/g, '')) : null);
+      if (sId && tNum && !sessionMap.has(sId) && o.status !== 'CLOSED') {
+        sessionMap.set(sId, {
+          id: sId,
+          sessionId: sId,
+          tableNumber: tNum,
+          tableId: `tbl_${tNum}`,
+          tableCode: o.tableCode || o.data?.tableCode || `T-${String(tNum).padStart(2, '0')}`,
+          guestCount: o.guestCount || o.data?.guestCount || 2,
+          assignedWaiterId: o.waiterId || o.waiter_id || o.data?.waiterId || 'Staff',
+          status: o.status === 'BILL_GENERATED' ? 'BILL_GENERATED' : 'ORDERS_STARTED',
+          guestNotes: o.notes || o.data?.guestNotes || '',
+          dietaryTags: o.dietaryTags || o.data?.dietaryTags || [],
+          celebrationFlag: o.celebrationFlag || o.data?.celebrationFlag || null,
+          createdAt: o.createdAt || o.created_at || new Date().toISOString(),
+          lastActivityAt: o.updatedAt || o.created_at || new Date().toISOString(),
+          tenantId: o.tenantId || o.tenant_id || tenantId || 'tenant_h0qc7wf',
+          correlationId: o.correlationId || o.data?.correlationId || `CID-${sId}`
+        });
+      }
+    });
+
+    const allSessions = Array.from(sessionMap.values());
+    if (!tenantId) return allSessions;
+    return allSessions.filter(s => !s.tenantId || s.tenantId === tenantId);
   }
 
-  updateSession(sessionId, updates) {
-    const sessions = offlineStore.getCollection('table_sessions') || [];
-    const index = sessions.findIndex(s => s.id === sessionId);
+  /**
+   * Update session properties / milestone
+   * @param {string} sessionId 
+   * @param {Object} updates 
+   * @param {string|null} tenantId 
+   * @returns {Object|null}
+   */
+  updateSession(sessionId, updates, tenantId = null) {
+    const allSessions = offlineStore.getCollection('table_sessions') || [];
+    const index = allSessions.findIndex(s => s.id === sessionId || s.sessionId === sessionId);
     if (index >= 0) {
-      sessions[index] = {
-        ...sessions[index],
+      allSessions[index] = {
+        ...allSessions[index],
         ...updates,
         lastActivityAt: new Date().toISOString()
       };
-      offlineStore.setCollection('table_sessions', sessions);
-      return sessions[index];
+      offlineStore.setCollection('table_sessions', allSessions);
+      return allSessions[index];
     }
     return null;
   }

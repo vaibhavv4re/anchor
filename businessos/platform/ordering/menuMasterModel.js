@@ -1,74 +1,131 @@
 /**
  * BusinessOS Platform - Menu Master Model
- * Manages menu categories, items, pricing, dietary indicators (VEG, NON_VEG), and variant modifiers.
+ * Bridges the live restaurant menu (kitchen_menu_items / ACTUAL_ANCHOR_MENU)
+ * with the POS Touch Menu Browser, Order Builder, and Waiter workflow.
  */
 
 import { offlineStore } from '../offline_store/offlineStore.js';
+import { ACTUAL_ANCHOR_MENU } from '../../../restaurantos/frontend/capabilities/kitchen/data/actualMenuData.js';
 
 class MenuMasterModel {
-  constructor() {
-    this._initSeedData();
+  _getTenantId() {
+    if (typeof sessionStorage !== 'undefined') {
+      try {
+        const session = JSON.parse(sessionStorage.getItem('ros_session') || '{}');
+        return session.tenantId || null;
+      } catch (_) {}
+    }
+    return null;
   }
 
-  _initSeedData() {
-    if (!offlineStore.getCollection('menu_categories')) {
-      const defaultCategories = [
-        { id: 'cat-starters', name: 'Appetizers & Starters', displayOrder: 1 },
-        { id: 'cat-mains', name: 'Main Course', displayOrder: 2 },
-        { id: 'cat-beverages', name: 'Beverages & Bar', displayOrder: 3 },
-        { id: 'cat-desserts', name: 'Desserts & Sweets', displayOrder: 4 }
-      ];
-      offlineStore.setCollection('menu_categories', defaultCategories);
+  /**
+   * Get all live menu items from offlineStore (synced with Supabase),
+   * falling back to the 70 authentic Anchor Coastal dishes if offlineStore is empty.
+   */
+  getAllMenuItems() {
+    const tenantId = this._getTenantId();
+    let rawList = offlineStore.getCollection('kitchen_menu_items', tenantId) || [];
+    if (!rawList.length) {
+      rawList = offlineStore.getCollection('kitchen_menu_items') || [];
+    }
+    if (!rawList.length) {
+      rawList = ACTUAL_ANCHOR_MENU;
     }
 
-    if (!offlineStore.getCollection('menu_items')) {
-      const defaultItems = [
-        // Starters
-        { id: 'item-paneer-tikka', categoryId: 'cat-starters', name: 'Paneer Tikka', price: 280, dietary: 'VEG', isAvailable: true, modifiers: ['Spicy: Mild', 'Spicy: Medium', 'Spicy: High'] },
-        { id: 'item-chicken-tikka', categoryId: 'cat-starters', name: 'Chicken Tikka', price: 340, dietary: 'NON_VEG', isAvailable: true, modifiers: ['Spicy: Mild', 'Spicy: Medium', 'Spicy: High'] },
-        
-        // Mains
-        { id: 'item-butter-chicken', categoryId: 'cat-mains', name: 'Butter Chicken', price: 420, dietary: 'NON_VEG', isAvailable: true, modifiers: ['Spicy: Medium', 'Spicy: Low', 'Extra Gravy'] },
-        { id: 'item-dal-makhani', categoryId: 'cat-mains', name: 'Dal Makhani', price: 310, dietary: 'VEG', isAvailable: true, modifiers: ['Extra Butter', 'No Butter'] },
-        { id: 'item-garlic-naan', categoryId: 'cat-mains', name: 'Garlic Naan', price: 70, dietary: 'VEG', isAvailable: true, modifiers: ['Butter', 'Plain'] },
+    return rawList.map(item => ({
+      id: item.id || item.itemCode || `item-${(item.itemName || item.name || '').toLowerCase().replace(/\s+/g, '-')}`,
+      itemId: item.id || item.itemCode,
+      itemCode: item.itemCode || item.id,
+      name: item.itemName || item.name || 'Untitled Dish',
+      itemName: item.itemName || item.name || 'Untitled Dish',
+      category: item.category || 'GENERAL',
+      categoryId: item.category || 'GENERAL',
+      price: parseFloat(item.sellingPrice || item.price) || 0,
+      sellingPrice: parseFloat(item.sellingPrice || item.price) || 0,
+      dietary: item.dietaryType || item.dietary || 'VEG',
+      dietaryType: item.dietaryType || item.dietary || 'VEG',
+      portionSize: item.portionSize || '',
+      description: item.description || '',
+      region: item.region || '',
+      spicinessLevel: item.spicinessLevel || 'MEDIUM',
+      routing: item.routing || (item.category === 'BEVERAGES & BAR' || item.category === 'BAR' ? 'BAR_LINE' : 'KITCHEN_LINE'),
+      recipeId: item.recipeId || item.recipe_id || (item.data ? (item.data.recipeId || item.data.recipe_id) : null) || null,
+      recipe_id: item.recipeId || item.recipe_id || (item.data ? (item.data.recipeId || item.data.recipe_id) : null) || null,
+      isAvailable: (item.availabilityStatus || 'AVAILABLE') === 'AVAILABLE' && (item.lifecycleStatus || 'ACTIVE') !== 'ARCHIVED',
+      modifiers: item.modifiers || (item.spicinessLevel ? [`Spicy: ${item.spicinessLevel}`] : ['Standard'])
+    }));
+  }
 
-        // Beverages & Bar
-        { id: 'item-fresh-lime', categoryId: 'cat-beverages', name: 'Fresh Lime Soda', price: 120, dietary: 'VEG', isAvailable: true, modifiers: ['Sweet', 'Salt', 'Mix'] },
-        { id: 'item-mojito', categoryId: 'cat-beverages', name: 'Classic Virgin Mojito', price: 180, dietary: 'VEG', isAvailable: true, modifiers: ['Extra Mint', 'Less Ice'] },
-        { id: 'item-kingfisher-beer', categoryId: 'cat-beverages', name: 'Kingfisher Premium Beer (330ml)', price: 240, dietary: 'VEG', isAvailable: true, modifiers: ['Chilled'] },
-
-        // Desserts
-        { id: 'item-gulab-jamun', categoryId: 'cat-desserts', name: 'Gulab Jamun (2 pcs)', price: 140, dietary: 'VEG', isAvailable: true, modifiers: ['Warm', 'With Ice Cream'] }
-      ];
-      offlineStore.setCollection('menu_items', defaultItems);
-    }
+  getAllItems() {
+    return this.getAllMenuItems();
   }
 
   getAllCategories() {
-    const list = offlineStore.getCollection('menu_categories') || [];
-    return list.sort((a, b) => a.displayOrder - b.displayOrder);
-  }
+    const items = this.getAllMenuItems();
+    const categoriesSet = new Set();
+    const categories = [];
 
-  getAllMenuItems() {
-    return offlineStore.getCollection('menu_items') || [];
+    // Category display order & icons mapping
+    const categoryIcons = {
+      'SOUPS': '🥣',
+      'STARTERS - GARDEN & GRAIN': '🥗',
+      'STARTERS - HARBOUR & COAST': '🍤',
+      'STARTERS': '🍢',
+      'MAINS - COASTAL CURRIES': '🥘',
+      'MAIN COURSE': '🍛',
+      'BREADS & RICE': '🍚',
+      'DESSERTS': '🍨',
+      'BEVERAGES & BAR': '🍹',
+      'BAR': '🍺'
+    };
+
+    items.forEach(item => {
+      const cat = item.category || 'GENERAL';
+      if (!categoriesSet.has(cat)) {
+        categoriesSet.add(cat);
+        const icon = categoryIcons[cat] || '🍽️';
+        const formattedName = cat.split(' - ').map(s => s.charAt(0) + s.slice(1).toLowerCase()).join(' • ');
+        categories.push({
+          id: cat,
+          name: `${icon} ${formattedName}`,
+          rawCategory: cat
+        });
+      }
+    });
+
+    return categories;
   }
 
   getItemsByCategory(categoryId) {
     const items = this.getAllMenuItems();
-    return items.filter(i => i.categoryId === categoryId && i.isAvailable);
+    if (!categoryId || categoryId === 'ALL') {
+      return items.filter(i => i.isAvailable);
+    }
+    return items.filter(i => (i.category === categoryId || i.categoryId === categoryId) && i.isAvailable);
   }
 
   getItem(itemId) {
+    if (!itemId) return null;
     const items = this.getAllMenuItems();
-    return items.find(i => i.id === itemId) || null;
+    const str = String(itemId).trim().toLowerCase();
+    return items.find(i => 
+      (i.id && String(i.id).toLowerCase() === str) || 
+      (i.itemId && String(i.itemId).toLowerCase() === str) || 
+      (i.itemCode && String(i.itemCode).toLowerCase() === str) ||
+      (i.name && i.name.toLowerCase() === str)
+    ) || null;
   }
 
   searchItems(query) {
-    if (!query) return this.getAllMenuItems();
-    const q = query.toLowerCase();
-    return this.getAllMenuItems().filter(i => 
-      i.name.toLowerCase().includes(q) || 
-      i.dietary.toLowerCase().includes(q)
+    const items = this.getAllMenuItems().filter(i => i.isAvailable);
+    if (!query || !query.trim()) return items;
+    const q = query.toLowerCase().trim();
+    return items.filter(i =>
+      (i.name && i.name.toLowerCase().includes(q)) ||
+      (i.itemCode && i.itemCode.toLowerCase().includes(q)) ||
+      (i.category && i.category.toLowerCase().includes(q)) ||
+      (i.description && i.description.toLowerCase().includes(q)) ||
+      (i.region && i.region.toLowerCase().includes(q))
     );
   }
 }
