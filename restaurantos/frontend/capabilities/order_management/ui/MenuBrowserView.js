@@ -142,6 +142,7 @@ export class MenuBrowserView {
       const spiceIndicator = item.spicinessLevel === 'SPICY' ? '🌶️ Spicy' : (item.spicinessLevel === 'MEDIUM' ? '🌶️ Med' : '');
       const inCartItem = this.draftItems ? this.draftItems.find(d => d.itemId === item.id || d.name === item.name) : null;
       const inCartQty = inCartItem ? inCartItem.quantity : 0;
+      const hasVariants = item.hasVariants && Array.isArray(item.variants) && item.variants.length > 0;
 
       return `
         <div class="card pos-item-card animate-fade-in" data-idx="${idx}" data-item-id="${item.id}">
@@ -167,6 +168,23 @@ export class MenuBrowserView {
             ${item.description ? `
               <div style="font-size:0.78rem; color:var(--text-muted); margin-top:4px; line-height:1.3; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;">
                 ${item.description}
+              </div>
+            ` : ''}
+
+            <!-- VARIANTS PILLS SECTION -->
+            ${hasVariants ? `
+              <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:8px; border-top:1px dashed var(--border-subtle); padding-top:6px;">
+                ${item.variants.map(v => `
+                  <button class="btn-variant-select ${v.is86 ? 'disabled-86' : ''}" 
+                    data-item-id="${item.id}" 
+                    data-variant-id="${v.variantId}"
+                    data-variant-name="${v.variantName}"
+                    data-variant-price="${v.price}"
+                    ${v.is86 ? 'disabled' : ''}
+                    style="padding:3px 8px; font-size:0.75rem; border-radius:4px; font-weight:700; cursor:${v.is86 ? 'not-allowed' : 'pointer'}; background:${v.is86 ? 'var(--bg-surface-2)' : 'var(--bg-app)'}; border:1px solid ${v.is86 ? 'var(--border-subtle)' : 'var(--accent-primary)'}; color:${v.is86 ? 'var(--text-muted)' : 'var(--accent-primary)'}; opacity:${v.is86 ? 0.6 : 1};">
+                    ${v.variantName} ₹${v.price} ${v.is86 ? '(86)' : ''}
+                  </button>
+                `).join('')}
               </div>
             ` : ''}
           </div>
@@ -247,18 +265,17 @@ export class MenuBrowserView {
       }
     };
 
-    const addBtns = this.container.querySelectorAll('.btn-add-pos-item');
-    addBtns.forEach(btn => {
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        const idx = parseInt(btn.dataset.idx);
-        const card = btn.closest('.pos-item-card');
-        triggerSelect(idx, card, btn);
-      });
-    });
-
     const cards = this.container.querySelectorAll('.pos-item-card');
     cards.forEach(card => {
+      const idx = parseInt(card.dataset.idx, 10);
+      const addBtn = card.querySelector('.btn-add-pos-item');
+      if (addBtn) {
+        addBtn.addEventListener('click', (e) => {
+          e.stopPropagation();
+          triggerSelect(idx, card, addBtn);
+        });
+      }
+      
       card.addEventListener('click', () => {
         const idx = parseInt(card.dataset.idx);
         const btn = card.querySelector('.btn-add-pos-item');

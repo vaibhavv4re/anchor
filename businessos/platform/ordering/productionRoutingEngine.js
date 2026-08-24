@@ -9,6 +9,7 @@ import { prodSpecModel, ProductionDestinations } from './prodSpecModel.js';
 import { orderModel } from './orderModel.js';
 import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
+import { resolvedBomEngine } from './resolvedBomEngine.js';
 
 class ProductionRoutingEngine {
   constructor() {
@@ -169,8 +170,6 @@ class ProductionRoutingEngine {
    */
   _deductOrderRecipeBOM(order, tenantId = null) {
     const targetTenantId = tenantId || (typeof sessionStorage !== 'undefined' ? JSON.parse(sessionStorage.getItem('ros_session') || '{}').tenantId : null) || 'tenant_h0qc7wf';
-    const recipes = offlineStore.getCollection('recipes', targetTenantId) || [];
-    const menuItems = offlineStore.getCollection('kitchen_menu_items', targetTenantId) || [];
     const stockBalances = offlineStore.getCollection('stock_balances', targetTenantId) || [];
     const stockTxns = offlineStore.getCollection('stock_transactions', targetTenantId) || [];
     const now = new Date().toISOString();
@@ -179,86 +178,37 @@ class ProductionRoutingEngine {
     let balancesChanged = false;
 
     (order.items || []).forEach(item => {
-      const itemId = item.itemId || item.itemCode || item.id;
-      const orderQty = parseFloat(item.quantity || item.qty) || 1;
+      // 1. Resolve exact line item BOM via Resolved BOM Engine
+      const resolved = resolvedBomEngine.resolveOrderLineBOM(item, targetTenantId);
+      
+      // 2. Attach immutable resolvedConsumption snapshot on the order line
+      item.resolvedConsumption = resolved.consumption;
+      item.bomVersionId = resolved.bomVersionId;
+      item.variantName = resolved.variantName;
 
-      // Find linked recipe
-      const menuItem = menuItems.find(m => m.id === itemId || m.itemCode === itemId || m.item_code === itemId);
-      const recipeId = item.recipeId || item.recipe_id || menuItem?.recipeId || menuItem?.recipe_id;
+      // 3. Deduct each resolved raw material, prep ingredient, and packaging item
+      (resolved.consumption || []).forEach(cLine => {
+        const ingCode = String(cLine.inventoryItemCode || '');
+        const ingName = cLine.inventoryItemName || ingCode;
+        const totalDeductQty = parseFloat(cLine.quantity) || 0;
 
-      // 1. Look for an APPROVED recipe
-      let recipe = recipes.find(r => 
-        r.status === 'APPROVED' && (
-          (recipeId && (r.id === recipeId || r.recipe_id === recipeId)) ||
-          r.menuItemId === itemId ||
-          r.menu_item_id === itemId ||
-          r.recipeCode === itemId ||
-          r.recipe_code === itemId ||
-          (menuItem && (r.menuItemId === menuItem.id || r.menu_item_id === menuItem.id || r.menuItemCode === menuItem.itemCode || r.menu_item_code === menuItem.item_code))
-        )
-      );
+        if (totalDeductQty > 0 && (ingCode || ingName)) {
+          const norm = (s) => String(s || '').toUpperCase().trim().replace(/^(PREP-|RCP-|INV-|ITEM-|MENU-)/, '').replace(/[-_]/g, '');
+          const normName = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
-      // 2. If no approved recipe found, look for any recipe by ID or code
-      if (!recipe) {
-        recipe = recipes.find(r => 
-          (recipeId && (r.id === recipeId || r.recipe_id === recipeId)) ||
-          r.menuItemId === itemId ||
-          r.menu_item_id === itemId ||
-          r.recipeCode === itemId ||
-          (menuItem && (r.menuItemId === menuItem.id || r.menu_item_id === menuItem.id || r.menuItemCode === menuItem.itemCode || r.menu_item_code === menuItem.item_code))
-        );
-      }
-
-      // 3. Fallback: match by dish name in recipeName
-      if (!recipe && (item.name || item.itemName)) {
-        const dishName = String(item.name || item.itemName || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-        recipe = recipes.find(r => {
-          const rName = String(r.recipeName || r.recipe_name || (r.data ? r.data.recipeName : '') || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-          return r.status === 'APPROVED' && rName && (rName.includes(dishName) || dishName.includes(rName));
-        });
-      }
-
-      const rawIngredients = recipe ? (recipe.ingredients || recipe.data?.ingredients || recipe.costSnapshotAtApproval?.linesSnapshot || []) : [];
-
-      if (recipe && Array.isArray(rawIngredients) && rawIngredients.length > 0) {
-        rawIngredients.forEach(ing => {
-          const ingCode = String(ing.inventoryItemCode || ing.inventory_item_code || ing.itemCode || ing.code || '');
-          const ingName = ing.inventoryItemName || ing.inventory_item_name || ing.itemName || ing.name || ingCode;
-          
-          let ingQtyPerPortion = 0;
-          if (ing.quantity !== undefined && ing.quantity !== null && parseFloat(ing.quantity) > 0) {
-            ingQtyPerPortion = parseFloat(ing.quantity);
-          } else if (ing.grossQuantity !== undefined && parseFloat(ing.grossQuantity) > 0) {
-            ingQtyPerPortion = parseFloat(ing.grossQuantity);
-          } else if (ing.recipeQty) {
-            const rQty = parseFloat(ing.recipeQty);
-            const rUom = String(ing.recipeUom || ing.uom || 'G').toUpperCase().trim();
-            if (rUom === 'G' || rUom === 'GRAM' || rUom === 'GRAMS' || rUom === 'ML' || rUom === 'MILLILITRE') {
-              ingQtyPerPortion = rQty / 1000;
-            } else {
-              ingQtyPerPortion = rQty;
+          const isMatch = (bal) => {
+            const bCode = norm(bal.itemCode || bal.item_code || bal.id);
+            const tCode = norm(ingCode);
+            if (bCode && tCode) {
+              if (bCode === tCode || bCode.includes(tCode) || tCode.includes(bCode)) return true;
             }
-          }
-
-          const totalDeductQty = parseFloat((ingQtyPerPortion * orderQty).toFixed(4));
-
-          if (totalDeductQty > 0 && (ingCode || ingName)) {
-            const norm = (s) => String(s || '').toUpperCase().trim().replace(/^(PREP-|RCP-|INV-|ITEM-|MENU-)/, '').replace(/[-_]/g, '');
-            const normName = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-
-            const isMatch = (bal) => {
-              const bCode = norm(bal.itemCode || bal.item_code || bal.id);
-              const tCode = norm(ingCode);
-              if (bCode && tCode) {
-                if (bCode === tCode || bCode.includes(tCode) || tCode.includes(bCode)) return true;
-              }
-              const bName = normName(bal.itemName || bal.inventoryItemName);
-              const tName = normName(ingName);
-              if (bName && tName && (bName.length > 3 || tName.length > 3)) {
-                if (bName === tName || bName.includes(tName) || tName.includes(bName)) return true;
-              }
-              return false;
-            };
+            const bName = normName(bal.itemName || bal.inventoryItemName);
+            const tName = normName(ingName);
+            if (bName && tName && (bName.length > 3 || tName.length > 3)) {
+              if (bName === tName || bName.includes(tName) || tName.includes(bName)) return true;
+            }
+            return false;
+          };
 
             // 1. Find stock balance in Kitchen Store (LOC-886 / LOC-KIT)
             let balIdx = stockBalances.findIndex(s => {

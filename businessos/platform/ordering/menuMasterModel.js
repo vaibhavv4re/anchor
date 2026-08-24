@@ -32,28 +32,50 @@ class MenuMasterModel {
       rawList = ACTUAL_ANCHOR_MENU;
     }
 
-    return rawList.map(item => ({
-      id: item.id || item.itemCode || `item-${(item.itemName || item.name || '').toLowerCase().replace(/\s+/g, '-')}`,
-      itemId: item.id || item.itemCode,
-      itemCode: item.itemCode || item.id,
-      name: item.itemName || item.name || 'Untitled Dish',
-      itemName: item.itemName || item.name || 'Untitled Dish',
-      category: item.category || 'GENERAL',
-      categoryId: item.category || 'GENERAL',
-      price: parseFloat(item.sellingPrice || item.price) || 0,
-      sellingPrice: parseFloat(item.sellingPrice || item.price) || 0,
-      dietary: item.dietaryType || item.dietary || 'VEG',
-      dietaryType: item.dietaryType || item.dietary || 'VEG',
-      portionSize: item.portionSize || '',
-      description: item.description || '',
-      region: item.region || '',
-      spicinessLevel: item.spicinessLevel || 'MEDIUM',
-      routing: item.routing || (item.category === 'BEVERAGES & BAR' || item.category === 'BAR' ? 'BAR_LINE' : 'KITCHEN_LINE'),
-      recipeId: item.recipeId || item.recipe_id || (item.data ? (item.data.recipeId || item.data.recipe_id) : null) || null,
-      recipe_id: item.recipeId || item.recipe_id || (item.data ? (item.data.recipeId || item.data.recipe_id) : null) || null,
-      isAvailable: (item.availabilityStatus || 'AVAILABLE') === 'AVAILABLE' && (item.lifecycleStatus || 'ACTIVE') !== 'ARCHIVED',
-      modifiers: item.modifiers || (item.spicinessLevel ? [`Spicy: ${item.spicinessLevel}`] : ['Standard'])
-    }));
+    return rawList.map(item => {
+      const isItemAvailable = (item.availabilityStatus || 'AVAILABLE') === 'AVAILABLE' && (item.lifecycleStatus || 'ACTIVE') !== 'ARCHIVED';
+      const rawVariants = Array.isArray(item.variants) ? item.variants : [];
+      
+      const variants = rawVariants.map(v => ({
+        variantId: v.variantId || v.id || `var-${item.id}-${v.variantName}`,
+        variantCode: v.variantCode || v.sku || v.variantId,
+        variantName: v.variantName || v.name || 'Standard',
+        price: parseFloat(v.price || v.sellingPrice || item.sellingPrice || item.price) || 0,
+        sku: v.sku || v.variantCode || '',
+        portionSize: v.portionSize || '',
+        bomMode: v.bomMode || 'INDEPENDENT',
+        scalingFactor: parseFloat(v.scalingFactor) || 1.0,
+        bomId: v.bomId || v.recipeId || null,
+        is86: v.is86 || v.is_86 || !isItemAvailable,
+        isAvailable: isItemAvailable && !(v.is86 || v.is_86),
+        packagingBom: Array.isArray(v.packagingBom) ? v.packagingBom : []
+      }));
+
+      return {
+        id: item.id || item.itemCode || `item-${(item.itemName || item.name || '').toLowerCase().replace(/\s+/g, '-')}`,
+        itemId: item.id || item.itemCode,
+        itemCode: item.itemCode || item.id,
+        name: item.itemName || item.name || 'Untitled Dish',
+        itemName: item.itemName || item.name || 'Untitled Dish',
+        category: item.category || 'GENERAL',
+        categoryId: item.category || 'GENERAL',
+        price: parseFloat(item.sellingPrice || item.price) || 0,
+        sellingPrice: parseFloat(item.sellingPrice || item.price) || 0,
+        dietary: item.dietaryType || item.dietary || 'VEG',
+        dietaryType: item.dietaryType || item.dietary || 'VEG',
+        portionSize: item.portionSize || '',
+        description: item.description || '',
+        region: item.region || '',
+        spicinessLevel: item.spicinessLevel || 'MEDIUM',
+        routing: item.routing || (item.category === 'BEVERAGES & BAR' || item.category === 'BAR' ? 'BAR_LINE' : 'KITCHEN_LINE'),
+        recipeId: item.recipeId || item.recipe_id || (item.data ? (item.data.recipeId || item.data.recipe_id) : null) || null,
+        recipe_id: item.recipeId || item.recipe_id || (item.data ? (item.data.recipeId || item.data.recipe_id) : null) || null,
+        isAvailable: isItemAvailable,
+        hasVariants: variants.length > 0 || !!item.hasVariants,
+        variants,
+        modifiers: Array.isArray(item.modifiers) ? item.modifiers : (item.spicinessLevel ? [`Spicy: ${item.spicinessLevel}`] : ['Standard'])
+      };
+    });
   }
 
   getAllItems() {
