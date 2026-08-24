@@ -71,6 +71,7 @@ export class KitchenRecipeView {
     this.searchQuery = '';
     this.currentView = 'LIST'; // 'LIST' | 'BUILDER'
     this.selectedMenuItem = null;
+    this.selectedVariantId = null;
     this.activeRecipe = null;
   }
 
@@ -158,6 +159,7 @@ export class KitchenRecipeView {
                 <th>Dish Code & Name</th>
                 <th>Category</th>
                 <th>Selling Price</th>
+                <th>Variants</th>
                 <th>Recipe Linkage</th>
                 <th>Active Version</th>
                 <th>Recipe Food Cost</th>
@@ -174,6 +176,7 @@ export class KitchenRecipeView {
                 const sellingPrice = parseFloat(item.sellingPrice || item.selling_price) || 0;
                 const foodCostPct = (activeRecipe && sellingPrice > 0) ? ((activeRecipe.costPerPortion / sellingPrice) * 100).toFixed(1) : null;
                 const grossMarginPct = foodCostPct ? (100 - parseFloat(foodCostPct)).toFixed(1) : null;
+                const variants = (item.hasVariants && Array.isArray(item.variants)) ? item.variants : [];
 
                 return `
                   <tr>
@@ -183,6 +186,13 @@ export class KitchenRecipeView {
                     </td>
                     <td><span class="badge badge-info">${item.category || 'GENERAL'}</span></td>
                     <td style="font-weight:700;">₹${sellingPrice}</td>
+                    <td>
+                      ${variants.length > 0 ? `
+                        <div style="display:flex; gap:4px; flex-wrap:wrap;">
+                          ${variants.map(v => `<span class="badge badge-info" style="font-size:0.7rem;">${v.variantName} ₹${v.price}</span>`).join('')}
+                        </div>
+                      ` : '<span style="font-size:0.75rem; color:var(--text-muted);">Base Dish</span>'}
+                    </td>
                     <td>
                       ${hasRecipe 
                         ? `<span class="badge badge-success">✓ Approved Recipe</span>` 
@@ -212,7 +222,7 @@ export class KitchenRecipeView {
                 `;
               }).join('') : `
                 <tr>
-                  <td colspan="8" style="text-align:center; padding:40px; color:var(--text-muted);">
+                  <td colspan="9" style="text-align:center; padding:40px; color:var(--text-muted);">
                     <div style="font-size:1.5rem; margin-bottom:8px;">📖 No Menu Items Found</div>
                     <div>No menu dishes match the current filter selection.</div>
                   </td>
@@ -246,6 +256,7 @@ export class KitchenRecipeView {
         const menuItem = menuItems.find(m => String(m.id || m._id || m.itemCode || m.item_code) === String(menuItemId));
         if (menuItem) {
           this.selectedMenuItem = menuItem;
+          this.selectedVariantId = null;
           this.currentView = 'BUILDER';
           this.render(mount, session);
         } else {
@@ -262,19 +273,28 @@ export class KitchenRecipeView {
     const mId = menuItem.id || menuItem._id || menuItem.itemCode || menuItem.item_code;
     const mCode = menuItem.itemCode || menuItem.item_code || 'CODE';
     const mName = menuItem.itemName || menuItem.item_name || 'Dish';
-    const sellingPrice = parseFloat(menuItem.sellingPrice || menuItem.selling_price) || 0;
+    const baseSellingPrice = parseFloat(menuItem.sellingPrice || menuItem.selling_price) || 0;
 
-    let activeRecipe = recipeModel.getActiveRecipeForMenuItem(mId);
+    const variants = (menuItem.hasVariants && Array.isArray(menuItem.variants) && menuItem.variants.length > 0) ? menuItem.variants : [];
+    const activeVariant = variants.find(v => v.variantId === this.selectedVariantId) || null;
+    const currentVariantId = activeVariant ? activeVariant.variantId : null;
+    const sellingPrice = activeVariant ? (parseFloat(activeVariant.price) || baseSellingPrice) : baseSellingPrice;
+
+    let activeRecipe = recipeModel.getActiveRecipeForMenuItem(mId, currentVariantId);
     if (!activeRecipe) {
-      const revisions = recipeModel.getRevisionsForMenuItem(mId);
+      const revisions = recipeModel.getRevisionsForMenuItem(mId, currentVariantId);
       if (revisions.length > 0) {
         activeRecipe = revisions[0];
       } else {
         activeRecipe = recipeModel.createRecipe({
-          recipeCode: `RCP-${mCode || Math.floor(1000 + Math.random() * 9000)}`,
-          recipeName: `${mName} Recipe`,
+          recipeCode: `RCP-${mCode}-${currentVariantId ? currentVariantId.replace(/[^a-zA-Z0-9]/g, '').toUpperCase() : 'BASE'}`,
+          recipeName: activeVariant ? `${mName} (${activeVariant.variantName}) BOM Recipe` : `${mName} Base Recipe`,
           menuItemId: mId,
           menuItemCode: mCode,
+          variantId: currentVariantId,
+          variantName: activeVariant ? activeVariant.variantName : null,
+          bomMode: activeVariant ? (activeVariant.bomMode || 'INDEPENDENT') : 'INDEPENDENT',
+          scalingFactor: activeVariant ? (activeVariant.scalingFactor || 1.0) : 1.0,
           version: 'v1.0',
           yieldQuantity: 1,
           yieldUom: 'PORTION',
@@ -311,13 +331,34 @@ export class KitchenRecipeView {
             </div>
           </div>
 
+          <!-- VARIANT SELECTOR BAR -->
+          ${variants.length > 0 ? `
+            <div class="card" style="background:var(--bg-surface-1); padding:14px 20px; border:1px solid var(--border-subtle); display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+              <div style="font-weight:700; font-size:0.85rem; color:var(--text-secondary); text-transform:uppercase; display:flex; align-items:center; gap:6px;">
+                <span>📦</span> Select BOM Target:
+              </div>
+              <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                <button class="btn-secondary btn-variant-bom-tab ${!this.selectedVariantId ? 'active' : ''}" data-v-id="" style="padding:6px 14px; font-size:0.85rem; font-weight:700; cursor:pointer;">
+                  📌 Base Dish BOM
+                </button>
+                ${variants.map(v => `
+                  <button class="btn-secondary btn-variant-bom-tab ${this.selectedVariantId === v.variantId ? 'active' : ''}" data-v-id="${v.variantId}" style="padding:6px 14px; font-size:0.85rem; font-weight:700; cursor:pointer;">
+                    📦 ${v.variantName} (₹${v.price}) ${v.bomMode === 'DERIVED' ? `⚡ Scaled ${v.scalingFactor}x` : '🎯 Independent'}
+                  </button>
+                `).join('')}
+              </div>
+            </div>
+          ` : ''}
+
           <!-- Linked Dish Summary Card -->
           <div class="card" style="background:var(--bg-surface-1); padding:16px 20px; border-left:4px solid var(--accent-primary);">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
               <div>
-                <div style="font-weight:700; font-size:1.1rem; color:var(--text-main);">${mName} (<code>${mCode}</code>)</div>
+                <div style="font-weight:700; font-size:1.1rem; color:var(--text-main);">
+                  ${mName} ${activeVariant ? `— <span style="color:var(--accent-primary); font-weight:800;">${activeVariant.variantName}</span>` : ''} (<code>${activeVariant?.sku || mCode}</code>)
+                </div>
                 <div style="font-size:0.85rem; color:var(--text-muted); margin-top:2px;">
-                  Category: <strong>${menuItem.category || 'GENERAL'}</strong> • Selling MRP: <strong>₹${sellingPrice}</strong>
+                  Category: <strong>${menuItem.category || 'GENERAL'}</strong> • Target Selling MRP: <strong>₹${sellingPrice}</strong> ${activeVariant ? `• BOM Mode: <strong>${activeVariant.bomMode || 'INDEPENDENT'}</strong>` : ''}
                 </div>
               </div>
               <div>
@@ -558,6 +599,14 @@ export class KitchenRecipeView {
 
       const btnBackBottom = mount.querySelector('#btn-back-bottom');
       if (btnBackBottom) btnBackBottom.addEventListener('click', backAction);
+
+      // Variant BOM Tab Buttons Listener
+      mount.querySelectorAll('.btn-variant-bom-tab').forEach(tabBtn => {
+        tabBtn.addEventListener('click', (e) => {
+          this.selectedVariantId = e.currentTarget.dataset.vId || null;
+          this.renderBuilderView(mount, session, tenantId);
+        });
+      });
 
       if (!isApproved) {
         const yieldQtyInp = mount.querySelector('#inp-yield-qty');

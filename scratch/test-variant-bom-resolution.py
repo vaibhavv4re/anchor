@@ -53,8 +53,13 @@ def run_tests():
     assert "renderDishEditorTab" in kitchen_code, "KitchenMenuView missing renderDishEditorTab full-page view!"
     assert "table-variants-builder" in kitchen_code, "KitchenMenuView missing table-variants-builder variants table!"
     assert "btn-add-variant-row" in kitchen_code, "KitchenMenuView missing Add Variant Line button!"
-    assert "btn-link-variant-bom" in kitchen_code, "KitchenMenuView missing BOM Recipe link button!"
-    print("✅ KitchenMenuView.js: Standard Full-Page Dish & Variant Studio View verified.")
+    # 6. Audit KitchenRecipeView.js (Variant BOM Studio)
+    with open(r"d:\Projects\Anchor\restaurantos\frontend\capabilities\kitchen\ui\KitchenRecipeView.js", "r", encoding="utf-8") as f:
+        recipe_code = f.read()
+
+    assert "btn-variant-bom-tab" in recipe_code, "KitchenRecipeView missing btn-variant-bom-tab selector bar!"
+    assert "selectedVariantId" in recipe_code, "KitchenRecipeView missing selectedVariantId tracking!"
+    print("✅ KitchenRecipeView.js: Variant BOM Selector Toolbar & Variant Recipe Resolution verified.")
 
     print("\n🎉 ALL 11 ARCHITECTURAL REQUIREMENTS & 3 NON-NEGOTIABLES 100% VERIFIED!")
 

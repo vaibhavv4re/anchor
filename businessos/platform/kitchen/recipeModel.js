@@ -122,31 +122,47 @@ class RecipeModel {
   }
 
   /**
-   * Get active approved recipe for a menu item
+   * Get active approved recipe for a menu item or specific variant
    * @param {string} menuItemId 
+   * @param {string|null} variantId
    * @returns {Object|null}
    */
-  getActiveRecipeForMenuItem(menuItemId) {
+  getActiveRecipeForMenuItem(menuItemId, variantId = null) {
     const list = offlineStore.getCollection('recipes') || [];
-    const approved = list.filter(r => r.menuItemId === menuItemId && r.status === 'APPROVED');
-    if (approved.length === 0) return null;
+    const approved = list.filter(r => {
+      if (r.menuItemId !== menuItemId || r.status !== 'APPROVED') return false;
+      if (variantId) return r.variantId === variantId;
+      return !r.variantId;
+    });
+    if (approved.length === 0) {
+      if (variantId) {
+        // Fallback to base dish recipe if variant-specific recipe not yet approved
+        return this.getActiveRecipeForMenuItem(menuItemId, null);
+      }
+      return null;
+    }
     approved.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
     return approved[0];
   }
 
   /**
-   * Get all revisions for a menu item
+   * Get all revisions for a menu item or specific variant
    * @param {string} menuItemId 
+   * @param {string|null} variantId
    * @returns {Array<Object>}
    */
-  getRevisionsForMenuItem(menuItemId) {
+  getRevisionsForMenuItem(menuItemId, variantId = null) {
     const list = offlineStore.getCollection('recipes') || [];
-    return list.filter(r => r.menuItemId === menuItemId).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    return list.filter(r => {
+      if (r.menuItemId !== menuItemId) return false;
+      if (variantId) return r.variantId === variantId;
+      return true;
+    }).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }
 
   /**
    * Create new Draft Recipe Header
-   * @param {Object} data { recipeName, menuItemId, yieldQuantity, yieldUom, portionCount, prepTimeMinutes, cookTimeMinutes, instructions, tenantId }
+   * @param {Object} data { recipeName, menuItemId, variantId, variantName, bomMode, scalingFactor, yieldQuantity, yieldUom, portionCount, prepTimeMinutes, cookTimeMinutes, instructions, tenantId }
    * @returns {Object}
    */
   createRecipe(data) {
@@ -164,6 +180,10 @@ class RecipeModel {
       recipeName: data.recipeName || 'Untitled Recipe',
       menuItemId: data.menuItemId || null,
       menuItemCode: data.menuItemCode || null,
+      variantId: data.variantId || null,
+      variantName: data.variantName || null,
+      bomMode: data.bomMode || 'INDEPENDENT',
+      scalingFactor: parseFloat(data.scalingFactor) || 1.0,
       version: data.version || 'v1.0',
       status: 'DRAFT', // DRAFT | SUBMITTED | APPROVED | ARCHIVED
       yieldQuantity: parseFloat(data.yieldQuantity) || 1,
