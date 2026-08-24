@@ -240,7 +240,7 @@ class ProductionRoutingEngine {
                 dg.update('stock_balances', matchedBal.id || matchedBal.itemCode, matchedBal).catch(e => console.warn('[productionRoutingEngine] Cloud stock_balances update error:', e.message));
               }
 
-              console.log(`[productionRoutingEngine] 📦 Auto-deducted ${totalDeductQty} ${ing.uom || 'KG'} of ${matchedBal.itemCode || ingCode} (${ingName}) from ${matchedBal.locationCode}. Previous: ${cur}, New: ${newQty}`);
+              console.log(`[productionRoutingEngine] 📦 Auto-deducted ${totalDeductQty} ${cLine.uom || 'KG'} of ${matchedBal.itemCode || ingCode} (${ingName}) from ${matchedBal.locationCode}. Previous: ${cur}, New: ${newQty}`);
 
               // Append stock transaction ledger entry
               const txn = {
@@ -251,8 +251,8 @@ class ProductionRoutingEngine {
                 itemName: ingName,
                 locationCode: matchedBal.locationCode || 'LOC-886',
                 quantity: -totalDeductQty,
-                uom: ing.uom || ing.baseUom || 'KG',
-                notes: `Order ${order.orderNumber || order.id} BOM deduction for ${orderQty}x ${item.name || item.itemName}`,
+                uom: cLine.uom || 'KG',
+                notes: `Order ${order.orderNumber || order.id} BOM deduction for ${item.name || item.itemName}`,
                 timestamp: now,
                 tenantId: targetTenantId
               };
@@ -261,12 +261,11 @@ class ProductionRoutingEngine {
                 dg.create('stock_transactions', txn).catch(() => {});
               }
             } else {
-              console.warn(`[productionRoutingEngine] ⚠️ No stock balance record found to deduct ${totalDeductQty} ${ing.uom || 'KG'} for ingredient "${ingName}" (${ingCode})`);
+              console.warn(`[productionRoutingEngine] ⚠️ No stock balance record found to deduct ${totalDeductQty} ${cLine.uom || 'KG'} for ingredient "${ingName}" (${ingCode})`);
             }
           }
         });
-      }
-    });
+      });
 
     if (balancesChanged) {
       offlineStore.setCollection('stock_balances', stockBalances);
