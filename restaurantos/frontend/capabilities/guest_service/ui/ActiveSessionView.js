@@ -14,6 +14,7 @@ import { MenuBrowserView } from '../../order_management/ui/MenuBrowserView.js';
 import { OrderBuilderDrawer } from '../../order_management/ui/OrderBuilderDrawer.js';
 import { OrderReviewModal } from '../../order_management/ui/OrderReviewModal.js';
 import { ActiveOrdersWidget } from '../../order_management/ui/ActiveOrdersWidget.js';
+import { RunningBillModal } from './RunningBillModal.js';
 
 export class ActiveSessionView {
   constructor({ sessionId = null, onClose = null } = {}) {
@@ -118,27 +119,45 @@ export class ActiveSessionView {
             Assigned Waiter: <strong>${projection.waiter.name}</strong> • ${projection.elapsedTime} elapsed • Status: <span class="badge badge-info">${projection.status}</span>
           </div>
         </div>
-        <button class="btn-secondary" id="btn-back-to-floor">← Back to Floor Viewer</button>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <button class="btn-primary" id="btn-add-items-shortcut" style="padding:10px 16px; font-weight:700; font-size:0.85rem;">
+            ➕ Add Items to Order
+          </button>
+          <button class="btn-secondary" id="btn-back-to-floor">← Back to Floor</button>
+        </div>
       </div>
 
-      <!-- Guest Operational Context Summary -->
-      <div class="grid grid-cols-3 gap-md" style="margin-bottom:var(--space-md);">
+      <!-- Guest Operational Context & Live Financial Running Bill Strip -->
+      <div class="grid grid-cols-4 gap-md" style="margin-bottom:var(--space-md);">
         <div class="card" style="background:var(--bg-surface-2); padding:var(--space-sm) var(--space-md);">
           <div style="font-size:0.75rem; color:var(--text-muted);">Guest Count</div>
           <div style="font-size:1.1rem; font-weight:700; margin-top:2px;">👥 ${projection.guestCount} Guests</div>
         </div>
+        
         <div class="card" style="background:var(--bg-surface-2); padding:var(--space-sm) var(--space-md);">
-          <div style="font-size:0.75rem; color:var(--text-muted);">Dietary & Celebrations</div>
-          <div style="display:flex; gap:4px; flex-wrap:wrap; margin-top:4px;">
-            ${projection.celebrationFlag ? `<span class="badge badge-warning">🎂 ${projection.celebrationFlag}</span>` : ''}
-            ${projection.dietaryTags.map(t => `<span class="badge badge-danger">⚠️ ${t}</span>`).join('')}
-            ${(!projection.celebrationFlag && !projection.dietaryTags.length) ? `<span style="font-size:0.85rem; color:var(--text-secondary);">Standard Service</span>` : ''}
+          <div style="font-size:0.75rem; color:var(--text-muted);">Dietary & Notes</div>
+          <div style="font-size:0.85rem; margin-top:4px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
+            ${projection.celebrationFlag ? `<span class="badge badge-warning" style="margin-right:4px;">🎂 ${projection.celebrationFlag}</span>` : ''}
+            <span style="font-style:italic;">"${projection.guestNotes || 'Standard'}"</span>
           </div>
         </div>
+
         <div class="card" style="background:var(--bg-surface-2); padding:var(--space-sm) var(--space-md);">
-          <div style="font-size:0.75rem; color:var(--text-muted);">Seating Notes</div>
-          <div style="font-size:0.85rem; margin-top:2px; font-style:italic; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">
-            "${projection.guestNotes || 'No special notes'}"
+          <div style="font-size:0.75rem; color:var(--text-muted);">Confirmed Items</div>
+          <div style="font-size:1.1rem; font-weight:700; margin-top:2px; color:var(--text-primary);">
+            📦 ${projection.itemizedList ? projection.itemizedList.length : 0} Item(s)
+          </div>
+        </div>
+
+        <!-- RUNNING TOTAL CARD WITH DIRECT OPEN BILL BUTTON -->
+        <div class="card" id="btn-open-running-bill-card" style="background:var(--accent-primary)15; border:1px solid var(--accent-primary); padding:var(--space-sm) var(--space-md); cursor:pointer; transition:transform 0.15s ease;" title="Click to view detailed itemized bill breakdown">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="font-size:0.75rem; color:var(--accent-primary); font-weight:700; text-transform:uppercase;">🧾 Running Total</div>
+            <span style="font-size:0.7rem; background:var(--accent-primary); color:#000; padding:1px 6px; border-radius:4px; font-weight:800;">INSPECT BILL →</span>
+          </div>
+          <div style="font-size:1.25rem; font-weight:800; color:var(--accent-primary); margin-top:2px;">
+            ₹${(projection.grandTotal || projection.subtotal || 0).toFixed(2)}
+            <span style="font-size:0.75rem; font-weight:400; color:var(--text-secondary);">(incl. GST)</span>
           </div>
         </div>
       </div>
@@ -180,16 +199,23 @@ export class ActiveSessionView {
 
       <!-- Bottom Session Control Toolbar -->
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--space-md); border-top:1px solid var(--border-subtle); padding-top:var(--space-md); margin-top:var(--space-md);">
-        <div>
-          <span class="badge badge-info">SESSION ID: ${projection.sessionId}</span>
-          ${projection.subtotal > 0 ? `<span style="font-weight:700; margin-left:12px; font-size:1rem;">Subtotal: ₹${projection.subtotal.toFixed(2)}</span>` : ''}
+        <div style="display:flex; align-items:center; gap:12px;">
+          <span class="badge badge-info">SESSION: ${projection.sessionId}</span>
+          <button class="btn-secondary" id="btn-view-running-bill" style="padding:6px 12px; font-size:0.85rem; font-weight:700;">
+            🧾 View Running Bill (${projection.itemizedList ? projection.itemizedList.length : 0} items)
+          </button>
+          <span style="font-weight:800; font-size:1.1rem; color:var(--accent-primary);">
+            Running Total: ₹${(projection.grandTotal || 0).toFixed(2)}
+          </span>
         </div>
-        <div style="display:flex; gap:var(--space-md);">
-          ${(projection.status === SessionMilestones.ORDERS_STARTED || projection.status === SessionMilestones.GUESTS_SEATED) ? `
-            <button class="btn-primary" id="btn-advance-bill">🧾 Generate Bill</button>
+        <div style="display:flex; gap:var(--space-md); flex-wrap:wrap;">
+          ${(projection.status === SessionMilestones.ORDERS_STARTED || projection.status === SessionMilestones.GUESTS_SEATED || projection.status === 'GUESTS_SEATED') ? `
+            <button class="btn-primary" id="btn-finalise-bill-cashier" style="padding:10px 18px; font-weight:800; background:var(--accent-primary);">
+              🧾 Finalise Bill & Send to Cashier →
+            </button>
           ` : ''}
           ${projection.status === SessionMilestones.BILL_GENERATED ? `
-            <button class="btn-primary" id="btn-close-session" style="background-color:var(--status-success); color:#000;">✨ Mark Payment Received & Close Session</button>
+            <button class="btn-primary" id="btn-close-session" style="background-color:var(--status-success); color:#000; font-weight:700;">✨ Mark Payment Received & Close Session</button>
           ` : ''}
           <button class="btn-secondary" id="btn-close-session-direct" style="color:var(--status-danger);">Close Session</button>
         </div>
@@ -339,6 +365,27 @@ export class ActiveSessionView {
     reviewMount.appendChild(reviewModal.render());
   }
 
+  openRunningBillModal() {
+    const reviewMount = this.container.querySelector('#review-modal-mount');
+    if (!reviewMount) return;
+    reviewMount.innerHTML = '';
+
+    const billModal = new RunningBillModal({
+      sessionId: this.sessionId,
+      onClose: () => { reviewMount.innerHTML = ''; },
+      onAddMore: () => {
+        reviewMount.innerHTML = '';
+        const menuEl = this.container.querySelector('#menu-browser-mount');
+        if (menuEl) menuEl.scrollIntoView({ behavior: 'smooth' });
+      },
+      onBillFinalized: () => {
+        this.updateContent();
+      }
+    });
+
+    reviewMount.appendChild(billModal.render());
+  }
+
   bindEvents(projection) {
     const backBtn = this.container.querySelector('#btn-back-to-floor');
     if (backBtn) {
@@ -347,12 +394,39 @@ export class ActiveSessionView {
       });
     }
 
+    const addShortcutBtn = this.container.querySelector('#btn-add-items-shortcut');
+    if (addShortcutBtn) {
+      addShortcutBtn.addEventListener('click', () => {
+        const menuEl = this.container.querySelector('#menu-browser-mount');
+        if (menuEl) menuEl.scrollIntoView({ behavior: 'smooth' });
+      });
+    }
+
+    const openBillCardBtn = this.container.querySelector('#btn-open-running-bill-card');
+    if (openBillCardBtn) {
+      openBillCardBtn.addEventListener('click', () => {
+        this.openRunningBillModal();
+      });
+    }
+
+    const viewBillBtn = this.container.querySelector('#btn-view-running-bill');
+    if (viewBillBtn) {
+      viewBillBtn.addEventListener('click', () => {
+        this.openRunningBillModal();
+      });
+    }
+
+    const finaliseBillBtn = this.container.querySelector('#btn-finalise-bill-cashier');
+    if (finaliseBillBtn) {
+      finaliseBillBtn.addEventListener('click', () => {
+        this.openRunningBillModal();
+      });
+    }
+
     const advanceBillBtn = this.container.querySelector('#btn-advance-bill');
     if (advanceBillBtn) {
       advanceBillBtn.addEventListener('click', () => {
-        sessionStateMachine.transitionMilestone(this.sessionId, SessionMilestones.BILL_GENERATED);
-        tableStateMachine.transitionTableState(projection.tableNumber, PhysicalTableStates.PAYMENT_PENDING);
-        this.updateContent();
+        this.openRunningBillModal();
       });
     }
 

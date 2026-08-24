@@ -419,12 +419,12 @@ export class WaiterWorkspaceView {
 
                     <div style="border-top:1px solid var(--border-subtle); margin-top:12px; padding-top:10px; font-size:0.85rem;">
                       <div style="display:flex; justify-content:space-between;">
-                        <span style="color:var(--text-muted);">Orders Placed:</span>
-                        <strong>${orders.length} Orders (${tickets.length} Tickets)</strong>
+                        <span style="color:var(--text-muted);">Ordered Items:</span>
+                        <strong>${proj && proj.itemizedList ? proj.itemizedList.length : orders.length} Items (${tickets.length} Tickets)</strong>
                       </div>
                       <div style="display:flex; justify-content:space-between; margin-top:4px;">
                         <span style="color:var(--text-muted);">Running Total:</span>
-                        <strong style="color:var(--accent-primary); font-size:0.95rem;">₹${proj ? proj.subtotal.toFixed(2) : '0.00'}</strong>
+                        <strong style="color:var(--accent-primary); font-size:1.05rem;">₹${proj ? (proj.grandTotal || proj.subtotal).toFixed(2) : '0.00'}</strong>
                       </div>
                     </div>
 
@@ -435,9 +435,11 @@ export class WaiterWorkspaceView {
                     ` : ''}
                   </div>
 
-                  <button class="btn-primary btn-open-table-service" data-session-id="${s.id}" style="padding:10px; font-weight:700; width:100%;">
-                    Open Table ${s.tableNumber} Service Console →
-                  </button>
+                  <div style="display:flex; gap:8px;">
+                    <button class="btn-primary btn-open-table-service" data-session-id="${s.id}" style="padding:10px; font-weight:700; flex:1;">
+                      🧾 Table ${s.tableNumber} Service & Bill →
+                    </button>
+                  </div>
                 </div>
               `;
             }).join('')}

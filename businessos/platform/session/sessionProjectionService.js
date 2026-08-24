@@ -142,7 +142,32 @@ class SessionProjectionService {
       });
     }
 
+    // Build consolidated itemized list from all orders in session
+    const itemizedList = [];
+    orders.forEach(o => {
+      (o.items || []).forEach(item => {
+        const itemPrice = parseFloat(item.price || item.unitPrice || item.sellingPrice || 0);
+        const itemQty = parseInt(item.quantity || item.qty || 1, 10);
+        const lineTotal = parseFloat(item.lineTotal || item.total || (itemPrice * itemQty));
+        itemizedList.push({
+          lineItemId: item.lineItemId || item.itemId || `${o.id}_${item.name}`,
+          itemId: item.itemId,
+          name: item.name || item.itemName || 'Dish',
+          price: itemPrice,
+          quantity: itemQty,
+          lineTotal,
+          orderId: o.orderId || o.id,
+          status: item.itemStatus || o.orderStatus || 'CONFIRMED'
+        });
+      });
+    });
+
     const subtotal = orders.reduce((sum, o) => sum + (parseFloat(o.subtotal || o.totalAmount || o.total_amount) || 0), 0);
+    const cgstAmount = Math.round(subtotal * 0.025 * 100) / 100;
+    const sgstAmount = Math.round(subtotal * 0.025 * 100) / 100;
+    const taxAmount = cgstAmount + sgstAmount;
+    const grandTotal = subtotal + taxAmount;
+
     const guestNotes = session.guestNotes || session.notes || '';
     const dietaryTags = session.dietaryTags || [];
     const celebrationFlag = session.celebrationFlag || null;
@@ -170,7 +195,12 @@ class SessionProjectionService {
       readyItems,
       preparingItems,
       queuedItems,
+      itemizedList,
       subtotal,
+      cgstAmount,
+      sgstAmount,
+      taxAmount,
+      grandTotal,
       billStatus: session.status === 'BILL_GENERATED' ? 'GENERATED' : (session.status === 'PAYMENT_RECEIVED' || session.status === 'CLOSED' ? 'PAID' : 'NONE'),
       paymentStatus: session.status === 'PAYMENT_RECEIVED' || session.status === 'CLOSED' ? 'COMPLETED' : 'PENDING',
       elapsedTime,
