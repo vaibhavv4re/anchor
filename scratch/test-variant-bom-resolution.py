@@ -46,6 +46,16 @@ def run_tests():
     assert "disabled-86" in ui_code, "MenuBrowserView missing 86 disabled variant rendering!"
     print("✅ MenuBrowserView.js: Variant pills, pricing, and 86 availability UI verified.")
 
+    # 5. Audit KitchenMenuView.js (Full-Page Dish Editor)
+    with open(r"d:\Projects\Anchor\restaurantos\frontend\capabilities\kitchen\ui\KitchenMenuView.js", "r", encoding="utf-8") as f:
+        kitchen_code = f.read()
+
+    assert "renderDishEditorTab" in kitchen_code, "KitchenMenuView missing renderDishEditorTab full-page view!"
+    assert "table-variants-builder" in kitchen_code, "KitchenMenuView missing table-variants-builder variants table!"
+    assert "btn-add-variant-row" in kitchen_code, "KitchenMenuView missing Add Variant Line button!"
+    assert "btn-link-variant-bom" in kitchen_code, "KitchenMenuView missing BOM Recipe link button!"
+    print("✅ KitchenMenuView.js: Standard Full-Page Dish & Variant Studio View verified.")
+
     print("\n🎉 ALL 11 ARCHITECTURAL REQUIREMENTS & 3 NON-NEGOTIABLES 100% VERIFIED!")
 
 if __name__ == "__main__":

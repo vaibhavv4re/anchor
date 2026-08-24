@@ -124,6 +124,8 @@ class KitchenMenuModel {
       recipeNotes: itemData.recipeNotes || '',
       spicinessLevel: itemData.spicinessLevel || 'MEDIUM',
       region: itemData.region || 'Coastal India',
+      hasVariants: Boolean(itemData.hasVariants || (Array.isArray(itemData.variants) && itemData.variants.length > 0)),
+      variants: Array.isArray(itemData.variants) ? itemData.variants : [],
       tenantId: itemData.tenantId || null,
       createdAt: existingIndex >= 0 ? (list[existingIndex].createdAt || now) : now,
       updatedAt: now

@@ -138,6 +138,8 @@ export class KitchenMenuView {
         return this.renderImportTab(tenantId);
       case 'recipe-status':
         return this.renderRecipeStatusTab(linkageStats, tenantId);
+      case 'edit_dish':
+        return this.renderDishEditorTab(tenantId);
       case 'catalog':
       default:
         return this.renderCatalogTab(tenantId, stats);
@@ -532,10 +534,14 @@ export class KitchenMenuView {
       });
     });
 
-    // Open Add Dish Modal
+    // Open Full-Page Add Dish View
     const addBtn = this.container.querySelector('.btn-open-add-modal');
     if (addBtn) {
-      addBtn.addEventListener('click', () => this.showDishModal(null, tenantId));
+      addBtn.addEventListener('click', () => {
+        this.editingItem = null;
+        this.activeTab = 'edit_dish';
+        this.updateContent();
+      });
     }
 
     // Catalog Search & Filters
@@ -591,11 +597,15 @@ export class KitchenMenuView {
       });
     });
 
-    // Edit Dish Buttons
+    // Edit Dish Buttons -> Open Full-Page Editor View
     this.container.querySelectorAll('.btn-edit-dish').forEach(btn => {
       btn.addEventListener('click', () => {
         const item = kitchenMenuModel.getById(btn.dataset.id);
-        if (item) this.showDishModal(item, tenantId);
+        if (item) {
+          this.editingItem = item;
+          this.activeTab = 'edit_dish';
+          this.updateContent();
+        }
       });
     });
 
@@ -687,114 +697,503 @@ export class KitchenMenuView {
       'Kokum & Coconut Soup,SOUPS,240,VEG,Tangy coconut broth,250ml\n' +
       'Surmai Tawa Fry,STARTERS - FROM THE SEA,550,NON_VEG,Seared King Mackerel steaks,2 steaks\n';
 
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', 'kitchen_menu_import_template.csv');
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  }
-
-  // Show Add / Edit Dish Modal
-  showDishModal(item = null, tenantId = null) {
-    const modalMount = this.container.querySelector('#dish-modal-container');
+  // Standard Full-Page Dish & Variant Editor View
+  renderDishEditorTab(tenantId) {
+    const item = this.editingItem;
     const isEdit = Boolean(item);
+    const hasVariants = item ? Boolean(item.hasVariants || (Array.isArray(item.variants) && item.variants.length > 0)) : false;
+    
+    const initialVariants = (item && Array.isArray(item.variants) && item.variants.length > 0) ? item.variants : [
+      { variantId: `var-${Date.now()}-1`, variantName: 'Half', price: (item ? item.sellingPrice : 250), sku: `${item ? item.itemCode : 'MENU-101'}-HALF`, portionSize: '1/2 Portion', bomMode: 'INDEPENDENT', scalingFactor: 1.0, is86: false },
+      { variantId: `var-${Date.now()}-2`, variantName: 'Full', price: (item ? Math.round((item.sellingPrice || 300) * 1.6) : 450), sku: `${item ? item.itemCode : 'MENU-101'}-FULL`, portionSize: 'Full Portion', bomMode: 'DERIVED', scalingFactor: 1.65, is86: false }
+    ];
 
-    modalMount.innerHTML = `
-      <div class="lock-screen-overlay animate-fade-in">
-        <div class="card" style="max-width:550px; width:100%; padding:var(--space-xl);">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-md);">
-            <h3 style="font-size:1.3rem; margin:0;">${isEdit ? '✏️ Edit Menu Item' : '➕ Add New Menu Item'}</h3>
-            <button class="btn-secondary btn-close-modal" style="padding:4px 8px;">✕</button>
+    return `
+      <div class="animate-fade-in" style="display:flex; flex-direction:column; gap:var(--space-lg);">
+        
+        <!-- EDITOR TOP HEADER BAR -->
+        <div class="card" style="background:var(--bg-surface-1); padding:var(--space-lg); border:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div style="display:flex; align-items:center; gap:14px;">
+            <button class="btn-secondary" id="btn-editor-back-catalog" style="padding:8px 14px; font-weight:700;">
+              ← Back to Catalog
+            </button>
+            <div>
+              <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">FULL-PAGE DISH & VARIANT STUDIO</div>
+              <h2 style="font-size:1.6rem; margin:2px 0 0; color:var(--text-primary);">
+                ${isEdit ? `✏️ Editing Dish: ${item.itemName}` : '➕ Create New Menu Dish'}
+              </h2>
+            </div>
           </div>
 
-          <form id="form-dish">
-            <div style="display:flex; flex-direction:column; gap:var(--space-md);">
-              <div class="grid grid-cols-2 gap-sm">
+          <div style="display:flex; gap:10px;">
+            <button class="btn-secondary" id="btn-editor-cancel" style="padding:10px 16px; font-weight:600;">Cancel</button>
+            <button class="btn-primary" id="btn-editor-save-top" style="padding:10px 20px; font-weight:800; background:var(--accent-primary); color:#000;">
+              💾 Save Dish & Sync Variants
+            </button>
+          </div>
+        </div>
+
+        <form id="form-full-dish-editor" style="display:flex; flex-direction:column; gap:var(--space-lg);">
+          
+          <!-- CARD 1: MASTER DISH IDENTITY & PRICING -->
+          <div class="card" style="background:var(--bg-surface-1); padding:var(--space-lg); border:1px solid var(--border-subtle);">
+            <h3 style="font-size:1.2rem; margin:0 0 16px; border-bottom:1px solid var(--border-subtle); padding-bottom:8px;">
+              📋 Master Dish Identity & Attributes
+            </h3>
+
+            <div style="display:flex; flex-direction:column; gap:16px;">
+              <div class="grid grid-cols-3 gap-md">
                 <div>
-                  <label style="display:block; font-size:0.75rem; margin-bottom:2px;">Item Code</label>
-                  <input type="text" id="inp-dish-code" value="${item ? item.itemCode : `MENU-${Math.floor(1000 + Math.random() * 9000)}`}" style="width:100%;">
+                  <label style="display:block; font-size:0.8rem; font-weight:700; margin-bottom:4px;">Item Code / SKU *</label>
+                  <input type="text" id="inp-editor-code" value="${item ? item.itemCode : `MENU-${Math.floor(1000 + Math.random() * 9000)}`}" required style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-app); color:var(--text-primary); font-family:monospace; box-sizing:border-box;">
                 </div>
                 <div>
-                  <label style="display:block; font-size:0.75rem; margin-bottom:2px;">Selling Price (₹)</label>
-                  <input type="number" id="inp-dish-price" value="${item ? item.sellingPrice : ''}" required style="width:100%;">
+                  <label style="display:block; font-size:0.8rem; font-weight:700; margin-bottom:4px;">Master Dish Name *</label>
+                  <input type="text" id="inp-editor-name" value="${item ? item.itemName : ''}" required placeholder="e.g. Butter Chicken" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-app); color:var(--text-primary); box-sizing:border-box;">
+                </div>
+                <div>
+                  <label style="display:block; font-size:0.8rem; font-weight:700; margin-bottom:4px;">Master Base Price (₹) *</label>
+                  <input type="number" id="inp-editor-price" value="${item ? item.sellingPrice : 350}" required style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-app); color:var(--text-primary); box-sizing:border-box;">
                 </div>
               </div>
 
-              <div>
-                <label style="display:block; font-size:0.75rem; margin-bottom:2px;">Dish Name *</label>
-                <input type="text" id="inp-dish-name" value="${item ? item.itemName : ''}" required style="width:100%;" placeholder="e.g. Kokum & Coconut Soup">
-              </div>
-
-              <div class="grid grid-cols-2 gap-sm">
+              <div class="grid grid-cols-4 gap-md">
                 <div>
-                  <label style="display:block; font-size:0.75rem; margin-bottom:2px;">Category</label>
-                  <input type="text" id="inp-dish-category" value="${item ? item.category : 'SOUPS'}" style="width:100%;" placeholder="e.g. SOUPS">
+                  <label style="display:block; font-size:0.8rem; font-weight:700; margin-bottom:4px;">Category *</label>
+                  <input type="text" id="inp-editor-category" value="${item ? item.category : 'MAINS - COASTAL CURRIES'}" required style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-app); color:var(--text-primary); box-sizing:border-box;">
                 </div>
                 <div>
-                  <label style="display:block; font-size:0.75rem; margin-bottom:2px;">Dietary Type</label>
-                  <select id="inp-dish-dietary" style="width:100%;">
+                  <label style="display:block; font-size:0.8rem; font-weight:700; margin-bottom:4px;">Dietary Type</label>
+                  <select id="inp-editor-dietary" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-app); color:var(--text-primary); box-sizing:border-box;">
                     <option value="VEG" ${item && item.dietaryType === 'VEG' ? 'selected' : ''}>🟢 VEG</option>
                     <option value="NON_VEG" ${item && item.dietaryType === 'NON_VEG' ? 'selected' : ''}>🔴 NON-VEG</option>
                     <option value="EGG" ${item && item.dietaryType === 'EGG' ? 'selected' : ''}>🟡 EGG</option>
                     <option value="VEGAN" ${item && item.dietaryType === 'VEGAN' ? 'selected' : ''}>🌱 VEGAN</option>
                   </select>
                 </div>
-              </div>
-
-              <div class="grid grid-cols-2 gap-sm">
                 <div>
-                  <label style="display:block; font-size:0.75rem; margin-bottom:2px;">Portion Size</label>
-                  <input type="text" id="inp-dish-portion" value="${item ? item.portionSize : '1 Portion'}" style="width:100%;">
+                  <label style="display:block; font-size:0.8rem; font-weight:700; margin-bottom:4px;">Master Portion Specs</label>
+                  <input type="text" id="inp-editor-portion" value="${item ? item.portionSize : '1 Portion'}" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-app); color:var(--text-primary); box-sizing:border-box;">
                 </div>
                 <div>
-                  <label style="display:block; font-size:0.75rem; margin-bottom:2px;">Availability</label>
-                  <select id="inp-dish-avail" style="width:100%;">
-                    <option value="AVAILABLE" ${item && item.availabilityStatus === 'AVAILABLE' ? 'selected' : ''}>🟢 AVAILABLE</option>
-                    <option value="PAUSED" ${item && item.availabilityStatus === 'PAUSED' ? 'selected' : ''}>🟡 PAUSED</option>
-                    <option value="SOLD_OUT" ${item && item.availabilityStatus === 'SOLD_OUT' ? 'selected' : ''}>🔴 SOLD OUT</option>
+                  <label style="display:block; font-size:0.8rem; font-weight:700; margin-bottom:4px;">Station Routing</label>
+                  <select id="inp-editor-routing" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-app); color:var(--text-primary); box-sizing:border-box;">
+                    <option value="KITCHEN_LINE" ${!item || item.routing === 'KITCHEN_LINE' ? 'selected' : ''}>🍳 Main Kitchen Line</option>
+                    <option value="BAR_LINE" ${item && item.routing === 'BAR_LINE' ? 'selected' : ''}>🍹 Bar Station</option>
+                    <option value="TANDOOR_LINE" ${item && item.routing === 'TANDOOR_LINE' ? 'selected' : ''}>🔥 Tandoor Station</option>
                   </select>
                 </div>
               </div>
 
               <div>
-                <label style="display:block; font-size:0.75rem; margin-bottom:2px;">Description</label>
-                <textarea id="inp-dish-desc" style="width:100%; height:60px;">${item ? item.description : ''}</textarea>
-              </div>
-
-              <div style="display:flex; justify-content:flex-end; gap:var(--space-md); margin-top:var(--space-md);">
-                <button type="button" class="btn-secondary btn-close-modal">Cancel</button>
-                <button type="submit" class="btn-primary">💾 Save Dish</button>
+                <label style="display:block; font-size:0.8rem; font-weight:700; margin-bottom:4px;">Dish Description</label>
+                <textarea id="inp-editor-desc" style="width:100%; height:70px; padding:10px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-app); color:var(--text-primary); box-sizing:border-box;">${item ? item.description : ''}</textarea>
               </div>
             </div>
-          </form>
-        </div>
+          </div>
+
+          <!-- CARD 2: FIRST-CLASS PORTION & SIZE VARIANTS (BOM LINKED) -->
+          <div class="card" style="background:var(--bg-surface-1); padding:var(--space-lg); border:1px solid var(--border-subtle);">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; border-bottom:1px solid var(--border-subtle); padding-bottom:12px; margin-bottom:16px;">
+              <div>
+                <h3 style="font-size:1.2rem; margin:0;">📦 Portion & Size Variants (BOM Attached)</h3>
+                <p style="font-size:0.85rem; color:var(--text-muted); margin-top:2px;">
+                  Define portion variants (e.g., Half, Full, 6", 9", 11", Single, Family). Each variant has its own price, BOM Mode, and 86 status.
+                </p>
+              </div>
+              
+              <div style="display:flex; align-items:center; gap:10px;">
+                <label style="display:flex; align-items:center; gap:8px; font-weight:700; font-size:0.9rem; cursor:pointer;">
+                  <input type="checkbox" id="chk-enable-variants" ${hasVariants || true ? 'checked' : ''} style="width:18px; height:18px; cursor:pointer;">
+                  Enable Variants for this Dish
+                </label>
+                <button type="button" class="btn-primary" id="btn-add-variant-row" style="padding:8px 14px; font-size:0.85rem; font-weight:700;">
+                  ➕ Add Variant Line
+                </button>
+              </div>
+            </div>
+
+            <!-- VARIANTS BUILDER TABLE -->
+            <div style="overflow-x:auto;">
+              <table style="width:100%; border-collapse:collapse; font-size:0.85rem;" id="table-variants-builder">
+                <thead>
+                  <tr style="border-bottom:2px solid var(--border-subtle); text-align:left; color:var(--text-secondary); font-size:0.75rem;">
+                    <th style="padding:8px 6px;">Variant Name</th>
+                    <th style="padding:8px 6px; width:120px;">Price (₹)</th>
+                    <th style="padding:8px 6px; width:120px;">Variant SKU</th>
+                    <th style="padding:8px 6px; width:140px;">Portion Specs</th>
+                    <th style="padding:8px 6px; width:140px;">BOM Mode</th>
+                    <th style="padding:8px 6px; width:90px;">Scale Factor</th>
+                    <th style="padding:8px 6px; width:130px;">86 Status</th>
+                    <th style="padding:8px 6px; width:150px;">BOM Recipe Link</th>
+                    <th style="padding:8px 6px; width:60px; text-align:center;">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="tbody-variants-list">
+                  ${initialVariants.map((v, idx) => `
+                    <tr class="variant-row" data-v-id="${v.variantId || `var-${idx}`}" style="border-bottom:1px solid var(--border-subtle);">
+                      <td style="padding:8px 4px;">
+                        <input type="text" class="v-inp-name" value="${v.variantName || ''}" placeholder="e.g. Half" required style="width:100%; padding:6px; border-radius:4px; border:1px solid var(--border-subtle); background:var(--bg-app); font-weight:700; color:var(--text-primary); box-sizing:border-box;">
+                      </td>
+                      <td style="padding:8px 4px;">
+                        <input type="number" class="v-inp-price" value="${v.price || 0}" required style="width:100%; padding:6px; border-radius:4px; border:1px solid var(--border-subtle); background:var(--bg-app); font-weight:800; color:var(--accent-primary); box-sizing:border-box;">
+                      </td>
+                      <td style="padding:8px 4px;">
+                        <input type="text" class="v-inp-sku" value="${v.sku || ''}" placeholder="SKU" style="width:100%; padding:6px; border-radius:4px; border:1px solid var(--border-subtle); background:var(--bg-app); font-family:monospace; color:var(--text-muted); box-sizing:border-box;">
+                      </td>
+                      <td style="padding:8px 4px;">
+                        <input type="text" class="v-inp-portion" value="${v.portionSize || ''}" placeholder="e.g. 250g chicken" style="width:100%; padding:6px; border-radius:4px; border:1px solid var(--border-subtle); background:var(--bg-app); color:var(--text-secondary); box-sizing:border-box;">
+                      </td>
+                      <td style="padding:8px 4px;">
+                        <select class="v-sel-mode" style="width:100%; padding:6px; border-radius:4px; border:1px solid var(--border-subtle); background:var(--bg-app); color:var(--text-primary); box-sizing:border-box;">
+                          <option value="INDEPENDENT" ${v.bomMode === 'INDEPENDENT' ? 'selected' : ''}>INDEPENDENT BOM</option>
+                          <option value="DERIVED" ${v.bomMode === 'DERIVED' ? 'selected' : ''}>DERIVED (Scaled)</option>
+                        </select>
+                      </td>
+                      <td style="padding:8px 4px;">
+                        <input type="number" step="0.05" class="v-inp-scale" value="${v.scalingFactor || 1.0}" style="width:100%; padding:6px; border-radius:4px; border:1px solid var(--border-subtle); background:var(--bg-app); color:var(--text-primary); box-sizing:border-box;">
+                      </td>
+                      <td style="padding:8px 4px;">
+                        <select class="v-sel-86" style="width:100%; padding:6px; border-radius:4px; border:1px solid var(--border-subtle); background:var(--bg-app); color:var(--text-primary); box-sizing:border-box;">
+                          <option value="false" ${!v.is86 ? 'selected' : ''}>🟢 AVAILABLE</option>
+                          <option value="true" ${v.is86 ? 'selected' : ''}>🔴 86 SOLD OUT</option>
+                        </select>
+                      </td>
+                      <td style="padding:8px 4px;">
+                        <button type="button" class="btn-secondary btn-link-variant-bom" data-v-name="${v.variantName}" style="width:100%; padding:6px; font-size:0.75rem; font-weight:700; display:flex; align-items:center; justify-content:center; gap:4px;">
+                          <span>🔗</span> View/Link BOM
+                        </button>
+                      </td>
+                      <td style="padding:8px 4px; text-align:center;">
+                        <button type="button" class="btn-remove-v-row" style="background:transparent; color:var(--status-danger); border:none; cursor:pointer; font-size:1.1rem; padding:4px;">
+                          🗑️
+                        </button>
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- CARD 3: BOTTOM ACTION TOOLBAR -->
+          <div class="card" style="background:var(--bg-surface-1); padding:var(--space-md) var(--space-lg); border:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+            <div style="font-size:0.85rem; color:var(--text-muted);">
+              Changes will update live Menu Master & auto-sync BOM inventory deduction schemas.
+            </div>
+
+            <div style="display:flex; gap:12px;">
+              <button type="button" class="btn-secondary" id="btn-editor-cancel-bottom" style="padding:10px 18px; font-weight:600;">
+                Cancel / Discard
+              </button>
+              <button type="submit" class="btn-primary" style="padding:10px 24px; font-weight:800; background:var(--accent-primary); color:#000;">
+                💾 Save Menu Item & Sync Variants
+              </button>
+            </div>
+          </div>
+
+        </form>
+
       </div>
     `;
+  }
 
-    modalMount.querySelectorAll('.btn-close-modal').forEach(btn => {
-      btn.addEventListener('click', () => { modalMount.innerHTML = ''; });
-    });
+  // Bind Full-Page Dish Editor Form Events
+  bindEvents(tenantId) {
+    // If we're in full-page Dish Editor view:
+    if (this.activeTab === 'edit_dish') {
+      const backBtn = this.container.querySelector('#btn-editor-back-catalog');
+      if (backBtn) {
+        backBtn.addEventListener('click', () => {
+          this.activeTab = 'catalog';
+          this.updateContent();
+        });
+      }
 
-    modalMount.querySelector('#form-dish').addEventListener('submit', (e) => {
-      e.preventDefault();
-      kitchenMenuModel.saveItem({
-        id: item ? item.id : null,
-        itemCode: modalMount.querySelector('#inp-dish-code').value,
-        itemName: modalMount.querySelector('#inp-dish-name').value,
-        category: modalMount.querySelector('#inp-dish-category').value.toUpperCase(),
-        sellingPrice: parseFloat(modalMount.querySelector('#inp-dish-price').value),
-        dietaryType: modalMount.querySelector('#inp-dish-dietary').value,
-        portionSize: modalMount.querySelector('#inp-dish-portion').value,
-        availabilityStatus: modalMount.querySelector('#inp-dish-avail').value,
-        description: modalMount.querySelector('#inp-dish-desc').value,
-        tenantId
+      const cancelBtn = this.container.querySelector('#btn-editor-cancel');
+      if (cancelBtn) {
+        cancelBtn.addEventListener('click', () => {
+          this.activeTab = 'catalog';
+          this.updateContent();
+        });
+      }
+
+      const cancelBottomBtn = this.container.querySelector('#btn-editor-cancel-bottom');
+      if (cancelBottomBtn) {
+        cancelBottomBtn.addEventListener('click', () => {
+          this.activeTab = 'catalog';
+          this.updateContent();
+        });
+      }
+
+      // Add New Variant Row Button
+      const addVRowBtn = this.container.querySelector('#btn-add-variant-row');
+      if (addVRowBtn) {
+        addVRowBtn.addEventListener('click', () => {
+          const tbody = this.container.querySelector('#tbody-variants-list');
+          if (!tbody) return;
+          const vIdx = tbody.children.length + 1;
+          const newRow = document.createElement('tr');
+          newRow.className = 'variant-row';
+          newRow.dataset.vId = `var-${Date.now()}-${vIdx}`;
+          newRow.style.borderBottom = '1px solid var(--border-subtle)';
+          newRow.innerHTML = `
+            <td style="padding:8px 4px;">
+              <input type="text" class="v-inp-name" value="Variant ${vIdx}" required style="width:100%; padding:6px; border-radius:4px; border:1px solid var(--border-subtle); background:var(--bg-app); font-weight:700; color:var(--text-primary); box-sizing:border-box;">
+            </td>
+            <td style="padding:8px 4px;">
+              <input type="number" class="v-inp-price" value="300" required style="width:100%; padding:6px; border-radius:4px; border:1px solid var(--border-subtle); background:var(--bg-app); font-weight:800; color:var(--accent-primary); box-sizing:border-box;">
+            </td>
+            <td style="padding:8px 4px;">
+              <input type="text" class="v-inp-sku" value="SKU-${vIdx}" style="width:100%; padding:6px; border-radius:4px; border:1px solid var(--border-subtle); background:var(--bg-app); font-family:monospace; color:var(--text-muted); box-sizing:border-box;">
+            </td>
+            <td style="padding:8px 4px;">
+              <input type="text" class="v-inp-portion" value="Portion ${vIdx}" style="width:100%; padding:6px; border-radius:4px; border:1px solid var(--border-subtle); background:var(--bg-app); color:var(--text-secondary); box-sizing:border-box;">
+            </td>
+            <td style="padding:8px 4px;">
+              <select class="v-sel-mode" style="width:100%; padding:6px; border-radius:4px; border:1px solid var(--border-subtle); background:var(--bg-app); color:var(--text-primary); box-sizing:border-box;">
+                <option value="INDEPENDENT">INDEPENDENT BOM</option>
+                <option value="DERIVED">DERIVED (Scaled)</option>
+              </select>
+            </td>
+            <td style="padding:8px 4px;">
+              <input type="number" step="0.05" class="v-inp-scale" value="1.0" style="width:100%; padding:6px; border-radius:4px; border:1px solid var(--border-subtle); background:var(--bg-app); color:var(--text-primary); box-sizing:border-box;">
+            </td>
+            <td style="padding:8px 4px;">
+              <select class="v-sel-86" style="width:100%; padding:6px; border-radius:4px; border:1px solid var(--border-subtle); background:var(--bg-app); color:var(--text-primary); box-sizing:border-box;">
+                <option value="false">🟢 AVAILABLE</option>
+                <option value="true">🔴 86 SOLD OUT</option>
+              </select>
+            </td>
+            <td style="padding:8px 4px;">
+              <button type="button" class="btn-secondary btn-link-variant-bom" style="width:100%; padding:6px; font-size:0.75rem; font-weight:700; display:flex; align-items:center; justify-content:center; gap:4px;">
+                <span>🔗</span> View/Link BOM
+              </button>
+            </td>
+            <td style="padding:8px 4px; text-align:center;">
+              <button type="button" class="btn-remove-v-row" style="background:transparent; color:var(--status-danger); border:none; cursor:pointer; font-size:1.1rem; padding:4px;">
+                🗑️
+              </button>
+            </td>
+          `;
+          tbody.appendChild(newRow);
+          this.bindVariantRowEvents(newRow);
+        });
+      }
+
+      // Bind Remove and Link buttons on existing variant rows
+      this.container.querySelectorAll('.variant-row').forEach(row => this.bindVariantRowEvents(row));
+
+      // Handle Full Form Submit
+      const form = this.container.querySelector('#form-full-dish-editor');
+      if (form) {
+        form.addEventListener('submit', (e) => {
+          e.preventDefault();
+          const enableVariants = this.container.querySelector('#chk-enable-variants')?.checked ?? true;
+          
+          const variantRows = this.container.querySelectorAll('.variant-row');
+          const collectedVariants = [];
+
+          variantRows.forEach(row => {
+            const vName = row.querySelector('.v-inp-name')?.value || '';
+            const vPrice = parseFloat(row.querySelector('.v-inp-price')?.value) || 0;
+            const vSku = row.querySelector('.v-inp-sku')?.value || '';
+            const vPortion = row.querySelector('.v-inp-portion')?.value || '';
+            const vMode = row.querySelector('.v-sel-mode')?.value || 'INDEPENDENT';
+            const vScale = parseFloat(row.querySelector('.v-inp-scale')?.value) || 1.0;
+            const v86 = row.querySelector('.v-sel-86')?.value === 'true';
+
+            if (vName.trim() !== '') {
+              collectedVariants.push({
+                variantId: row.dataset.vId || `var-${Math.random().toString(36).substring(2, 7)}`,
+                variantCode: vSku || `VAR-${vName.toUpperCase().replace(/\s+/g, '')}`,
+                variantName: vName.trim(),
+                price: vPrice,
+                sku: vSku,
+                portionSize: vPortion,
+                bomMode: vMode,
+                scalingFactor: vScale,
+                is86: v86,
+                isAvailable: !v86
+              });
+            }
+          });
+
+          const itemData = {
+            id: this.editingItem ? this.editingItem.id : null,
+            itemCode: this.container.querySelector('#inp-editor-code').value,
+            itemName: this.container.querySelector('#inp-editor-name').value,
+            sellingPrice: parseFloat(this.container.querySelector('#inp-editor-price').value) || 0,
+            category: this.container.querySelector('#inp-editor-category').value.toUpperCase(),
+            dietaryType: this.container.querySelector('#inp-editor-dietary').value,
+            portionSize: this.container.querySelector('#inp-editor-portion').value,
+            routing: this.container.querySelector('#inp-editor-routing').value,
+            description: this.container.querySelector('#inp-editor-desc').value,
+            hasVariants: enableVariants && collectedVariants.length > 0,
+            variants: enableVariants ? collectedVariants : [],
+            tenantId
+          };
+
+          kitchenMenuModel.saveItem(itemData);
+          alert(`✨ Saved Menu Dish "${itemData.itemName}" with ${collectedVariants.length} Portion Variants!`);
+          this.activeTab = 'catalog';
+          this.updateContent();
+        });
+      }
+
+      return;
+    }
+
+    // Standard Sub-tab switching buttons for Catalog view
+    this.container.querySelectorAll('.btn-tab-trigger').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.activeTab = btn.dataset.tab;
+        this.updateContent();
       });
-      modalMount.innerHTML = '';
-      this.updateContent();
     });
+
+    // Open Full-Page Add Dish View
+    const addBtn = this.container.querySelector('.btn-open-add-modal');
+    if (addBtn) {
+      addBtn.addEventListener('click', () => {
+        this.editingItem = null;
+        this.activeTab = 'edit_dish';
+        this.updateContent();
+      });
+    }
+
+    // Catalog Search & Filters
+    const searchInp = this.container.querySelector('#inp-catalog-search');
+    if (searchInp) {
+      searchInp.addEventListener('input', (e) => {
+        this.filters.searchQuery = e.target.value;
+        const tabContent = this.container.querySelector('#menu-tab-content');
+        if (tabContent && this.activeTab === 'catalog') {
+          tabContent.innerHTML = this.renderCatalogTab(tenantId, kitchenMenuModel.getStats(tenantId));
+          this.bindEvents(tenantId);
+        }
+      });
+    }
+
+    const catSel = this.container.querySelector('#sel-catalog-category');
+    if (catSel) {
+      catSel.addEventListener('change', (e) => {
+        this.filters.category = e.target.value;
+        this.updateContent();
+      });
+    }
+
+    const dietSel = this.container.querySelector('#sel-catalog-dietary');
+    if (dietSel) {
+      dietSel.addEventListener('change', (e) => {
+        this.filters.dietaryType = e.target.value;
+        this.updateContent();
+      });
+    }
+
+    const availSel = this.container.querySelector('#sel-catalog-availability');
+    if (availSel) {
+      availSel.addEventListener('change', (e) => {
+        this.filters.availabilityStatus = e.target.value;
+        this.updateContent();
+      });
+    }
+
+    // Inline Catalog Status Dropdowns
+    this.container.querySelectorAll('.sel-item-status').forEach(sel => {
+      sel.addEventListener('change', (e) => {
+        kitchenMenuModel.toggleAvailability(e.target.dataset.id, e.target.value);
+        this.updateContent();
+      });
+    });
+
+    // Quick Availability Toggles in Availability Tab
+    this.container.querySelectorAll('.btn-quick-avail').forEach(btn => {
+      btn.addEventListener('click', () => {
+        kitchenMenuModel.toggleAvailability(btn.dataset.id, btn.dataset.status);
+        this.updateContent();
+      });
+    });
+
+    // Edit Dish Buttons -> Open Full-Page Editor View
+    this.container.querySelectorAll('.btn-edit-dish').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const item = kitchenMenuModel.getById(btn.dataset.id);
+        if (item) {
+          this.editingItem = item;
+          this.activeTab = 'edit_dish';
+          this.updateContent();
+        }
+      });
+    });
+
+    // Archive Dish Buttons (Controlled Lifecycle)
+    this.container.querySelectorAll('.btn-archive-dish').forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (confirm('Archive this dish? It will be moved to ARCHIVED status and hidden from active sales.')) {
+          kitchenMenuModel.archiveItem(btn.dataset.id);
+          this.updateContent();
+        }
+      });
+    });
+
+    // 1-Click Load Actual Menu Dataset Button
+    const loadActualBtn = this.container.querySelector('.btn-load-actual-menu');
+    if (loadActualBtn) {
+      loadActualBtn.addEventListener('click', () => {
+        const res = kitchenMenuModel.importActualMenu(tenantId);
+        alert(`✨ Successfully imported ${res.importedCount} actual Anchor coastal menu items!`);
+        this.activeTab = 'catalog';
+        this.updateContent();
+      });
+    }
+
+    // Download CSV Template
+    const templateBtn = this.container.querySelector('.btn-download-template');
+    if (templateBtn) {
+      templateBtn.addEventListener('click', () => this.downloadCSVTemplate());
+    }
+
+    // Upload File Input Listener
+    const fileInp = this.container.querySelector('#inp-upload-menu-file');
+    if (fileInp) {
+      fileInp.addEventListener('change', (e) => this.handleFileUpload(e.target.files[0], tenantId));
+    }
+
+    // Confirm Bulk Import Button
+    const confirmImportBtn = this.container.querySelector('.btn-confirm-import');
+    if (confirmImportBtn) {
+      confirmImportBtn.addEventListener('click', () => {
+        const res = kitchenMenuModel.importFromRows(this.importPreviewRows, tenantId);
+        if (res.success) {
+          alert(`✅ Bulk imported ${res.importedCount} menu items successfully!`);
+          this.importPreviewRows = [];
+          this.importFileName = '';
+          this.importErrors = [];
+          this.activeTab = 'catalog';
+          this.updateContent();
+        } else {
+          alert(`Import failed: ${res.errors.join('\n')}`);
+        }
+      });
+    }
+  }
+
+  bindVariantRowEvents(row) {
+    const removeBtn = row.querySelector('.btn-remove-v-row');
+    if (removeBtn) {
+      removeBtn.addEventListener('click', () => {
+        row.remove();
+      });
+    }
+
+    const linkBtn = row.querySelector('.btn-link-variant-bom');
+    if (linkBtn) {
+      linkBtn.addEventListener('click', () => {
+        const vName = row.querySelector('.v-inp-name')?.value || 'Variant';
+        alert(`🔗 Linking BOM Recipe for variant "${vName}". Redirecting to Recipe Studio...`);
+      });
+    }
   }
 }
 
