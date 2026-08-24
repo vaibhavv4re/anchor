@@ -697,6 +697,16 @@ export class KitchenMenuView {
       'Kokum & Coconut Soup,SOUPS,240,VEG,Tangy coconut broth,250ml\n' +
       'Surmai Tawa Fry,STARTERS - FROM THE SEA,550,NON_VEG,Seared King Mackerel steaks,2 steaks\n';
 
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    link.setAttribute('download', 'kitchen_menu_import_template.csv');
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
   // Standard Full-Page Dish & Variant Editor View
   renderDishEditorTab(tenantId) {
     const item = this.editingItem;
