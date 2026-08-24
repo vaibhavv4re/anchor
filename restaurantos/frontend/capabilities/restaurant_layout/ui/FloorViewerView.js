@@ -39,9 +39,19 @@ export class FloorViewerView {
   }
 
   subscribeProjections() {
-    this.unsubscribeProjection = platformEventBus.subscribe('table:projection:updated', () => {
-      this.updateGridContent();
-    });
+    const refresh = () => {
+      if (this.container && document.body.contains(this.container)) {
+        this.updateGridContent();
+      }
+    };
+    this.unsubscribeEvents = [
+      platformEventBus.subscribe('table:projection:updated', refresh),
+      platformEventBus.subscribe('table:state:changed', refresh),
+      platformEventBus.subscribe('session:created', refresh),
+      platformEventBus.subscribe('session:milestone:changed', refresh),
+      platformEventBus.subscribe('bill:finalized', refresh),
+      platformEventBus.subscribe('bill:reopened', refresh)
+    ];
   }
 
   updateContent() {
@@ -63,7 +73,7 @@ export class FloorViewerView {
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--space-md); margin-bottom:12px;">
         <div>
           <h2 style="font-size:1.5rem; margin:0;">Restaurant Layout & Live Floor</h2>
-          <p style="color:var(--text-muted); font-size:0.875rem; margin-top:2px;">Single unified table state projection across all workspaces (PD-006 & PD-009)</p>
+          <p style="color:var(--text-muted); font-size:0.875rem; margin-top:2px;">Single unified real-time table state projection across all workspaces (PD-006 & PD-009)</p>
         </div>
         <div style="display:flex; gap:var(--space-sm); align-items:center; flex-wrap:wrap;">
           <span class="badge" style="background:#10b98122; color:#10b981; border:1px solid #10b981;">🟢 Available</span>
@@ -118,58 +128,95 @@ export class FloorViewerView {
     }
 
     gridMount.innerHTML = projections.map(p => `
-      <div class="card table-card animate-fade-in" data-table="${p.tableNumber}" style="cursor:pointer; border-top:4px solid ${p.stateColor}; transition:transform var(--transition-fast); padding:var(--space-md); background:var(--bg-surface-1);">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-xs);">
-          <div style="font-size:1.15rem; font-weight:700;">Table ${p.tableLabel || p.tableNumber}</div>
-          <span class="badge" style="background:${p.stateColor}22; color:${p.stateColor}; border:1px solid ${p.stateColor}; font-size:0.7rem; font-weight:700;">
-            ${p.physicalState}
-          </span>
+      <div class="card table-card animate-fade-in" data-table="${p.tableNumber}" style="cursor:pointer; border-top:4px solid ${p.stateColor}; transition:transform var(--transition-fast); padding:var(--space-md); background:var(--bg-surface-1); display:flex; flex-direction:column; justify-content:space-between; gap:8px;">
+        <div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-xs);">
+            <div style="font-size:1.15rem; font-weight:700;">Table ${p.tableLabel || p.tableNumber}</div>
+            <span class="badge" style="background:${p.stateColor}22; color:${p.stateColor}; border:1px solid ${p.stateColor}; font-size:0.7rem; font-weight:700;">
+              ${p.physicalState}
+            </span>
+          </div>
+
+          <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:var(--space-xs);">
+            👥 ${p.capacity} / ${p.maxCapacity} Seats
+          </div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.75rem; margin-bottom:4px;">
+            <div style="color:var(--text-secondary);">
+              👤 ${p.assignedWaiterName || 'Unassigned'}
+            </div>
+            <div style="color:var(--text-muted); font-family:monospace;">
+              ${p.elapsedTime}
+            </div>
+          </div>
         </div>
 
-        <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:var(--space-sm);">
-          👥 ${p.capacity} / ${p.maxCapacity} Seats
-        </div>
-
-        <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.75rem;">
-          <div style="color:var(--text-secondary);">
-            👤 ${p.assignedWaiterName || 'Unassigned'}
-          </div>
-          <div style="color:var(--text-muted); font-family:monospace;">
-            ${p.elapsedTime}
-          </div>
-        </div>
+        <!-- STAGE-GATED DIRECT NEXT ACTION BUTTON -->
+        <button class="btn-primary btn-direct-table-action" data-table="${p.tableNumber}" data-action-type="${p.primaryAction.type}" style="width:100%; padding:8px 10px; font-weight:700; font-size:0.8rem; border-radius:6px; cursor:pointer; background:${p.stateColor}; color:${p.physicalState === 'AVAILABLE' || p.physicalState === 'PAYMENT_PENDING' ? '#000' : '#fff'}; border:none; display:flex; align-items:center; justify-content:center; gap:4px;">
+          ${p.primaryAction.label} →
+        </button>
       </div>
     `).join('');
 
-    // Attach click listeners to open Table Inspector Modal
+    // Attach click listeners to direct action buttons & table cards
     gridMount.querySelectorAll('.table-card').forEach(card => {
-      card.addEventListener('click', () => {
-        const tableNum = card.dataset.table;
+      const tableNum = card.dataset.table;
+      const directBtn = card.querySelector('.btn-direct-table-action');
+
+      const handleTableAction = (e) => {
+        if (e) e.stopPropagation();
         const projection = tableProjectionService.getTableProjection(tableNum);
         if (!projection) return;
 
-        const modalMount = this.container.querySelector('#inspector-modal-mount');
-        if (!modalMount) return;
-        modalMount.innerHTML = '';
+        const actionType = projection.primaryAction.type;
 
-        const inspector = new TableInspectorModal({
-          projection,
-          onClose: () => {
+        if (actionType === 'SEAT_GUESTS') {
+          // Open Group 3 CreateSessionModal
+          const modalMount = this.container.querySelector('#inspector-modal-mount');
+          if (modalMount) {
             modalMount.innerHTML = '';
-          },
-          onActionComplete: () => {
-            modalMount.innerHTML = '';
-            this.updateGridContent();
-          },
-          onOpenActiveSession: (sessionId) => {
-            modalMount.innerHTML = '';
-            this.activeSessionId = sessionId;
-            this.updateContent();
+            const sessionModal = new CreateSessionModal({
+              tableNumber: projection.tableNumber,
+              onClose: () => { modalMount.innerHTML = ''; },
+              onSessionCreated: (session) => {
+                modalMount.innerHTML = '';
+                this.activeSessionId = session.id;
+                this.updateContent();
+              }
+            });
+            modalMount.appendChild(sessionModal.render());
           }
-        });
+        } else if (actionType === 'OPEN_SESSION' || actionType === 'OPEN_BILL') {
+          const activeProj = sessionProjectionService.getActiveProjectionForTable(projection.tableNumber);
+          if (activeProj) {
+            this.activeSessionId = activeProj.sessionId;
+            this.updateContent();
+          } else {
+            alert(`No active session found for Table ${projection.tableNumber}`);
+          }
+        } else if (actionType === 'MARK_CLEAN' || actionType === 'RESTORE_SERVICE') {
+          tableStateMachine.transitionTableState(projection.tableNumber, PhysicalTableStates.AVAILABLE);
+          this.updateGridContent();
+        } else {
+          // Default fallback: open Table Inspector Modal
+          const modalMount = this.container.querySelector('#inspector-modal-mount');
+          if (modalMount) {
+            modalMount.innerHTML = '';
+            const inspector = new TableInspectorModal({
+              projection,
+              onClose: () => { modalMount.innerHTML = ''; },
+              onActionComplete: () => { modalMount.innerHTML = ''; this.updateGridContent(); },
+              onOpenActiveSession: (sessionId) => { modalMount.innerHTML = ''; this.activeSessionId = sessionId; this.updateContent(); }
+            });
+            modalMount.appendChild(inspector.render());
+          }
+        }
+      };
 
-        modalMount.appendChild(inspector.render());
-      });
+      if (directBtn) {
+        directBtn.addEventListener('click', handleTableAction);
+      }
+      card.addEventListener('click', handleTableAction);
     });
   }
 }

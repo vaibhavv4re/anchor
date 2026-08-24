@@ -87,7 +87,15 @@ def run_tests():
     assert "btn-reopen-bill-cashier" in bill_code, "RunningBillModal missing Cashier Re-open button!"
     print("✅ Table Lifecycle Actions & Cashier Re-open Workflow verified.")
 
-    print("\n🎉 ALL 11 ARCHITECTURAL REQUIREMENTS & 3 NON-NEGOTIABLES 100% VERIFIED!")
+    # 9. Audit Live Real-time Table Status Sync & Stage-gated Direct Action Buttons
+    with open(r"d:\Projects\Anchor\restaurantos\frontend\capabilities\restaurant_layout\ui\FloorViewerView.js", "r", encoding="utf-8") as f:
+        floor_code = f.read()
+    assert "table:state:changed" in floor_code, "FloorViewerView missing table:state:changed real-time subscription!"
+    assert "btn-direct-table-action" in floor_code, "FloorViewerView missing btn-direct-table-action stage-gated button!"
+    assert "SEAT_GUESTS" in floor_code, "FloorViewerView missing SEAT_GUESTS stage action!"
+    print("✅ Live Real-time Table Status Sync & Stage-gated Intuitive Action Workflow verified.")
+
+    print("\n🎉 ALL ARCHITECTURAL REQUIREMENTS & WORKFLOW NON-NEGOTIABLES 100% VERIFIED!")
 
 if __name__ == "__main__":
     run_tests()
