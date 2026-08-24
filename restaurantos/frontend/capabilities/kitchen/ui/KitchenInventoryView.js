@@ -25,21 +25,39 @@ export class KitchenInventoryView {
   }
 
   _getCollection(name, tenantId) {
-    if (this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
-      const list = this.dataGateway.getCachedCollection(name, tenantId);
-      if (Array.isArray(list) && list.length > 0) return list;
-    }
-    if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.dataGateway) {
-      const list = window.__APP__.platform.dataGateway.getCachedCollection(name, tenantId);
-      if (Array.isArray(list) && list.length > 0) return list;
-    }
     const store = this.offlineStore || globalOfflineStore;
-    return store && typeof store.getCollection === 'function' ? store.getCollection(name, tenantId) || [] : [];
+    let list = [];
+    if (store && typeof store.getCollection === 'function') {
+      list = store.getCollection(name, tenantId) || [];
+    }
+    if ((!list || list.length === 0) && this.dataGateway && typeof this.dataGateway.getCachedCollection === 'function') {
+      list = this.dataGateway.getCachedCollection(name, tenantId) || [];
+    }
+    if ((!list || list.length === 0) && typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.dataGateway) {
+      list = window.__APP__.platform.dataGateway.getCachedCollection(name, tenantId) || [];
+    }
+    return list || [];
   }
 
   // --- MAIN RENDER FUNCTION ---
   render(container, session) {
+    this._container = container;
+    this._session = session;
     const tenantId = session ? session.tenantId : null;
+
+    if (!this._subscribedEvents && typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.eventBus) {
+      this._subscribedEvents = true;
+      const refresh = () => {
+        if (this._container && document.body.contains(this._container)) {
+          this.render(this._container, this._session);
+        }
+      };
+      window.__APP__.platform.eventBus.subscribe('stock:balance:updated', refresh);
+      window.__APP__.platform.eventBus.subscribe('inventory:updated', refresh);
+      window.__APP__.platform.eventBus.subscribe('STOCK_BALANCE_UPDATED', refresh);
+      window.__APP__.platform.eventBus.subscribe('INVENTORY_TRANSFERRED', refresh);
+      window.__APP__.platform.eventBus.subscribe('GRN_RECEIPT_POSTED', refresh);
+    }
 
     const renderHTML = () => {
       container.innerHTML = `

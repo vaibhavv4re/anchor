@@ -212,12 +212,14 @@ export class GoodsReceiptRepository {
       }
     }
 
-    if (!this.dataGateway) {
-      if (journal && typeof journal.createSyncJob === 'function') {
-        journal.createSyncJob('UPLOAD_EVENT', tenantId, 'goods_receipt_notes', { commandType: 'POST_GOODS_RECEIPT', eventType: 'GoodsReceiptPosted', ...grnRecord }, session);
-      } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
-        offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, 'goods_receipt_notes', { commandType: 'POST_GOODS_RECEIPT', eventType: 'GoodsReceiptPosted', ...grnRecord }, session);
-      }
+    if (store && balanceList.length > 0) {
+      store.setCollection('stock_balances', balanceList);
+    }
+
+    // Broadcast Real-time Stock Balance Events across all Workspaces
+    if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.eventBus) {
+      window.__APP__.platform.eventBus.publish('stock:balance:updated', { tenantId, documentNo: grnNum });
+      window.__APP__.platform.eventBus.publish('inventory:updated', { tenantId, documentNo: grnNum });
     }
 
     const actor = session ? session.employeeName : 'Admin';

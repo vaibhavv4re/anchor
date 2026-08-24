@@ -199,8 +199,7 @@ export class StockTransferRepository {
       }
     });
 
-    if (!this.dataGateway && store) {
-      store.setCollection('stock_ledger', ledgerList);
+    if (store && balanceList.length > 0) {
       store.setCollection('stock_balances', balanceList);
     }
 
@@ -216,12 +215,10 @@ export class StockTransferRepository {
       store.appendItem('stock_transfers', trfRecord);
     }
 
-    if (!this.dataGateway) {
-      if (journal && typeof journal.createSyncJob === 'function') {
-        journal.createSyncJob('UPLOAD_EVENT', tenantId, 'stock_transfers', { commandType: 'POST_STOCK_TRANSFER', eventType: 'StockTransferPosted', ...trfRecord }, session);
-      } else if (typeof offlineJournal !== 'undefined' && offlineJournal.createSyncJob) {
-        offlineJournal.createSyncJob('UPLOAD_EVENT', tenantId, 'stock_transfers', { commandType: 'POST_STOCK_TRANSFER', eventType: 'StockTransferPosted', ...trfRecord }, session);
-      }
+    // Broadcast Real-time Stock Balance & Transfer Events across all Workspaces
+    if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.eventBus) {
+      window.__APP__.platform.eventBus.publish('stock:balance:updated', { tenantId, transferNo: trfNo, fromLoc, toLoc });
+      window.__APP__.platform.eventBus.publish('inventory:updated', { tenantId, transferNo: trfNo });
     }
 
     const actor = session ? session.employeeName : 'Admin';

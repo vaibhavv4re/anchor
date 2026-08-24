@@ -138,13 +138,33 @@ export class RunningBillModal {
               <span>Grand Total:</span>
               <span>₹${(proj.grandTotal || 0).toFixed(2)}</span>
             </div>
+          
+            <!-- TABLE LIFECYCLE & CASHIER CONTROLS STRIP (FOR FINALIZED BILLS) -->
+            ${isFinalized ? `
+              <div style="background:var(--bg-app); border:1px solid var(--border-subtle); padding:12px; border-radius:6px; display:flex; flex-direction:column; gap:8px;">
+                <div style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase;">
+                  🏷️ Table Status & Cashier Lifecycle Actions
+                </div>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                  <button id="btn-mark-cleaning" class="btn-secondary" style="padding:6px 12px; font-size:0.8rem; font-weight:700;">
+                    🧹 Mark Table Needs Cleaning
+                  </button>
+                  <button id="btn-mark-available" class="btn-secondary" style="padding:6px 12px; font-size:0.8rem; font-weight:700; color:var(--status-success);">
+                    🟢 Mark Table Available & Vacant
+                  </button>
+                  <button id="btn-reopen-bill-cashier" class="btn-secondary" style="padding:6px 12px; font-size:0.8rem; font-weight:700; color:var(--accent-primary);">
+                    🔓 Re-open Finalised Bill (Cashier)
+                  </button>
+                </div>
+              </div>
+            ` : ''}
           </div>
 
         </div>
 
         <!-- FOOTER ACTION BAR -->
         <div style="background:var(--bg-surface-2); padding:14px 20px; border-top:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-          <button id="btn-add-more-items" class="btn-secondary" style="font-weight:600; font-size:0.85rem;">
+          <button id="btn-add-more-items" class="btn-secondary" ${isFinalized ? 'disabled title="Bill is finalised. Only Cashier can re-open to add items."' : ''} style="font-weight:600; font-size:0.85rem; opacity:${isFinalized ? 0.5 : 1};">
             ➕ Add More Items
           </button>
 
@@ -178,6 +198,10 @@ export class RunningBillModal {
     const addMoreBtn = this.modalEl.querySelector('#btn-add-more-items');
     if (addMoreBtn) {
       addMoreBtn.addEventListener('click', () => {
+        if (proj.status === SessionMilestones.BILL_GENERATED) {
+          alert('🔒 Bill for this table is finalised and sent to Cashier. Only Cashier can re-open the bill to add or edit items.');
+          return;
+        }
         if (this.onClose) this.onClose();
         if (this.onAddMore) this.onAddMore();
       });
@@ -211,6 +235,35 @@ export class RunningBillModal {
 
         alert(`Bill for Table ${proj.tableNumber} (Total: ₹${(proj.grandTotal || 0).toFixed(2)}) has been finalised and sent to Cashier! Table status set to PAYMENT_PENDING.`);
         if (this.onBillFinalized) this.onBillFinalized();
+        this.updateContent();
+      });
+    }
+
+    const markCleaningBtn = this.modalEl.querySelector('#btn-mark-cleaning');
+    if (markCleaningBtn) {
+      markCleaningBtn.addEventListener('click', () => {
+        tableStateMachine.transitionTableState(proj.tableNumber, PhysicalTableStates.CLEANING);
+        alert(`🧹 Table ${proj.tableNumber} marked as NEEDS CLEANING.`);
+        this.updateContent();
+      });
+    }
+
+    const markAvailableBtn = this.modalEl.querySelector('#btn-mark-available');
+    if (markAvailableBtn) {
+      markAvailableBtn.addEventListener('click', () => {
+        sessionStateMachine.transitionMilestone(this.sessionId, SessionMilestones.CLOSED);
+        tableStateMachine.transitionTableState(proj.tableNumber, PhysicalTableStates.AVAILABLE);
+        alert(`🟢 Table ${proj.tableNumber} marked AVAILABLE & VACANT. Guest session closed.`);
+        if (this.onClose) this.onClose();
+      });
+    }
+
+    const reopenCashierBtn = this.modalEl.querySelector('#btn-reopen-bill-cashier');
+    if (reopenCashierBtn) {
+      reopenCashierBtn.addEventListener('click', () => {
+        sessionStateMachine.reopenBill(this.sessionId, 'CASHIER');
+        tableStateMachine.transitionTableState(proj.tableNumber, PhysicalTableStates.OCCUPIED);
+        alert(`🔓 Cashier Action: Bill for Table ${proj.tableNumber} has been re-opened! Waiters can now add or modify order items.`);
         this.updateContent();
       });
     }
