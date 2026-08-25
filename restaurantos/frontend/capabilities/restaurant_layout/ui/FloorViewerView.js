@@ -5,12 +5,15 @@
  */
 
 import { tableProjectionService } from '../../../../../businessos/platform/table_state/tableProjectionService.js';
+import { tableStateMachine, PhysicalTableStates } from '../../../../../businessos/platform/table_state/tableStateMachine.js';
+import { sessionProjectionService } from '../../../../../businessos/platform/session/sessionProjectionService.js';
 import { platformEventBus } from '../../../../../businessos/platform/events/platformEvents.js';
 import { diningAreaModel } from '../../../../../businessos/platform/layout/diningAreaModel.js';
 
 import { DiningAreaTabs } from './DiningAreaTabs.js';
 import { TimelineWidget } from './TimelineWidget.js';
 import { TableInspectorModal } from './TableInspectorModal.js';
+import { CreateSessionModal } from '../../guest_service/ui/CreateSessionModal.js';
 import { ActiveSessionView } from '../../guest_service/ui/ActiveSessionView.js';
 
 export class FloorViewerView {
