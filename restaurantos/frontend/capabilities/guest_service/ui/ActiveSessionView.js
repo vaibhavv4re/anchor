@@ -37,31 +37,29 @@ export class ActiveSessionView {
   }
 
   subscribeEvents() {
-    const unsubProj = platformEventBus.subscribe('session:projection:updated', (envelope) => {
-      const payload = envelope.payload || envelope;
-      if (this.sessionId && payload && (payload.sessionId === this.sessionId || payload.id === this.sessionId)) {
-        this.updateHeaderContent();
-        this.updateKitchenAlertBanner();
-      }
-    });
+    const refreshAlerts = () => {
+      this.updateHeaderContent();
+      this.updateKitchenAlertBanner();
+    };
 
-    const unsubTicket = platformEventBus.subscribe('ticket:status_changed', (envelope) => {
-      const payload = envelope.payload || envelope;
-      const ticket = payload.ticket;
-      if (this.sessionId && ticket && (ticket.sessionId === this.sessionId || ticket.session_id === this.sessionId)) {
-        this.updateKitchenAlertBanner();
+    const refreshFull = (envelope) => {
+      const payload = envelope ? (envelope.payload || envelope) : null;
+      if (!payload || !this.sessionId || payload.sessionId === this.sessionId || payload.tableNumber || payload.id === this.sessionId) {
+        if (this.container && document.body.contains(this.container)) {
+          this.updateContent();
+        }
       }
-    });
+    };
 
-    const unsubItem = platformEventBus.subscribe('ticket:item_status_changed', (envelope) => {
-      const payload = envelope.payload || envelope;
-      const ticket = payload.ticket;
-      if (this.sessionId && ticket && (ticket.sessionId === this.sessionId || ticket.session_id === this.sessionId)) {
-        this.updateKitchenAlertBanner();
-      }
-    });
+    const unsubProj = platformEventBus.subscribe('session:projection:updated', refreshAlerts);
+    const unsubState = platformEventBus.subscribe('table:state:changed', refreshFull);
+    const unsubMilestone = platformEventBus.subscribe('session:milestone:changed', refreshFull);
+    const unsubFinalized = platformEventBus.subscribe('bill:finalized', refreshFull);
+    const unsubReopened = platformEventBus.subscribe('bill:reopened', refreshFull);
+    const unsubTicket = platformEventBus.subscribe('ticket:status_changed', refreshAlerts);
+    const unsubItem = platformEventBus.subscribe('ticket:item_status_changed', refreshAlerts);
 
-    this.unsubscribeEvents.push(unsubProj, unsubTicket, unsubItem);
+    this.unsubscribeEvents.push(unsubProj, unsubState, unsubMilestone, unsubFinalized, unsubReopened, unsubTicket, unsubItem);
   }
 
   updateKitchenAlertBanner() {
@@ -161,6 +159,30 @@ export class ActiveSessionView {
           </div>
         </div>
       </div>
+      
+      <!-- Stage Guidance Banner when Bill is Finalized -->
+      ${(projection.status === SessionMilestones.BILL_GENERATED || projection.billStatus === 'GENERATED') ? `
+        <div class="card animate-fade-in" style="background:#f59e0b15; border:2px solid #f59e0b; padding:14px 18px; margin-bottom:var(--space-md); border-radius:8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+            <div>
+              <div style="font-weight:800; color:#f59e0b; font-size:1.05rem; display:flex; align-items:center; gap:6px;">
+                <span>💳</span> <strong>BILL FINALISED & SENT TO CASHIER (PAYMENT PENDING)</strong>
+              </div>
+              <div style="font-size:0.85rem; color:var(--text-primary); margin-top:4px;">
+                Table ${projection.tableNumber} is awaiting cashier payment of <strong>₹${(projection.grandTotal || 0).toFixed(2)}</strong>. Order menu is locked for waiters. Choose Next Logical Step:
+              </div>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn-primary" id="btn-settle-close-banner" style="background:#10b981; color:#000; font-weight:700; padding:8px 14px; font-size:0.85rem;">
+                ✨ Settle Payment & Close Session
+              </button>
+              <button class="btn-secondary" id="btn-mark-clean-banner" style="padding:8px 14px; font-size:0.85rem; font-weight:700;">
+                🧹 Mark Table Cleaning
+              </button>
+            </div>
+          </div>
+        </div>
+      ` : ''}
 
       <!-- Live Order & Production Status Strip Mount -->
       <div id="kitchen-alert-mount">
@@ -209,15 +231,19 @@ export class ActiveSessionView {
           </span>
         </div>
         <div style="display:flex; gap:var(--space-md); flex-wrap:wrap;">
-          ${(projection.status === SessionMilestones.ORDERS_STARTED || projection.status === SessionMilestones.GUESTS_SEATED || projection.status === 'GUESTS_SEATED') ? `
+          ${(projection.status !== SessionMilestones.BILL_GENERATED && projection.status !== SessionMilestones.CLOSED) ? `
             <button class="btn-primary" id="btn-finalise-bill-cashier" style="padding:10px 18px; font-weight:800; background:var(--accent-primary);">
               🧾 Finalise Bill & Send to Cashier →
             </button>
           ` : ''}
           ${projection.status === SessionMilestones.BILL_GENERATED ? `
-            <button class="btn-primary" id="btn-close-session" style="background-color:var(--status-success); color:#000; font-weight:700;">✨ Mark Payment Received & Close Session</button>
+            <button class="btn-primary" id="btn-close-session" style="background-color:var(--status-success); color:#000; font-weight:700; padding:10px 18px;">
+              ✨ Mark Payment Received & Close Session
+            </button>
           ` : ''}
-          <button class="btn-secondary" id="btn-close-session-direct" style="color:var(--status-danger);">Close Session</button>
+          <button class="btn-secondary" id="btn-close-session-direct" style="color:var(--status-danger);">
+            Close Session
+          </button>
         </div>
       </div>
 
@@ -226,6 +252,143 @@ export class ActiveSessionView {
 
     this.mountOrderComponents(projection);
     this.bindEvents(projection);
+  }
+
+  bindEvents(projection) {
+    const backBtn = this.container.querySelector('#btn-back-to-floor');
+    if (backBtn) {
+      backBtn.addEventListener('click', () => {
+        if (this.onClose) this.onClose();
+      });
+    }
+
+    const addShortcutBtn = this.container.querySelector('#btn-add-items-shortcut');
+    if (addShortcutBtn) {
+      addShortcutBtn.addEventListener('click', () => {
+        const menuEl = this.container.querySelector('#menu-browser-mount');
+        if (menuEl) menuEl.scrollIntoView({ behavior: 'smooth' });
+      });
+    }
+
+    const openBillCardBtn = this.container.querySelector('#btn-open-running-bill-card');
+    if (openBillCardBtn) {
+      openBillCardBtn.addEventListener('click', () => {
+        this.openRunningBillModal();
+      });
+    }
+
+    const viewBillBtn = this.container.querySelector('#btn-view-running-bill');
+    if (viewBillBtn) {
+      viewBillBtn.addEventListener('click', () => {
+        this.openRunningBillModal();
+      });
+    }
+
+    const finaliseBillBtn = this.container.querySelector('#btn-finalise-bill-cashier');
+    if (finaliseBillBtn) {
+      finaliseBillBtn.addEventListener('click', () => {
+        sessionStateMachine.transitionMilestone(this.sessionId, SessionMilestones.BILL_GENERATED);
+        tableStateMachine.transitionTableState(projection.tableNumber, PhysicalTableStates.PAYMENT_PENDING);
+
+        platformEventBus.publish('bill:finalized', {
+          sessionId: this.sessionId,
+          tableNumber: projection.tableNumber,
+          tableCode: projection.tableCode,
+          subtotal: projection.subtotal,
+          cgstAmount: projection.cgstAmount,
+          sgstAmount: projection.sgstAmount,
+          grandTotal: projection.grandTotal,
+          itemizedList: projection.itemizedList,
+          waiterName: projection.waiter ? projection.waiter.name : 'Staff',
+          timestamp: new Date().toISOString()
+        });
+
+        platformEventBus.publish('table:state:changed', {
+          tableNumber: projection.tableNumber,
+          newState: PhysicalTableStates.PAYMENT_PENDING,
+          sessionId: this.sessionId
+        });
+
+        alert(`🧾 Bill for Table ${projection.tableNumber} (Total: ₹${(projection.grandTotal || 0).toFixed(2)}) finalised and sent to Cashier! Table status updated to PAYMENT PENDING.`);
+        this.updateContent();
+        this.openRunningBillModal();
+      });
+    }
+
+    const settleBannerBtn = this.container.querySelector('#btn-settle-close-banner');
+    if (settleBannerBtn) {
+      settleBannerBtn.addEventListener('click', () => {
+        sessionStateMachine.transitionMilestone(this.sessionId, SessionMilestones.CLOSED);
+        tableStateMachine.transitionTableState(projection.tableNumber, PhysicalTableStates.CLEANING);
+        platformEventBus.publish('table:state:changed', {
+          tableNumber: projection.tableNumber,
+          newState: PhysicalTableStates.CLEANING
+        });
+        alert(`✨ Payment marked received & Session closed for Table ${projection.tableNumber}! Table status set to CLEANING.`);
+        if (this.onClose) {
+          this.onClose();
+        } else {
+          this.sessionId = null;
+          this.updateContent();
+        }
+      });
+    }
+
+    const markCleanBannerBtn = this.container.querySelector('#btn-mark-clean-banner');
+    if (markCleanBannerBtn) {
+      markCleanBannerBtn.addEventListener('click', () => {
+        tableStateMachine.transitionTableState(projection.tableNumber, PhysicalTableStates.CLEANING);
+        platformEventBus.publish('table:state:changed', {
+          tableNumber: projection.tableNumber,
+          newState: PhysicalTableStates.CLEANING
+        });
+        alert(`🧹 Table ${projection.tableNumber} marked as NEEDS CLEANING.`);
+        if (this.onClose) {
+          this.onClose();
+        } else {
+          this.sessionId = null;
+          this.updateContent();
+        }
+      });
+    }
+
+    const closeBtn = this.container.querySelector('#btn-close-session');
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        sessionStateMachine.transitionMilestone(this.sessionId, SessionMilestones.CLOSED);
+        tableStateMachine.transitionTableState(projection.tableNumber, PhysicalTableStates.CLEANING);
+        platformEventBus.publish('table:state:changed', {
+          tableNumber: projection.tableNumber,
+          newState: PhysicalTableStates.CLEANING
+        });
+        alert(`✨ Payment marked received & Session closed for Table ${projection.tableNumber}! Table moved to CLEANING.`);
+        if (this.onClose) {
+          this.onClose();
+        } else {
+          this.sessionId = null;
+          this.updateContent();
+        }
+      });
+    }
+
+    const closeDirectBtn = this.container.querySelector('#btn-close-session-direct');
+    if (closeDirectBtn) {
+      closeDirectBtn.addEventListener('click', () => {
+        sessionStateMachine.transitionMilestone(this.sessionId, SessionMilestones.CLOSED);
+        tableStateMachine.transitionTableState(projection.tableNumber, PhysicalTableStates.AVAILABLE);
+        platformEventBus.publish('table:state:changed', {
+          tableNumber: projection.tableNumber,
+          newState: PhysicalTableStates.AVAILABLE
+        });
+        alert(`🟢 Session closed for Table ${projection.tableNumber}! Table marked AVAILABLE & VACANT.`);
+        if (this.onClose) {
+          this.onClose();
+        } else {
+          this.sessionId = null;
+          this.updateContent();
+        }
+      });
+    }
   }
 
   renderActiveSessionsPicker(alertMessage = null) {
@@ -384,69 +547,5 @@ export class ActiveSessionView {
     });
 
     reviewMount.appendChild(billModal.render());
-  }
-
-  bindEvents(projection) {
-    const backBtn = this.container.querySelector('#btn-back-to-floor');
-    if (backBtn) {
-      backBtn.addEventListener('click', () => {
-        if (this.onClose) this.onClose();
-      });
-    }
-
-    const addShortcutBtn = this.container.querySelector('#btn-add-items-shortcut');
-    if (addShortcutBtn) {
-      addShortcutBtn.addEventListener('click', () => {
-        const menuEl = this.container.querySelector('#menu-browser-mount');
-        if (menuEl) menuEl.scrollIntoView({ behavior: 'smooth' });
-      });
-    }
-
-    const openBillCardBtn = this.container.querySelector('#btn-open-running-bill-card');
-    if (openBillCardBtn) {
-      openBillCardBtn.addEventListener('click', () => {
-        this.openRunningBillModal();
-      });
-    }
-
-    const viewBillBtn = this.container.querySelector('#btn-view-running-bill');
-    if (viewBillBtn) {
-      viewBillBtn.addEventListener('click', () => {
-        this.openRunningBillModal();
-      });
-    }
-
-    const finaliseBillBtn = this.container.querySelector('#btn-finalise-bill-cashier');
-    if (finaliseBillBtn) {
-      finaliseBillBtn.addEventListener('click', () => {
-        this.openRunningBillModal();
-      });
-    }
-
-    const advanceBillBtn = this.container.querySelector('#btn-advance-bill');
-    if (advanceBillBtn) {
-      advanceBillBtn.addEventListener('click', () => {
-        this.openRunningBillModal();
-      });
-    }
-
-    const closeBtn = this.container.querySelector('#btn-close-session');
-    if (closeBtn) {
-      closeBtn.addEventListener('click', () => {
-        sessionStateMachine.transitionMilestone(this.sessionId, SessionMilestones.CLOSED);
-        tableStateMachine.transitionTableState(projection.tableNumber, PhysicalTableStates.CLEANING);
-        alert(`Session closed for Table ${projection.tableNumber}! Table moved to CLEANING.`);
-        if (this.onClose) this.onClose();
-      });
-    }
-
-    const closeDirectBtn = this.container.querySelector('#btn-close-session-direct');
-    if (closeDirectBtn) {
-      closeDirectBtn.addEventListener('click', () => {
-        sessionStateMachine.transitionMilestone(this.sessionId, SessionMilestones.CLOSED);
-        tableStateMachine.transitionTableState(projection.tableNumber, PhysicalTableStates.AVAILABLE);
-        if (this.onClose) this.onClose();
-      });
-    }
   }
 }
