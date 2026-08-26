@@ -291,7 +291,7 @@ export class MenuBrowserView {
         const variantName = vBtn.dataset.variantName;
         const variantPrice = parseFloat(vBtn.dataset.variantPrice) || 0;
 
-        const baseItem = menuMasterModel.getMenuItemById(itemId);
+        const baseItem = menuMasterModel.getMenuItemById(itemId) || (this.currentItems && this.currentItems.find(i => (i.id && String(i.id) === String(itemId)) || (i.itemId && String(i.itemId) === String(itemId))));
         if (!baseItem) return;
 
         const itemWithVariant = {

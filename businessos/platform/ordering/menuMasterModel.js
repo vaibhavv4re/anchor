@@ -138,6 +138,14 @@ class MenuMasterModel {
     ) || null;
   }
 
+  getItemById(itemId) {
+    return this.getItem(itemId);
+  }
+
+  getMenuItemById(itemId) {
+    return this.getItem(itemId);
+  }
+
   searchItems(query) {
     const items = this.getAllMenuItems().filter(i => i.isAvailable);
     if (!query || !query.trim()) return items;
