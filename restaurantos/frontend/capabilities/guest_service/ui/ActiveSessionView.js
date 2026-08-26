@@ -461,14 +461,25 @@ export class ActiveSessionView {
     this.menuBrowserInstance = new MenuBrowserView({
       draftItems: this.draftItems,
       onSelectItem: (item) => {
-        const existing = this.draftItems.find(i => i.itemId === item.id || i.name === item.name);
+        const itemVariantId = item.variantId || item.selectedVariantId || null;
+        const itemPrice = parseFloat(item.price || item.sellingPrice) || 0;
+        const itemName = item.name || item.itemName;
+
+        const existing = this.draftItems.find(i => 
+          i.itemId === item.id && 
+          ((!i.variantId && !itemVariantId) || (i.variantId === itemVariantId))
+        );
+
         if (existing) {
           existing.quantity += 1;
         } else {
           this.draftItems.push({
             itemId: item.id,
-            name: item.name || item.itemName,
-            price: item.price || item.sellingPrice,
+            variantId: itemVariantId,
+            variantName: item.variantName || item.selectedVariantName || null,
+            name: itemName,
+            baseName: item.baseName || item.name,
+            price: itemPrice,
             quantity: 1,
             selectedModifiers: item.modifiers ? [item.modifiers[0]] : []
           });

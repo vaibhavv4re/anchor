@@ -240,8 +240,24 @@ export class MenuBrowserView {
 
   bindGridButtons() {
     const triggerSelect = (idx, cardEl, btnEl) => {
-      const item = (this.currentItems && this.currentItems[idx]) || null;
+      let item = (this.currentItems && this.currentItems[idx]) || null;
       if (!item) return;
+
+      // If item has variants, attach default (first available) variant info when clicking generic Add
+      if (item.hasVariants && Array.isArray(item.variants) && item.variants.length > 0) {
+        const defaultVar = item.variants.find(v => !v.is86) || item.variants[0];
+        item = {
+          ...item,
+          variantId: defaultVar.variantId,
+          variantName: defaultVar.variantName,
+          selectedVariantId: defaultVar.variantId,
+          selectedVariantName: defaultVar.variantName,
+          name: `${item.name} (${defaultVar.variantName})`,
+          baseName: item.name,
+          price: parseFloat(defaultVar.price) || item.price,
+          sellingPrice: parseFloat(defaultVar.price) || item.price
+        };
+      }
 
       // Visual feedback pulse
       if (cardEl) {
@@ -265,6 +281,57 @@ export class MenuBrowserView {
       }
     };
 
+    // 1. Bind Direct Variant Pill Button Clicks
+    const variantBtns = this.container.querySelectorAll('.btn-variant-select');
+    variantBtns.forEach(vBtn => {
+      vBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const itemId = vBtn.dataset.itemId;
+        const variantId = vBtn.dataset.variantId;
+        const variantName = vBtn.dataset.variantName;
+        const variantPrice = parseFloat(vBtn.dataset.variantPrice) || 0;
+
+        const baseItem = menuMasterModel.getMenuItemById(itemId);
+        if (!baseItem) return;
+
+        const itemWithVariant = {
+          ...baseItem,
+          id: baseItem.id,
+          variantId: variantId,
+          variantName: variantName,
+          selectedVariantId: variantId,
+          selectedVariantName: variantName,
+          name: `${baseItem.name} (${variantName})`,
+          baseName: baseItem.name,
+          price: variantPrice,
+          sellingPrice: variantPrice
+        };
+
+        const cardEl = vBtn.closest('.pos-item-card');
+        if (cardEl) {
+          cardEl.classList.add('added-pulse');
+          setTimeout(() => cardEl.classList.remove('added-pulse'), 400);
+        }
+
+        const origText = vBtn.innerHTML;
+        vBtn.innerHTML = `✓ ${variantName}`;
+        vBtn.style.background = '#10b981';
+        vBtn.style.color = '#fff';
+        vBtn.style.borderColor = '#10b981';
+        setTimeout(() => {
+          vBtn.innerHTML = origText;
+          vBtn.style.background = 'var(--bg-app)';
+          vBtn.style.color = 'var(--accent-primary)';
+          vBtn.style.borderColor = 'var(--accent-primary)';
+        }, 500);
+
+        if (this.onSelectItem) {
+          this.onSelectItem(itemWithVariant);
+        }
+      });
+    });
+
+    // 2. Bind Main Item Card & Add Button Clicks
     const cards = this.container.querySelectorAll('.pos-item-card');
     cards.forEach(card => {
       const idx = parseInt(card.dataset.idx, 10);
@@ -277,7 +344,7 @@ export class MenuBrowserView {
       }
       
       card.addEventListener('click', () => {
-        const idx = parseInt(card.dataset.idx);
+        const idx = parseInt(card.dataset.idx, 10);
         const btn = card.querySelector('.btn-add-pos-item');
         triggerSelect(idx, card, btn);
       });
