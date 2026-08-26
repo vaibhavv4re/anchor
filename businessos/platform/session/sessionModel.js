@@ -183,15 +183,47 @@ class SessionModel {
    */
   updateSession(sessionId, updates, tenantId = null) {
     const allSessions = offlineStore.getCollection('table_sessions') || [];
-    const index = allSessions.findIndex(s => s.id === sessionId || s.sessionId === sessionId);
+    let index = allSessions.findIndex(s => s.id === sessionId || s.sessionId === sessionId);
+
+    let sessionToUpdate = null;
     if (index >= 0) {
-      allSessions[index] = {
+      sessionToUpdate = {
         ...allSessions[index],
         ...updates,
         lastActivityAt: new Date().toISOString()
       };
+      allSessions[index] = sessionToUpdate;
+    } else {
+      const existing = this.getSession(sessionId, tenantId);
+      if (existing) {
+        sessionToUpdate = {
+          ...existing,
+          ...updates,
+          lastActivityAt: new Date().toISOString()
+        };
+        allSessions.push(sessionToUpdate);
+      }
+    }
+
+    if (sessionToUpdate) {
       offlineStore.setCollection('table_sessions', allSessions);
-      return allSessions[index];
+
+      // Also update linked orders in localStore if status is updated
+      if (updates.status) {
+        const localOrders = offlineStore.getCollection('orders', tenantId) || [];
+        let ordersChanged = false;
+        localOrders.forEach((o, idx) => {
+          if (o.sessionId === sessionId || o.session_id === sessionId || o.id === sessionId) {
+            localOrders[idx] = { ...o, status: updates.status, orderStatus: updates.status };
+            ordersChanged = true;
+          }
+        });
+        if (ordersChanged) {
+          offlineStore.setCollection('orders', localOrders);
+        }
+      }
+
+      return sessionToUpdate;
     }
     return null;
   }

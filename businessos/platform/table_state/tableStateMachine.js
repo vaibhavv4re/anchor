@@ -58,7 +58,7 @@ class TableStateMachine {
     const activeSession = sessionModel.getActiveSessionForTable(tableNum, tenantId);
 
     if (activeSession) {
-      const isPaymentPending = activeSession.status === 'BILL_GENERATED';
+      const isPaymentPending = activeSession.status === 'BILL_GENERATED' || activeSession.billStatus === 'GENERATED';
       return {
         tableNumber: tableNum,
         currentState: isPaymentPending ? PhysicalTableStates.PAYMENT_PENDING : PhysicalTableStates.OCCUPIED,

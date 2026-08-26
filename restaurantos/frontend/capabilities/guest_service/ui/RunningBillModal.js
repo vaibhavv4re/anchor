@@ -69,6 +69,17 @@ export class RunningBillModal {
             </div>
           </div>
 
+          <!-- KOT & LIFECYCLE TRANSPARENCY STRIP -->
+          <div style="background:var(--bg-surface-2); padding:10px 14px; border-radius:6px; border:1px solid var(--border-subtle); font-size:0.8rem; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <div>
+              <span style="color:var(--text-muted); font-weight:700;">KOT Kitchen Readiness:</span> 
+              ${(proj.readyItems && proj.readyItems.length > 0) ? `<span class="badge badge-success" style="margin-left:4px;">🟢 ${proj.readyItems.length} Items READY</span>` : '<span class="badge badge-info" style="margin-left:4px;">🍳 Kitchen Active</span>'}
+            </div>
+            <div style="color:var(--text-secondary); font-size:0.75rem;">
+              ℹ️ <strong>Zero KOT Blocking:</strong> Bill finalisation is independent of KOT status and directly updates table state to 🟡 <strong>PAYMENT PENDING</strong>.
+            </div>
+          </div>
+
           ${isFinalized ? `
             <div class="card" style="background:#10b98115; border:1px solid #10b981; padding:10px 14px; border-radius:6px; font-size:0.85rem; color:#10b981; font-weight:700; display:flex; align-items:center; gap:8px;">
               <span>✅</span> Bill Finalised & Dispatched to Cashier Station! (PAYMENT PENDING)
