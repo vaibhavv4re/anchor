@@ -400,13 +400,34 @@ export class WaiterWorkspaceView {
               const tickets = orderModel.getTicketsForSession(s.id, tenantId);
               const readyForThisTable = tickets.filter(t => t.status === 'READY');
 
+              // Compute human-readable stage status & badge class
+              const isPaymentSettled = s.status === 'PAYMENT_RECEIVED' || s.status === 'PAYMENT_SETTLED' || s.billStatus === 'PAID' || s.billStatus === 'SETTLED' || (proj && (proj.status === 'PAYMENT_RECEIVED' || proj.billStatus === 'PAID'));
+              const isPaymentPending = !isPaymentSettled && (s.status === 'BILL_GENERATED' || s.status === 'PAYMENT_PENDING' || (proj && (proj.status === 'BILL_GENERATED' || proj.billStatus === 'GENERATED')));
+
+              let badgeClass = 'badge-info';
+              let statusLabel = '🔵 ORDERS STARTED';
+
+              if (isPaymentSettled) {
+                badgeClass = 'badge-success';
+                statusLabel = '🟢 PAYMENT SETTLED';
+              } else if (isPaymentPending) {
+                badgeClass = 'badge-warning';
+                statusLabel = '🟡 PAYMENT PENDING';
+              } else if (s.status === 'ORDERS_CONFIRMED' || s.status === 'KITCHEN_UPDATES') {
+                badgeClass = 'badge-info';
+                statusLabel = '🟣 ORDERS IN KITCHEN';
+              } else if (s.status === 'GUESTS_SEATED') {
+                badgeClass = 'badge-info';
+                statusLabel = '🔵 GUESTS SEATED';
+              }
+
               return `
-                <div class="card my-table-card animate-fade-in" data-session-id="${s.id}" style="padding:20px; background:var(--bg-surface-1); border-radius:8px; border-top:4px solid ${readyForThisTable.length > 0 ? '#10b981' : 'var(--accent-primary)'}; display:flex; flex-direction:column; justify-content:space-between; gap:14px;">
+                <div class="card my-table-card animate-fade-in" data-session-id="${s.id}" style="padding:20px; background:var(--bg-surface-1); border-radius:8px; border-top:4px solid ${readyForThisTable.length > 0 ? '#10b981' : (isPaymentSettled ? '#10b981' : (isPaymentPending ? '#f59e0b' : 'var(--accent-primary)'))}; display:flex; flex-direction:column; justify-content:space-between; gap:14px;">
                   <div>
                     <div style="display:flex; justify-content:space-between; align-items:center;">
                       <div style="font-size:1.3rem; font-weight:800;">Table ${s.tableNumber} <span style="font-size:0.85rem; font-weight:400; color:var(--text-muted);">(${s.tableCode || `T-${s.tableNumber}`})</span></div>
-                      <span class="badge ${s.status === 'BILL_GENERATED' ? 'badge-warning' : 'badge-info'}" style="font-size:0.75rem;">
-                        ${s.status}
+                      <span class="badge ${badgeClass}" style="font-size:0.75rem; font-weight:700;">
+                        ${statusLabel}
                       </span>
                     </div>
 
@@ -436,9 +457,15 @@ export class WaiterWorkspaceView {
                   </div>
 
                   <div style="display:flex; gap:8px;">
-                    <button class="btn-primary btn-open-table-service" data-session-id="${s.id}" style="padding:10px; font-weight:700; flex:1;">
-                      🧾 Table ${s.tableNumber} Service & Bill →
-                    </button>
+                    ${isPaymentSettled ? `
+                      <button class="btn-primary btn-close-settled-table" data-session-id="${s.id}" data-table="${s.tableNumber}" style="padding:10px; font-weight:700; flex:1; background:#10b981; color:#000;">
+                        ✨ Close Table Session & Mark Cleaning →
+                      </button>
+                    ` : `
+                      <button class="btn-primary btn-open-table-service" data-session-id="${s.id}" style="padding:10px; font-weight:700; flex:1; background:${isPaymentPending ? '#f59e0b' : 'var(--accent-primary)'}; color:#000;">
+                        ${isPaymentPending ? '🟡 Table 1 Service & Payment Pending →' : `🧾 Table ${s.tableNumber} Service & Bill →`}
+                      </button>
+                    `}
                   </div>
                 </div>
               `;
@@ -479,6 +506,17 @@ export class WaiterWorkspaceView {
       btn.addEventListener('click', () => {
         const sid = btn.dataset.sessionId;
         this.openTableServiceConsole(mount, sid, waiterName, waiterId, tenantId, session);
+      });
+    });
+
+    mount.querySelectorAll('.btn-close-settled-table').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const sid = btn.dataset.sessionId;
+        const tnum = btn.dataset.table;
+        sessionStateMachine.transitionMilestone(sid, SessionMilestones.CLOSED);
+        tableStateMachine.transitionTableState(tnum, PhysicalTableStates.CLEANING);
+        alert(`✨ Session closed for Table ${tnum}! Table moved to NEEDS CLEANING.`);
+        this.mountActiveSubView(waiterName, waiterId, tenantId, session);
       });
     });
   }

@@ -157,6 +157,9 @@ export class RunningBillModal {
                   🏷️ Table Status & Cashier Lifecycle Actions
                 </div>
                 <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                  <button id="btn-settle-payment-cashier" class="btn-primary" style="padding:6px 12px; font-size:0.8rem; font-weight:700; background:#10b981; color:#000;">
+                    💵 Mark Payment Settled & Received (Cashier)
+                  </button>
                   <button id="btn-mark-cleaning" class="btn-secondary" style="padding:6px 12px; font-size:0.8rem; font-weight:700;">
                     🧹 Mark Table Needs Cleaning
                   </button>
@@ -245,6 +248,23 @@ export class RunningBillModal {
         });
 
         alert(`Bill for Table ${proj.tableNumber} (Total: ₹${(proj.grandTotal || 0).toFixed(2)}) has been finalised and sent to Cashier! Table status set to PAYMENT_PENDING.`);
+        if (this.onBillFinalized) this.onBillFinalized();
+        this.updateContent();
+      });
+    }
+
+    const settleCashierBtn = this.modalEl.querySelector('#btn-settle-payment-cashier');
+    if (settleCashierBtn) {
+      settleCashierBtn.addEventListener('click', () => {
+        sessionStateMachine.transitionMilestone(this.sessionId, SessionMilestones.PAYMENT_RECEIVED);
+        sessionModel.updateSession(this.sessionId, { billStatus: 'PAID', paymentStatus: 'SETTLED' });
+        platformEventBus.publish('bill:settled', {
+          sessionId: this.sessionId,
+          tableNumber: proj.tableNumber,
+          grandTotal: proj.grandTotal,
+          timestamp: new Date().toISOString()
+        });
+        alert(`✅ Cashier Action: Payment of ₹${(proj.grandTotal || 0).toFixed(2)} for Table ${proj.tableNumber} SETTLED! Waiter can now close the table session.`);
         if (this.onBillFinalized) this.onBillFinalized();
         this.updateContent();
       });

@@ -160,8 +160,26 @@ export class ActiveSessionView {
         </div>
       </div>
       
-      <!-- Stage Guidance Banner when Bill is Finalized -->
-      ${(projection.status === SessionMilestones.BILL_GENERATED || projection.billStatus === 'GENERATED') ? `
+      <!-- Stage Guidance Banner when Payment is Settled or Bill is Finalized -->
+      ${(projection.status === SessionMilestones.PAYMENT_RECEIVED || projection.billStatus === 'PAID') ? `
+        <div class="card animate-fade-in" style="background:#10b98115; border:2px solid #10b981; padding:14px 18px; margin-bottom:var(--space-md); border-radius:8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+            <div>
+              <div style="font-weight:800; color:#10b981; font-size:1.05rem; display:flex; align-items:center; gap:6px;">
+                <span>🟢</span> <strong>PAYMENT CONFIRMED & SETTLED BY CASHIER</strong>
+              </div>
+              <div style="font-size:0.85rem; color:var(--text-primary); margin-top:4px;">
+                Payment of <strong>₹${(projection.grandTotal || 0).toFixed(2)}</strong> for Table ${projection.tableNumber} is settled. Waiter can now close the table session.
+              </div>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn-primary" id="btn-close-session-settled-banner" style="background:#10b981; color:#000; font-weight:700; padding:8px 16px; font-size:0.9rem;">
+                ✨ Close Table Session & Mark Cleaning →
+              </button>
+            </div>
+          </div>
+        </div>
+      ` : ((projection.status === SessionMilestones.BILL_GENERATED || projection.billStatus === 'GENERATED') ? `
         <div class="card animate-fade-in" style="background:#f59e0b15; border:2px solid #f59e0b; padding:14px 18px; margin-bottom:var(--space-md); border-radius:8px;">
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
             <div>
@@ -169,12 +187,12 @@ export class ActiveSessionView {
                 <span>💳</span> <strong>BILL FINALISED & SENT TO CASHIER (PAYMENT PENDING)</strong>
               </div>
               <div style="font-size:0.85rem; color:var(--text-primary); margin-top:4px;">
-                Table ${projection.tableNumber} is awaiting cashier payment of <strong>₹${(projection.grandTotal || 0).toFixed(2)}</strong>. Order menu is locked for waiters. Choose Next Logical Step:
+                Table ${projection.tableNumber} is awaiting cashier payment of <strong>₹${(projection.grandTotal || 0).toFixed(2)}</strong>. Choose Next Step:
               </div>
             </div>
             <div style="display:flex; gap:8px; flex-wrap:wrap;">
               <button class="btn-primary" id="btn-settle-close-banner" style="background:#10b981; color:#000; font-weight:700; padding:8px 14px; font-size:0.85rem;">
-                ✨ Settle Payment & Close Session
+                💵 Settle Payment (Cashier)
               </button>
               <button class="btn-secondary" id="btn-mark-clean-banner" style="padding:8px 14px; font-size:0.85rem; font-weight:700;">
                 🧹 Mark Table Cleaning
@@ -182,7 +200,7 @@ export class ActiveSessionView {
             </div>
           </div>
         </div>
-      ` : ''}
+      ` : '')}
 
       <!-- Live Order & Production Status Strip Mount -->
       <div id="kitchen-alert-mount">
@@ -315,22 +333,31 @@ export class ActiveSessionView {
       });
     }
 
-    const settleBannerBtn = this.container.querySelector('#btn-settle-close-banner');
-    if (settleBannerBtn) {
-      settleBannerBtn.addEventListener('click', () => {
+    const closeSettledBannerBtn = this.container.querySelector('#btn-close-session-settled-banner');
+    if (closeSettledBannerBtn) {
+      closeSettledBannerBtn.addEventListener('click', () => {
         sessionStateMachine.transitionMilestone(this.sessionId, SessionMilestones.CLOSED);
         tableStateMachine.transitionTableState(projection.tableNumber, PhysicalTableStates.CLEANING);
         platformEventBus.publish('table:state:changed', {
           tableNumber: projection.tableNumber,
           newState: PhysicalTableStates.CLEANING
         });
-        alert(`✨ Payment marked received & Session closed for Table ${projection.tableNumber}! Table status set to CLEANING.`);
-        if (this.onClose) {
-          this.onClose();
-        } else {
-          this.sessionId = null;
-          this.updateContent();
-        }
+        alert(`✨ Session closed for Table ${projection.tableNumber}! Table status set to NEEDS CLEANING.`);
+        if (this.onClose) this.onClose();
+      });
+    }
+
+    const settleBannerBtn = this.container.querySelector('#btn-settle-close-banner');
+    if (settleBannerBtn) {
+      settleBannerBtn.addEventListener('click', () => {
+        sessionStateMachine.transitionMilestone(this.sessionId, SessionMilestones.PAYMENT_RECEIVED);
+        sessionModel.updateSession(this.sessionId, { billStatus: 'PAID', paymentStatus: 'SETTLED' });
+        platformEventBus.publish('bill:settled', {
+          sessionId: this.sessionId,
+          tableNumber: projection.tableNumber
+        });
+        alert(`✅ Payment of ₹${(projection.grandTotal || 0).toFixed(2)} for Table ${projection.tableNumber} SETTLED! Waiter can now close the session.`);
+        this.updateContent();
       });
     }
 
