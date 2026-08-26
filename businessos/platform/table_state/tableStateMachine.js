@@ -54,13 +54,17 @@ class TableStateMachine {
    * @returns {Object} Runtime state
    */
   getTableRuntimeState(tableNumber, tenantId = null) {
-    const tableNum = parseInt(tableNumber);
-    const activeSession = sessionModel.getActiveSessionForTable(tableNum, tenantId);
+    if (tableNumber === undefined || tableNumber === null) return { currentState: PhysicalTableStates.AVAILABLE };
+    const str = String(tableNumber).trim().toLowerCase();
+    const digitsOnly = str.replace(/\D/g, '');
+    const num = digitsOnly.length > 0 ? parseInt(digitsOnly, 10) : (typeof tableNumber === 'number' ? tableNumber : null);
+
+    const activeSession = sessionModel.getActiveSessionForTable(tableNumber, tenantId);
 
     if (activeSession) {
       const isPaymentPending = activeSession.status === 'BILL_GENERATED' || activeSession.billStatus === 'GENERATED';
       return {
-        tableNumber: tableNum,
+        tableNumber: activeSession.tableNumber || num || tableNumber,
         currentState: isPaymentPending ? PhysicalTableStates.PAYMENT_PENDING : PhysicalTableStates.OCCUPIED,
         currentSessionId: activeSession.id || activeSession.sessionId,
         assignedWaiterId: activeSession.assignedWaiterId || null,
@@ -72,11 +76,15 @@ class TableStateMachine {
 
     // No active session — check manual operational state overrides
     const states = offlineStore.getCollection('table_runtime_states') || [];
-    const manualState = states.find(s => s.tableNumber === tableNum);
+    const manualState = states.find(s => 
+      (num !== null && (s.tableNumber === num || s.table_number === num)) ||
+      (s.tableCode && String(s.tableCode).toLowerCase() === str) ||
+      (s.tableNumber && String(s.tableNumber).toLowerCase() === str)
+    );
 
     if (manualState && (manualState.currentState === PhysicalTableStates.CLEANING || manualState.currentState === PhysicalTableStates.RESERVED || manualState.currentState === PhysicalTableStates.OUT_OF_SERVICE)) {
       return {
-        tableNumber: tableNum,
+        tableNumber: num || tableNumber,
         currentState: manualState.currentState,
         currentSessionId: null,
         assignedWaiterId: manualState.assignedWaiterId || null,
@@ -87,7 +95,7 @@ class TableStateMachine {
     }
 
     return {
-      tableNumber: tableNum,
+      tableNumber: num || tableNumber,
       currentState: PhysicalTableStates.AVAILABLE,
       currentSessionId: null,
       assignedWaiterId: null,
@@ -105,8 +113,12 @@ class TableStateMachine {
    * @returns {{ success: boolean, runtime?: Object, error?: string }}
    */
   transitionTableState(tableNumber, newState, { sessionId = null, waiterId = null, actorId = 'SYSTEM' } = {}) {
-    const tableNum = parseInt(tableNumber);
-    const currentRuntime = this.getTableRuntimeState(tableNum);
+    if (tableNumber === undefined || tableNumber === null) return { success: false, error: 'Invalid tableNumber' };
+    const str = String(tableNumber).trim().toLowerCase();
+    const digitsOnly = str.replace(/\D/g, '');
+    const num = digitsOnly.length > 0 ? parseInt(digitsOnly, 10) : (typeof tableNumber === 'number' ? tableNumber : null);
+
+    const currentRuntime = this.getTableRuntimeState(tableNumber);
     const currentState = currentRuntime.currentState;
 
     if (currentState === newState) return { success: true, runtime: currentRuntime };
@@ -121,6 +133,7 @@ class TableStateMachine {
 
     const updatedRuntime = {
       ...currentRuntime,
+      tableNumber: currentRuntime.tableNumber || num || tableNumber,
       currentState: newState,
       currentSessionId: sessionId !== null ? sessionId : (newState === PhysicalTableStates.AVAILABLE ? null : currentRuntime.currentSessionId),
       assignedWaiterId: waiterId !== null ? waiterId : (newState === PhysicalTableStates.AVAILABLE ? null : currentRuntime.assignedWaiterId),
@@ -128,7 +141,11 @@ class TableStateMachine {
     };
 
     const allStates = offlineStore.getCollection('table_runtime_states') || [];
-    const index = allStates.findIndex(s => s.tableNumber === tableNum);
+    const index = allStates.findIndex(s => 
+      (num !== null && (s.tableNumber === num || s.table_number === num)) ||
+      (s.tableCode && String(s.tableCode).toLowerCase() === str) ||
+      (s.tableNumber && String(s.tableNumber).toLowerCase() === str)
+    );
     if (index >= 0) {
       allStates[index] = updatedRuntime;
     } else {

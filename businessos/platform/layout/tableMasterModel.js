@@ -44,14 +44,16 @@ class TableMasterModel {
   getTableMaster(tableNumber) {
     const tables = this.getAllMasterTables();
     if (tableNumber === undefined || tableNumber === null) return null;
-    const num = parseInt(tableNumber);
-    const str = String(tableNumber).trim();
+    const str = String(tableNumber).trim().toLowerCase();
+    const digitsOnly = str.replace(/\D/g, '');
+    const num = digitsOnly.length > 0 ? parseInt(digitsOnly, 10) : (typeof tableNumber === 'number' ? tableNumber : null);
+
     return tables.find(t => 
-      t.tableNumber === num || 
-      String(t.tableNumber) === str || 
-      t.id === str ||
-      t.tableCode === str ||
-      t.table_code === str
+      (num !== null && t.tableNumber === num) || 
+      String(t.tableNumber).toLowerCase() === str || 
+      (t.id && String(t.id).toLowerCase() === str) ||
+      (t.tableCode && String(t.tableCode).toLowerCase() === str) ||
+      (t.table_code && String(t.table_code).toLowerCase() === str)
     ) || null;
   }
 }

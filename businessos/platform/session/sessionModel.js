@@ -6,6 +6,7 @@
 
 import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
+import { tableMasterModel } from '../layout/tableMasterModel.js';
 
 class SessionModel {
   constructor() {
@@ -44,7 +45,11 @@ class SessionModel {
   createSession({ tableNumber, guestCount = 2, assignedWaiterId, guestNotes = '', dietaryTags = [], celebrationFlag = null, tenantId = null }) {
     const targetTenantId = this._getTenantId(tenantId);
     const correlationId = 'CID-' + Math.floor(10000 + Math.random() * 90000);
-    const tableNum = parseInt(tableNumber) || 1;
+    const strVal = String(tableNumber || '').trim();
+    const digitsOnly = strVal.replace(/\D/g, '');
+    const master = tableMasterModel.getTableMaster(tableNumber);
+    const tableNum = digitsOnly.length > 0 ? parseInt(digitsOnly, 10) : (master ? master.tableNumber : (typeof tableNumber === 'number' ? tableNumber : 1));
+    const tableCode = master ? master.tableCode : (strVal.includes('-') ? strVal : `T-${String(tableNum).padStart(2, '0')}`);
     const sessionId = 'sess_' + Math.random().toString(36).substring(2, 9);
     const now = new Date().toISOString();
 
@@ -52,8 +57,8 @@ class SessionModel {
       id: sessionId,
       sessionId,
       tableNumber: tableNum,
-      tableId: `tbl_${tableNum}`,
-      tableCode: `T-${String(tableNum).padStart(2, '0')}`,
+      tableId: master ? master.id : `tbl_${tableNum}`,
+      tableCode,
       guestCount: parseInt(guestCount) || 2,
       assignedWaiterId: assignedWaiterId || 'emp-waiter',
       status: 'GUESTS_SEATED',
@@ -119,8 +124,20 @@ class SessionModel {
    */
   getActiveSessionForTable(tableNumber, tenantId = null) {
     const sessions = this.getAllSessions(tenantId);
-    const tableNum = parseInt(tableNumber);
-    return sessions.find(s => (s.tableNumber === tableNum || s.table_number === tableNum) && s.status !== 'CLOSED') || null;
+    if (tableNumber === undefined || tableNumber === null) return null;
+    const str = String(tableNumber).trim().toLowerCase();
+    const digitsOnly = str.replace(/\D/g, '');
+    const num = digitsOnly.length > 0 ? parseInt(digitsOnly, 10) : (typeof tableNumber === 'number' ? tableNumber : null);
+
+    return sessions.find(s => 
+      s.status !== 'CLOSED' && (
+        (num !== null && (s.tableNumber === num || s.table_number === num)) ||
+        (s.tableCode && String(s.tableCode).toLowerCase() === str) ||
+        (s.table_code && String(s.table_code).toLowerCase() === str) ||
+        (s.tableId && String(s.tableId).toLowerCase() === str) ||
+        (s.tableNumber && String(s.tableNumber).toLowerCase() === str)
+      )
+    ) || null;
   }
 
   /**
