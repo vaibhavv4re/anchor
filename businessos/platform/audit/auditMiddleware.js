@@ -16,6 +16,8 @@ class AuditMiddleware {
     if (this._initialized) return;
 
     platformEventBus.subscribe('*', (envelope) => {
+      const payload = envelope ? (envelope.payload || envelope) : {};
+      if (payload.source === 'realtime_sync') return; // Skip high-frequency background polling events
       this.recordAudit(envelope);
     });
 

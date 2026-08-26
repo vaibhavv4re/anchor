@@ -35,6 +35,7 @@ class OfflineStore {
 
   /**
    * Writes data to local storage and updates memory cache.
+   * Handles QuotaExceededError automatically with emergency log pruning.
    * @param {string} collection 
    * @param {any} data 
    */
@@ -43,26 +44,78 @@ class OfflineStore {
     try {
       localStorage.setItem(this.prefix + collection, JSON.stringify(data));
     } catch (e) {
-      console.error(`[OfflineStore] Storage write failed for ${collection}`, e);
+      if (e && (e.name === 'QuotaExceededError' || e.code === 22 || e.number === -2147024882 || String(e).includes('quota'))) {
+        console.warn(`[OfflineStore] QuotaExceededError writing "${collection}". Executing emergency log pruning...`);
+        this._purgeStaleLogs();
+        try {
+          localStorage.setItem(this.prefix + collection, JSON.stringify(data));
+          console.log(`[OfflineStore] Successfully recovered and saved "${collection}" after log pruning.`);
+        } catch (retryErr) {
+          console.error(`[OfflineStore] Storage write failed for ${collection} even after log pruning`, retryErr);
+        }
+      } else {
+        console.error(`[OfflineStore] Storage write failed for ${collection}`, e);
+      }
     }
   }
 
   /**
-   * Append item to array collection
+   * Append item to array collection with automatic ring-buffer capping.
    * @param {string} collection 
    * @param {Object} item 
+   * @param {number} maxItems 
    */
-  appendItem(collection, item) {
+  appendItem(collection, item, maxItems = 100) {
     const list = this.getCollection(collection) || [];
     list.push(item);
-    this.setCollection(collection, list);
+
+    const logCaps = {
+      timeline_ledger: 100,
+      audit: 100,
+      stock_ledger: 150,
+      notifications: 50
+    };
+
+    const cap = logCaps[collection] || maxItems;
+    let finalData = list;
+    if (Array.isArray(list) && list.length > cap) {
+      finalData = list.slice(-cap);
+    }
+
+    this.setCollection(collection, finalData);
     return item;
+  }
+
+  /**
+   * Emergency Storage Cleanup: Trims oversized append-only log collections when localStorage hits quota limits.
+   */
+  _purgeStaleLogs() {
+    const logCollections = ['timeline_ledger', 'audit', 'stock_ledger', 'notifications'];
+    logCollections.forEach(col => {
+      try {
+        const raw = localStorage.getItem(this.prefix + col);
+        if (raw) {
+          const list = JSON.parse(raw);
+          if (Array.isArray(list) && list.length > 20) {
+            const trimmed = list.slice(-20);
+            localStorage.setItem(this.prefix + col, JSON.stringify(trimmed));
+            this.memoryCache.set(col, trimmed);
+          } else if (!Array.isArray(list)) {
+            localStorage.removeItem(this.prefix + col);
+            this.memoryCache.delete(col);
+          }
+        }
+      } catch (_) {
+        try { localStorage.removeItem(this.prefix + col); } catch (__) {}
+      }
+    });
   }
 
   /**
    * Seed default initial system state if store is empty.
    */
   _initSeedData() {
+    this._purgeStaleLogs();
     // Seed Identities & Employees if not existing
     if (!this.getCollection('identities')) {
       const initialIdentities = [
