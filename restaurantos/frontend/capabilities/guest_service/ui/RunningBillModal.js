@@ -253,52 +253,6 @@ export class RunningBillModal {
       });
     }
 
-    const settleCashierBtn = this.modalEl.querySelector('#btn-settle-payment-cashier');
-    if (settleCashierBtn) {
-      settleCashierBtn.addEventListener('click', () => {
-        sessionStateMachine.transitionMilestone(this.sessionId, SessionMilestones.PAYMENT_RECEIVED);
-        sessionModel.updateSession(this.sessionId, { billStatus: 'PAID', paymentStatus: 'SETTLED' });
-        platformEventBus.publish('bill:settled', {
-          sessionId: this.sessionId,
-          tableNumber: proj.tableNumber,
-          grandTotal: proj.grandTotal,
-          timestamp: new Date().toISOString()
-        });
-        alert(`✅ Cashier Action: Payment of ₹${(proj.grandTotal || 0).toFixed(2)} for Table ${proj.tableNumber} SETTLED! Waiter can now close the table session.`);
-        if (this.onBillFinalized) this.onBillFinalized();
-        this.updateContent();
-      });
-    }
-
-    const markCleaningBtn = this.modalEl.querySelector('#btn-mark-cleaning');
-    if (markCleaningBtn) {
-      markCleaningBtn.addEventListener('click', () => {
-        tableStateMachine.transitionTableState(proj.tableNumber, PhysicalTableStates.CLEANING);
-        alert(`🧹 Table ${proj.tableNumber} marked as NEEDS CLEANING.`);
-        this.updateContent();
-      });
-    }
-
-    const markAvailableBtn = this.modalEl.querySelector('#btn-mark-available');
-    if (markAvailableBtn) {
-      markAvailableBtn.addEventListener('click', () => {
-        sessionStateMachine.transitionMilestone(this.sessionId, SessionMilestones.CLOSED);
-        tableStateMachine.transitionTableState(proj.tableNumber, PhysicalTableStates.AVAILABLE);
-        alert(`🟢 Table ${proj.tableNumber} marked AVAILABLE & VACANT. Guest session closed.`);
-        if (this.onClose) this.onClose();
-      });
-    }
-
-    const reopenCashierBtn = this.modalEl.querySelector('#btn-reopen-bill-cashier');
-    if (reopenCashierBtn) {
-      reopenCashierBtn.addEventListener('click', () => {
-        sessionStateMachine.reopenBill(this.sessionId, 'CASHIER');
-        tableStateMachine.transitionTableState(proj.tableNumber, PhysicalTableStates.OCCUPIED);
-        alert(`🔓 Cashier Action: Bill for Table ${proj.tableNumber} has been re-opened! Waiters can now add or modify order items.`);
-        this.updateContent();
-      });
-    }
-
     const doneBtn = this.modalEl.querySelector('#btn-done-bill');
     if (doneBtn) {
       doneBtn.addEventListener('click', () => {

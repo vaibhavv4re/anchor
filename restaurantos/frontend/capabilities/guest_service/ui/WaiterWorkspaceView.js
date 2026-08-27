@@ -51,29 +51,32 @@ export class WaiterWorkspaceView {
   subscribeRealtimeEvents(tenantId) {
     if (this.unsubscribeEvents.length > 0) return;
 
-    const unsubTicket = platformEventBus.subscribe('ticket:status_changed', () => {
+    const refreshAll = () => {
       this.updateHeaderBadges(tenantId);
-    });
-    const unsubItem = platformEventBus.subscribe('ticket:item_status_changed', () => {
-      this.updateHeaderBadges(tenantId);
-    });
-    const unsubKot = platformEventBus.subscribe('kot:dispatched', () => {
-      this.updateHeaderBadges(tenantId);
-    });
-    const unsubBot = platformEventBus.subscribe('bot:dispatched', () => {
-      this.updateHeaderBadges(tenantId);
-    });
-    const unsubOrder = platformEventBus.subscribe('order:confirmed', () => {
-      this.updateHeaderBadges(tenantId);
-    });
-    const unsubSession = platformEventBus.subscribe('session:created', () => {
-      this.updateHeaderBadges(tenantId);
-    });
-    const unsubTable = platformEventBus.subscribe('table:state:changed', () => {
-      this.updateHeaderBadges(tenantId);
-    });
+      if (this.activeSubView === 'my_tables' && this.rootMount) {
+        const mount = this.rootMount.querySelector('#waiter-content-mount');
+        if (mount) {
+          const session = this.authEngine ? this.authEngine.getCurrentSession() : null;
+          const waiterName = session ? (session.employeeName || session.name || 'Waiter') : 'Staff';
+          const waiterId = session ? (session.employeeId || session.id || 'emp-waiter') : 'emp-waiter';
+          this.renderMyTablesView(mount, waiterName, waiterId, tenantId, session);
+        }
+      }
+    };
 
-    this.unsubscribeEvents.push(unsubTicket, unsubItem, unsubKot, unsubBot, unsubOrder, unsubSession, unsubTable);
+    const unsubTicket = platformEventBus.subscribe('ticket:status_changed', refreshAll);
+    const unsubItem = platformEventBus.subscribe('ticket:item_status_changed', refreshAll);
+    const unsubKot = platformEventBus.subscribe('kot:dispatched', refreshAll);
+    const unsubBot = platformEventBus.subscribe('bot:dispatched', refreshAll);
+    const unsubOrder = platformEventBus.subscribe('order:confirmed', refreshAll);
+    const unsubSession = platformEventBus.subscribe('session:created', refreshAll);
+    const unsubMilestone = platformEventBus.subscribe('session:milestone:changed', refreshAll);
+    const unsubTable = platformEventBus.subscribe('table:state:changed', refreshAll);
+    const unsubFinalized = platformEventBus.subscribe('bill:finalized', refreshAll);
+    const unsubSettled = platformEventBus.subscribe('bill:settled', refreshAll);
+    const unsubReopened = platformEventBus.subscribe('bill:reopened', refreshAll);
+
+    this.unsubscribeEvents.push(unsubTicket, unsubItem, unsubKot, unsubBot, unsubOrder, unsubSession, unsubMilestone, unsubTable, unsubFinalized, unsubSettled, unsubReopened);
   }
 
   getReadyTickets(tenantId) {

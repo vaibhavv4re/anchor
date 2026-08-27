@@ -5,6 +5,7 @@
 
 import { sessionModel } from './sessionModel.js';
 import { platformEventBus } from '../events/platformEvents.js';
+import { tableStateMachine, PhysicalTableStates } from '../table_state/tableStateMachine.js';
 
 export const SessionMilestones = Object.freeze({
   GUESTS_SEATED: 'GUESTS_SEATED',
@@ -18,7 +19,7 @@ export const SessionMilestones = Object.freeze({
 
 const AllowedMilestoneTransitions = {
   [SessionMilestones.GUESTS_SEATED]: [SessionMilestones.ORDERS_STARTED, SessionMilestones.CLOSED],
-  [SessionMilestones.ORDERS_STARTED]: [SessionMilestones.ORDERS_CONFIRMED, SessionMilestones.CLOSED],
+  [SessionMilestones.ORDERS_STARTED]: [SessionMilestones.ORDERS_CONFIRMED, SessionMilestones.BILL_GENERATED, SessionMilestones.CLOSED],
   [SessionMilestones.ORDERS_CONFIRMED]: [SessionMilestones.KITCHEN_UPDATES, SessionMilestones.BILL_GENERATED, SessionMilestones.CLOSED],
   [SessionMilestones.KITCHEN_UPDATES]: [SessionMilestones.BILL_GENERATED, SessionMilestones.CLOSED],
   [SessionMilestones.BILL_GENERATED]: [SessionMilestones.ORDERS_STARTED, SessionMilestones.ORDERS_CONFIRMED, SessionMilestones.PAYMENT_RECEIVED, SessionMilestones.CLOSED],
@@ -45,7 +46,19 @@ class SessionStateMachine {
       };
     }
 
-    const updated = sessionModel.updateSession(sessionId, { status: newMilestone });
+    const extraUpdates = {};
+    if (newMilestone === SessionMilestones.BILL_GENERATED) extraUpdates.billStatus = 'GENERATED';
+    if (newMilestone === SessionMilestones.PAYMENT_RECEIVED) extraUpdates.billStatus = 'PAID';
+
+    const updated = sessionModel.updateSession(sessionId, { status: newMilestone, ...extraUpdates });
+
+    if (newMilestone === SessionMilestones.BILL_GENERATED) {
+      tableStateMachine.transitionTableState(updated.tableNumber, PhysicalTableStates.PAYMENT_PENDING);
+    } else if (newMilestone === SessionMilestones.PAYMENT_RECEIVED) {
+      tableStateMachine.transitionTableState(updated.tableNumber, PhysicalTableStates.PAID_CLEARING);
+    } else if (newMilestone === SessionMilestones.CLOSED) {
+      tableStateMachine.transitionTableState(updated.tableNumber, PhysicalTableStates.CLEANING);
+    }
 
     // Publish platform event
     platformEventBus.publish('session:milestone:changed', {
@@ -72,6 +85,8 @@ class SessionStateMachine {
       status: SessionMilestones.ORDERS_STARTED, 
       billStatus: 'DRAFT' 
     });
+
+    tableStateMachine.transitionTableState(updated.tableNumber, PhysicalTableStates.ORDER_IN_PROGRESS);
 
     platformEventBus.publish('session:milestone:changed', {
       sessionId: updated.id,

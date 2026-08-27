@@ -172,11 +172,6 @@ export class ActiveSessionView {
                 Payment of <strong>₹${(projection.grandTotal || 0).toFixed(2)}</strong> for Table ${projection.tableNumber} is settled. Waiter can now close the table session.
               </div>
             </div>
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
-              <button class="btn-primary" id="btn-close-session-settled-banner" style="background:#10b981; color:#000; font-weight:700; padding:8px 16px; font-size:0.9rem;">
-                ✨ Close Table Session & Mark Cleaning →
-              </button>
-            </div>
           </div>
         </div>
       ` : ((projection.status === SessionMilestones.BILL_GENERATED || projection.billStatus === 'GENERATED') ? `
@@ -187,16 +182,11 @@ export class ActiveSessionView {
                 <span>💳</span> <strong>BILL FINALISED & SENT TO CASHIER (PAYMENT PENDING)</strong>
               </div>
               <div style="font-size:0.85rem; color:var(--text-primary); margin-top:4px;">
-                Table ${projection.tableNumber} is awaiting cashier payment of <strong>₹${(projection.grandTotal || 0).toFixed(2)}</strong>. Choose Next Step:
+                Table ${projection.tableNumber} is locked awaiting Cashier payment settlement of <strong>₹${(projection.grandTotal || 0).toFixed(2)}</strong>. Items cannot be added unless Cashier re-opens the bill.
               </div>
             </div>
-            <div style="display:flex; gap:8px; flex-wrap:wrap;">
-              <button class="btn-primary" id="btn-settle-close-banner" style="background:#10b981; color:#000; font-weight:700; padding:8px 14px; font-size:0.85rem;">
-                💵 Settle Payment (Cashier)
-              </button>
-              <button class="btn-secondary" id="btn-mark-clean-banner" style="padding:8px 14px; font-size:0.85rem; font-weight:700;">
-                🧹 Mark Table Cleaning
-              </button>
+            <div>
+              <span class="badge badge-warning" style="padding:6px 12px; font-weight:800; font-size:0.85rem;">⏳ Cashier Settlement Pending</span>
             </div>
           </div>
         </div>
@@ -226,17 +216,6 @@ export class ActiveSessionView {
         <div id="order-drawer-mount" style="min-width:0; width:100%; position:sticky; top:12px;"></div>
       </div>
 
-      <style>
-        @media (max-width: 1024px) {
-          .session-order-workspace {
-            grid-template-columns: 1fr !important;
-          }
-          #order-drawer-mount {
-            position: static !important;
-          }
-        }
-      </style>
-
       <!-- Bottom Session Control Toolbar -->
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:var(--space-md); border-top:1px solid var(--border-subtle); padding-top:var(--space-md); margin-top:var(--space-md);">
         <div style="display:flex; align-items:center; gap:12px;">
@@ -249,19 +228,19 @@ export class ActiveSessionView {
           </span>
         </div>
         <div style="display:flex; gap:var(--space-md); flex-wrap:wrap;">
-          ${(projection.status !== SessionMilestones.BILL_GENERATED && projection.status !== SessionMilestones.CLOSED) ? `
+          ${(projection.status === SessionMilestones.PAYMENT_RECEIVED || projection.billStatus === 'PAID') ? `
+            <button class="btn-primary" id="btn-close-session-settled-banner" style="background-color:#10b981; color:#000; font-weight:800; padding:10px 18px;">
+              ✨ Close Table Session & Mark Cleaning →
+            </button>
+          ` : ((projection.status === SessionMilestones.BILL_GENERATED || projection.billStatus === 'GENERATED') ? `
+            <button class="btn-secondary" disabled style="padding:10px 18px; font-weight:800; opacity:0.8; cursor:not-allowed; background:#f59e0b22; color:#f59e0b; border:1px solid #f59e0b;">
+              ⏳ Bill Finalized — Awaiting Cashier Settlement
+            </button>
+          ` : `
             <button class="btn-primary" id="btn-finalise-bill-cashier" style="padding:10px 18px; font-weight:800; background:var(--accent-primary);">
               🧾 Finalise Bill & Send to Cashier →
             </button>
-          ` : ''}
-          ${projection.status === SessionMilestones.BILL_GENERATED ? `
-            <button class="btn-primary" id="btn-close-session" style="background-color:var(--status-success); color:#000; font-weight:700; padding:10px 18px;">
-              ✨ Mark Payment Received & Close Session
-            </button>
-          ` : ''}
-          <button class="btn-secondary" id="btn-close-session-direct" style="color:var(--status-danger);">
-            Close Session
-          </button>
+          `)}
         </div>
       </div>
 
@@ -343,7 +322,12 @@ export class ActiveSessionView {
           newState: PhysicalTableStates.CLEANING
         });
         alert(`✨ Session closed for Table ${projection.tableNumber}! Table status set to NEEDS CLEANING.`);
-        if (this.onClose) this.onClose();
+        if (this.onClose) {
+          this.onClose();
+        } else {
+          this.sessionId = null;
+          this.updateContent();
+        }
       });
     }
 
@@ -428,7 +412,7 @@ export class ActiveSessionView {
           <h2 style="font-size:1.75rem; margin:0;">🛎️ Active Guest Service Sessions</h2>
           <p style="color:var(--text-muted); font-size:0.875rem; margin-top:2px;">Select an active table session to take orders or manage service.</p>
         </div>
-        <button class="btn-primary" id="btn-picker-go-floor">🗺️ Open Floor & Layout</button>
+        <button class="btn-primary" id="btn-picker-go-floor">MAP Open Floor & Layout</button>
       </div>
 
       ${alertMessage ? `<div class="card" style="background:var(--bg-surface-2); border-left:4px solid var(--accent-primary); padding:12px; margin-bottom:var(--space-md);">${alertMessage}</div>` : ''}
@@ -461,7 +445,7 @@ export class ActiveSessionView {
           <div style="font-size:2.5rem; margin-bottom:8px;">🍽️</div>
           <div style="font-size:1.1rem; font-weight:700; color:var(--text-primary);">No Active Table Sessions</div>
           <p style="font-size:0.875rem; margin-top:4px;">All tables are currently free. Go to the Floor View to seat guests and open a new session.</p>
-          <button class="btn-primary" id="btn-empty-go-floor" style="margin-top:12px;">🗺️ Go to Floor & Seat Guests</button>
+          <button class="btn-primary" id="btn-empty-go-floor" style="margin-top:12px;">MAP Go to Floor & Seat Guests</button>
         </div>
       `}
     `;
@@ -488,6 +472,15 @@ export class ActiveSessionView {
     this.menuBrowserInstance = new MenuBrowserView({
       draftItems: this.draftItems,
       onSelectItem: (item) => {
+        if (projection.status === SessionMilestones.BILL_GENERATED || projection.billStatus === 'GENERATED') {
+          alert(`🔒 Bill for Table ${projection.tableNumber} is finalized and pending cashier payment. Items cannot be added unless Cashier re-opens the bill.`);
+          return;
+        }
+        if (projection.status === SessionMilestones.PAYMENT_RECEIVED || projection.billStatus === 'PAID') {
+          alert(`🟢 Payment for Table ${projection.tableNumber} is settled. Session is ready to be closed.`);
+          return;
+        }
+
         const itemVariantId = item.variantId || item.selectedVariantId || null;
         const itemPrice = parseFloat(item.price || item.sellingPrice) || 0;
         const itemName = item.name || item.itemName;
