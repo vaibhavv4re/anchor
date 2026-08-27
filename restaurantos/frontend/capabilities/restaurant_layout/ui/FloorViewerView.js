@@ -160,25 +160,25 @@ export class FloorViewerView {
 
             <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:var(--space-xs);">
               👥 ${p.capacity} / ${p.maxCapacity} Seats
-            </div>`;
-    }).join('');
-
-          <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.75rem; margin-bottom:4px;">
-            <div style="color:var(--text-secondary);">
-              👤 ${p.assignedWaiterName || 'Unassigned'}
             </div>
-            <div style="color:var(--text-muted); font-family:monospace;">
-              ${p.elapsedTime}
+
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.75rem; margin-bottom:4px;">
+              <div style="color:var(--text-secondary);">
+                👤 ${p.assignedWaiterName || 'Unassigned'}
+              </div>
+              <div style="color:var(--text-muted); font-family:monospace;">
+                ${p.elapsedTime}
+              </div>
             </div>
           </div>
-        </div>
 
-        <!-- STAGE-GATED DIRECT NEXT ACTION BUTTON -->
-        <button class="btn-primary btn-direct-table-action" data-table="${p.tableNumber}" data-action-type="${p.primaryAction.type}" style="width:100%; padding:8px 10px; font-weight:700; font-size:0.8rem; border-radius:6px; cursor:pointer; background:${p.stateColor}; color:${p.physicalState === 'AVAILABLE' || p.physicalState === 'PAYMENT_PENDING' ? '#000' : '#fff'}; border:none; display:flex; align-items:center; justify-content:center; gap:4px;">
-          ${p.primaryAction.label} →
-        </button>
-      </div>
-    `).join('');
+          <!-- STAGE-GATED DIRECT NEXT ACTION BUTTON -->
+          <button class="btn-primary btn-direct-table-action" data-table="${p.tableNumber}" data-action-type="${p.primaryAction.type}" style="width:100%; padding:8px 10px; font-weight:700; font-size:0.8rem; border-radius:6px; cursor:pointer; background:${color}; color:${p.physicalState === 'AVAILABLE' || p.physicalState === 'PAYMENT_PENDING' || p.physicalState === 'ORDER_IN_PROGRESS' ? '#000' : '#fff'}; border:none; display:flex; align-items:center; justify-content:center; gap:4px;">
+            ${p.primaryAction.label} →
+          </button>
+        </div>
+      `;
+    }).join('');
 
     // Attach click listeners to direct action buttons & table cards
     gridMount.querySelectorAll('.table-card').forEach(card => {
