@@ -326,7 +326,7 @@ class ProductionRoutingEngine {
     if (tIdx >= 0) {
       const ticket = tickets[tIdx];
       const items = ticket.items || [];
-      const item = items.find((it, idx) => it.lineItemId === lineItemIdOrIndex || it.itemId === lineItemIdOrIndex || idx === lineItemIdOrIndex);
+      const item = items.find((it, idx) => it.lineItemId === lineItemIdOrIndex || it.itemId === lineItemIdOrIndex || idx === lineItemIdOrIndex || String(idx) === String(lineItemIdOrIndex));
       if (item) {
         item.itemStatus = newStatus;
         item.status = newStatus;
@@ -348,7 +348,7 @@ class ProductionRoutingEngine {
       if (matchIdx >= 0) {
         const ticket = orderTickets[matchIdx];
         const items = ticket.items || [];
-        const item = items.find((it, idx) => it.lineItemId === lineItemIdOrIndex || it.itemId === lineItemIdOrIndex || idx === lineItemIdOrIndex);
+        const item = items.find((it, idx) => it.lineItemId === lineItemIdOrIndex || it.itemId === lineItemIdOrIndex || idx === lineItemIdOrIndex || String(idx) === String(lineItemIdOrIndex));
         if (item) {
           item.itemStatus = newStatus;
           item.status = newStatus;

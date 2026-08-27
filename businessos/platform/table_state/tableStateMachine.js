@@ -164,7 +164,7 @@ class TableStateMachine {
 
     // Publish platform event
     platformEventBus.publish('table:state:changed', {
-      tableNumber: tableNum,
+      tableNumber: updatedRuntime.tableNumber || num || tableNumber,
       previousState: currentState,
       newState,
       sessionId: updatedRuntime.currentSessionId,

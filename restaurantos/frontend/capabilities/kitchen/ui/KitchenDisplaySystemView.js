@@ -186,8 +186,12 @@ export class KitchenDisplaySystemView {
 
     // 3. Filter tickets by Station, Status, and Search Query
     const filteredTickets = kitchenTickets.filter(t => {
-      // Status filter
-      if (this.selectedStatus !== 'ALL' && t.status !== this.selectedStatus) return false;
+      // Status filter (match overall ticket status OR any contained item status)
+      if (this.selectedStatus !== 'ALL') {
+        const matchesOverall = t.status === this.selectedStatus;
+        const matchesAnyItem = (t.items || []).some(i => (i.itemStatus || t.status) === this.selectedStatus);
+        if (!matchesOverall && !matchesAnyItem) return false;
+      }
 
       // Station filter
       if (this.selectedStation !== 'ALL') {
