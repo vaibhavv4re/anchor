@@ -4,7 +4,7 @@
  */
 
 import { tableMasterModel } from '../layout/tableMasterModel.js';
-import { tableStateMachine, TableStateColors, PhysicalTableStates } from './tableStateMachine.js';
+import { tableStateMachine, PhysicalTableStates } from './tableStateMachine.js';
 import { diningAreaModel } from '../layout/diningAreaModel.js';
 import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
@@ -36,6 +36,22 @@ class TableProjectionService {
         if (projection) platformEventBus.publish('table:projection:updated', projection);
       }
     });
+
+    platformEventBus.subscribe('order:confirmed', (envelope) => {
+      const payload = envelope.payload || envelope;
+      if (payload.tableNumber) {
+        const projection = this.getTableProjection(payload.tableNumber);
+        if (projection) platformEventBus.publish('table:projection:updated', projection);
+      }
+    });
+
+    platformEventBus.subscribe('bill:settled', (envelope) => {
+      const payload = envelope.payload || envelope;
+      if (payload.tableNumber) {
+        const projection = this.getTableProjection(payload.tableNumber);
+        if (projection) platformEventBus.publish('table:projection:updated', projection);
+      }
+    });
   }
 
   /**
@@ -49,8 +65,12 @@ class TableProjectionService {
         return { type: 'SEAT_GUESTS', label: 'Seat Reserved Guests' };
       case PhysicalTableStates.OCCUPIED:
         return { type: 'OPEN_SESSION', label: 'Open Session & Service' };
+      case PhysicalTableStates.ORDER_IN_PROGRESS:
+        return { type: 'OPEN_SESSION', label: 'Open Service & Add Orders' };
       case PhysicalTableStates.PAYMENT_PENDING:
-        return { type: 'OPEN_BILL', label: 'View Bill & Collect Payment' };
+        return { type: 'VIEW_BILL', label: 'Awaiting Cashier Settlement' };
+      case PhysicalTableStates.PAID_CLEARING:
+        return { type: 'CLOSE_SESSION', label: 'Close Session & Clear Table' };
       case PhysicalTableStates.CLEANING:
         return { type: 'MARK_CLEAN', label: 'Mark Table Clean & Ready' };
       case PhysicalTableStates.OUT_OF_SERVICE:
@@ -92,7 +112,6 @@ class TableProjectionService {
       capacity: master.seats || 4,
       maxCapacity: master.maxSeats || 6,
       physicalState: currentState,
-      stateColor: TableStateColors[currentState] || '#10b981',
       currentSessionId: runtime ? runtime.currentSessionId : null,
       assignedWaiterId: runtime ? runtime.assignedWaiterId : null,
       assignedWaiterName: waiter ? waiter.name : (runtime?.assignedWaiterId || null),

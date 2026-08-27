@@ -7,30 +7,26 @@
 import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
 import { sessionModel } from '../session/sessionModel.js';
+import { orderModel } from '../ordering/orderModel.js';
 
 export const PhysicalTableStates = Object.freeze({
   AVAILABLE: 'AVAILABLE',
   RESERVED: 'RESERVED',
   OCCUPIED: 'OCCUPIED',
+  ORDER_IN_PROGRESS: 'ORDER_IN_PROGRESS',
   PAYMENT_PENDING: 'PAYMENT_PENDING',
+  PAID_CLEARING: 'PAID_CLEARING',
   CLEANING: 'CLEANING',
   OUT_OF_SERVICE: 'OUT_OF_SERVICE'
-});
-
-export const TableStateColors = Object.freeze({
-  AVAILABLE: '#10b981',      // 🟢 Emerald Green
-  RESERVED: '#3b82f6',       // 🔵 Blue
-  OCCUPIED: '#8b5cf6',       // 🟣 Purple
-  PAYMENT_PENDING: '#f59e0b',// 🟡 Yellow/Amber
-  CLEANING: '#6b7280',       // ⚪ Slate Gray
-  OUT_OF_SERVICE: '#ef4444'  // 🔴 Red
 });
 
 const AllowedTransitions = {
   [PhysicalTableStates.AVAILABLE]: [PhysicalTableStates.RESERVED, PhysicalTableStates.OCCUPIED, PhysicalTableStates.OUT_OF_SERVICE],
   [PhysicalTableStates.RESERVED]: [PhysicalTableStates.OCCUPIED, PhysicalTableStates.AVAILABLE, PhysicalTableStates.OUT_OF_SERVICE],
-  [PhysicalTableStates.OCCUPIED]: [PhysicalTableStates.PAYMENT_PENDING, PhysicalTableStates.CLEANING, PhysicalTableStates.AVAILABLE],
-  [PhysicalTableStates.PAYMENT_PENDING]: [PhysicalTableStates.CLEANING, PhysicalTableStates.AVAILABLE],
+  [PhysicalTableStates.OCCUPIED]: [PhysicalTableStates.ORDER_IN_PROGRESS, PhysicalTableStates.PAYMENT_PENDING, PhysicalTableStates.CLEANING, PhysicalTableStates.AVAILABLE],
+  [PhysicalTableStates.ORDER_IN_PROGRESS]: [PhysicalTableStates.PAYMENT_PENDING, PhysicalTableStates.CLEANING, PhysicalTableStates.AVAILABLE],
+  [PhysicalTableStates.PAYMENT_PENDING]: [PhysicalTableStates.PAID_CLEARING, PhysicalTableStates.CLEANING, PhysicalTableStates.AVAILABLE],
+  [PhysicalTableStates.PAID_CLEARING]: [PhysicalTableStates.CLEANING, PhysicalTableStates.AVAILABLE],
   [PhysicalTableStates.CLEANING]: [PhysicalTableStates.AVAILABLE, PhysicalTableStates.OUT_OF_SERVICE],
   [PhysicalTableStates.OUT_OF_SERVICE]: [PhysicalTableStates.AVAILABLE, PhysicalTableStates.CLEANING]
 };
@@ -62,10 +58,23 @@ class TableStateMachine {
     const activeSession = sessionModel.getActiveSessionForTable(tableNumber, tenantId);
 
     if (activeSession) {
+      const orders = orderModel.getOrdersForSession(activeSession.id || activeSession.sessionId, tenantId);
+      const isPaymentSettled = activeSession.status === 'PAYMENT_RECEIVED' || activeSession.billStatus === 'PAID';
       const isPaymentPending = activeSession.status === 'BILL_GENERATED' || activeSession.billStatus === 'GENERATED';
+      const hasConfirmedOrders = Array.isArray(orders) && orders.length > 0;
+
+      let derivedState = PhysicalTableStates.OCCUPIED;
+      if (isPaymentSettled) {
+        derivedState = PhysicalTableStates.PAID_CLEARING;
+      } else if (isPaymentPending) {
+        derivedState = PhysicalTableStates.PAYMENT_PENDING;
+      } else if (hasConfirmedOrders) {
+        derivedState = PhysicalTableStates.ORDER_IN_PROGRESS;
+      }
+
       return {
         tableNumber: activeSession.tableNumber || num || tableNumber,
-        currentState: isPaymentPending ? PhysicalTableStates.PAYMENT_PENDING : PhysicalTableStates.OCCUPIED,
+        currentState: derivedState,
         currentSessionId: activeSession.id || activeSession.sessionId,
         assignedWaiterId: activeSession.assignedWaiterId || null,
         guestCount: activeSession.guestCount || 2,

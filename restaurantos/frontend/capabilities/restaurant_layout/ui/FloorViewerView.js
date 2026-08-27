@@ -16,6 +16,17 @@ import { TableInspectorModal } from './TableInspectorModal.js';
 import { CreateSessionModal } from '../../guest_service/ui/CreateSessionModal.js';
 import { ActiveSessionView } from '../../guest_service/ui/ActiveSessionView.js';
 
+export const TableStateThemeColors = Object.freeze({
+  AVAILABLE: '#10b981',        // 🟢 Emerald Green
+  RESERVED: '#3b82f6',         // 🔵 Blue
+  OCCUPIED: '#8b5cf6',         // 🟣 Purple
+  ORDER_IN_PROGRESS: '#f59e0b',// 🟡 Amber/Yellow
+  PAYMENT_PENDING: '#d97706',  // 🟠 Orange/Amber
+  PAID_CLEARING: '#8b5cf6',    // 🟣 Purple
+  CLEANING: '#6b7280',         // ⚪ Slate Gray
+  OUT_OF_SERVICE: '#ef4444'    // 🔴 Red
+});
+
 export class FloorViewerView {
   constructor() {
     const areas = diningAreaModel.getAllAreas();
@@ -52,7 +63,9 @@ export class FloorViewerView {
       platformEventBus.subscribe('table:state:changed', refresh),
       platformEventBus.subscribe('session:created', refresh),
       platformEventBus.subscribe('session:milestone:changed', refresh),
+      platformEventBus.subscribe('order:confirmed', refresh),
       platformEventBus.subscribe('bill:finalized', refresh),
+      platformEventBus.subscribe('bill:settled', refresh),
       platformEventBus.subscribe('bill:reopened', refresh)
     ];
   }
@@ -80,9 +93,10 @@ export class FloorViewerView {
         </div>
         <div style="display:flex; gap:var(--space-sm); align-items:center; flex-wrap:wrap;">
           <span class="badge" style="background:#10b98122; color:#10b981; border:1px solid #10b981;">🟢 Available</span>
-          <span class="badge" style="background:#3b82f622; color:#3b82f6; border:1px solid #3b82f6;">🔵 Reserved</span>
-          <span class="badge" style="background:#8b5cf622; color:#8b5cf6; border:1px solid #8b5cf6;">🟣 Occupied</span>
-          <span class="badge" style="background:#f59e0b22; color:#f59e0b; border:1px solid #f59e0b;">🟡 Payment</span>
+          <span class="badge" style="background:#8b5cf622; color:#8b5cf6; border:1px solid #8b5cf6;">🔵 Occupied</span>
+          <span class="badge" style="background:#f59e0b22; color:#f59e0b; border:1px solid #f59e0b;">🟡 Order In Progress</span>
+          <span class="badge" style="background:#d9770622; color:#d97706; border:1px solid #d97706;">🟠 Payment Pending</span>
+          <span class="badge" style="background:#8b5cf622; color:#8b5cf6; border:1px solid #8b5cf6;">🟣 Paid / Clearing</span>
           <span class="badge" style="background:#6b728022; color:#6b7280; border:1px solid #6b7280;">⚪ Cleaning</span>
         </div>
       </div>
@@ -130,19 +144,24 @@ export class FloorViewerView {
       return;
     }
 
-    gridMount.innerHTML = projections.map(p => `
-      <div class="card table-card animate-fade-in" data-table="${p.tableNumber}" style="cursor:pointer; border-top:4px solid ${p.stateColor}; transition:transform var(--transition-fast); padding:var(--space-md); background:var(--bg-surface-1); display:flex; flex-direction:column; justify-content:space-between; gap:8px;">
-        <div>
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-xs);">
-            <div style="font-size:1.15rem; font-weight:700;">Table ${p.tableLabel || p.tableNumber}</div>
-            <span class="badge" style="background:${p.stateColor}22; color:${p.stateColor}; border:1px solid ${p.stateColor}; font-size:0.7rem; font-weight:700;">
-              ${p.physicalState}
-            </span>
-          </div>
+    gridMount.innerHTML = projections.map(p => {
+      const color = TableStateThemeColors[p.physicalState] || '#10b981';
+      const label = p.physicalState ? p.physicalState.replace(/_/g, ' ') : 'AVAILABLE';
 
-          <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:var(--space-xs);">
-            👥 ${p.capacity} / ${p.maxCapacity} Seats
-          </div>
+      return `
+        <div class="card table-card animate-fade-in" data-table="${p.tableNumber}" style="cursor:pointer; border-top:4px solid ${color}; transition:transform var(--transition-fast); padding:var(--space-md); background:var(--bg-surface-1); display:flex; flex-direction:column; justify-content:space-between; gap:8px;">
+          <div>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-xs);">
+              <div style="font-size:1.15rem; font-weight:700;">Table ${p.tableLabel || p.tableNumber}</div>
+              <span class="badge" style="background:${color}22; color:${color}; border:1px solid ${color}; font-size:0.7rem; font-weight:700;">
+                ${label}
+              </span>
+            </div>
+
+            <div style="font-size:0.8rem; color:var(--text-muted); margin-bottom:var(--space-xs);">
+              👥 ${p.capacity} / ${p.maxCapacity} Seats
+            </div>`;
+    }).join('');
 
           <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.75rem; margin-bottom:4px;">
             <div style="color:var(--text-secondary);">
