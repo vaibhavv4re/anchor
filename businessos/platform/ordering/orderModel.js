@@ -131,6 +131,15 @@ class OrderModel {
   }
 
   /**
+   * Retrieve all orders for tenant (alias)
+   * @param {string|null} tenantId
+   * @returns {Array<Object>}
+   */
+  getAllOrders(tenantId = null) {
+    return this.getOrders(tenantId);
+  }
+
+  /**
    * Retrieve all orders for tenant
    * @param {string|null} tenantId
    * @returns {Array<Object>}

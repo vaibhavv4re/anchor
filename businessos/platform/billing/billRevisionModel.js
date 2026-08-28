@@ -264,6 +264,54 @@ class BillRevisionModel {
     }
     return null;
   }
+
+  /**
+   * Approve a pending discount approval request
+   */
+  approveDiscount(revisionId, actorName = 'Manager', tenantId = null) {
+    const all = offlineStore.getCollection('bill_revisions') || [];
+    const idx = all.findIndex(r => r.id === revisionId || r.revisionId === revisionId);
+    if (idx >= 0) {
+      all[idx].revisionStatus = 'ACCEPTED';
+      all[idx].approvalStatus = 'APPROVED';
+      all[idx].approvedBy = actorName;
+      all[idx].approvedAt = new Date().toISOString();
+      offlineStore.setCollection('bill_revisions', all);
+
+      platformEventBus.publish('discount:approved', {
+        revisionId,
+        sessionId: all[idx].sessionId,
+        actorName,
+        timestamp: all[idx].approvedAt
+      });
+      return { success: true, revision: all[idx] };
+    }
+    return { success: false, error: 'Revision not found' };
+  }
+
+  /**
+   * Reject a pending discount approval request
+   */
+  rejectDiscount(revisionId, actorName = 'Manager', tenantId = null) {
+    const all = offlineStore.getCollection('bill_revisions') || [];
+    const idx = all.findIndex(r => r.id === revisionId || r.revisionId === revisionId);
+    if (idx >= 0) {
+      all[idx].revisionStatus = 'REJECTED';
+      all[idx].approvalStatus = 'REJECTED';
+      all[idx].rejectedBy = actorName;
+      all[idx].rejectedAt = new Date().toISOString();
+      offlineStore.setCollection('bill_revisions', all);
+
+      platformEventBus.publish('discount:rejected', {
+        revisionId,
+        sessionId: all[idx].sessionId,
+        actorName,
+        timestamp: all[idx].rejectedAt
+      });
+      return { success: true, revision: all[idx] };
+    }
+    return { success: false, error: 'Revision not found' };
+  }
 }
 
 export const billRevisionModel = new BillRevisionModel();

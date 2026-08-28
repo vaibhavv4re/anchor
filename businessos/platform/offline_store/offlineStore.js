@@ -90,7 +90,7 @@ class OfflineStore {
    * Emergency Storage Cleanup: Trims oversized append-only log collections when localStorage hits quota limits.
    */
   _purgeStaleLogs() {
-    const logCollections = ['timeline_ledger', 'audit', 'stock_ledger', 'notifications'];
+    const logCollections = ['timeline_ledger', 'audit', 'stock_ledger', 'notifications', 'session_audit_logs', 'bill_revisions', 'orders'];
     logCollections.forEach(col => {
       try {
         const raw = localStorage.getItem(this.prefix + col);
@@ -177,33 +177,51 @@ class OfflineStore {
       const initialRoles = [
         {
           id: 'role-superadmin',
-          name: 'Super Admin',
-          workspace: 'admin',
+          name: 'System Superadmin',
+          workspace: 'superadmin',
           permissions: ['*']
         },
         {
           id: 'role-admin',
-          name: 'Admin',
+          name: 'General Manager / Admin',
           workspace: 'admin',
           permissions: ['user.create', 'user.edit', 'user.disable', 'pin.reset', 'config.edit', 'device.manage', 'audit.view']
         },
         {
           id: 'role-manager',
-          name: 'Manager',
+          name: 'Operations Manager',
           workspace: 'manager',
           permissions: ['override.lock', 'floor.view', 'kitchen.view', 'attendance.view', 'action.approve']
         },
         {
           id: 'role-waiter',
-          name: 'Waiter',
+          name: 'Floor Server / Waiter',
           workspace: 'waiter',
           permissions: ['floor.view', 'table.session', 'order.create', 'kot.generate']
         },
         {
           id: 'role-chef',
-          name: 'Chef',
+          name: 'Kitchen Head Chef',
           workspace: 'kitchen',
           permissions: ['kitchen.view', 'kot.update', 'recipe.view']
+        },
+        {
+          id: 'role-cashier',
+          name: 'Cashier & Billing',
+          workspace: 'cashier',
+          permissions: ['cashier.view', 'payment.process', 'bill.revision']
+        },
+        {
+          id: 'role-inventory-manager',
+          name: 'Inventory Manager',
+          workspace: 'inventory',
+          permissions: ['inventory.view', 'stock.manage', 'recipe.manage']
+        },
+        {
+          id: 'role-bar',
+          name: 'Bartender',
+          workspace: 'bar',
+          permissions: ['bar.view', 'order.create']
         }
       ];
       this.setCollection('roles', initialRoles);

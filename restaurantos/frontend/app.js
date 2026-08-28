@@ -39,6 +39,7 @@ import { MenuBrowserView } from './capabilities/order_management/ui/MenuBrowserV
 import { ActiveSessionView } from './capabilities/guest_service/ui/ActiveSessionView.js';
 import { AdminWorkspaceView } from './capabilities/setup_wizard/ui/AdminWorkspaceView.js';
 import { SuperAdminWorkspaceView } from './capabilities/setup_wizard/ui/SuperAdminWorkspaceView.js';
+import { ManagerWorkspaceView } from './capabilities/manager/ui/ManagerWorkspaceView.js';
 import { InventoryWorkspaceView } from './capabilities/inventory/ui/InventoryWorkspaceView.js';
 import { KitchenDisplaySystemView } from './capabilities/kitchen/ui/KitchenDisplaySystemView.js';
 import { WaiterWorkspaceView } from './capabilities/guest_service/ui/WaiterWorkspaceView.js';
@@ -183,6 +184,9 @@ export class ApplicationShell {
     } else if (session.workspace === 'admin') {
       const adminWs = new AdminWorkspaceView(opts);
       await adminWs.render(rootMount, session);
+    } else if (session.workspace === 'manager' || session.roleId === 'role-manager') {
+      const managerWs = new ManagerWorkspaceView(opts);
+      await managerWs.render(rootMount, session);
     } else if (session.workspace === 'inventory') {
       const inventoryWs = new InventoryWorkspaceView(opts);
       await inventoryWs.render(rootMount, session);

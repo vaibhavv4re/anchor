@@ -141,6 +141,16 @@ class SessionModel {
   }
 
   /**
+   * Retrieve all active (non-closed) guest sessions
+   * @param {string|null} tenantId 
+   * @returns {Array<Object>}
+   */
+  getActiveSessions(tenantId = null) {
+    const sessions = this.getAllSessions(tenantId);
+    return sessions.filter(s => s.status !== 'CLOSED');
+  }
+
+  /**
    * Retrieve all sessions (reconciled across local store, offline_journal, and Supabase orders)
    * @param {string|null} tenantId 
    * @returns {Array<Object>}

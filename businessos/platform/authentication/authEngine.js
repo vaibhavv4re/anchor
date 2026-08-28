@@ -108,7 +108,10 @@ export class AuthEngine {
           String(e.adminPin) === sPin ||
           String(e.admin_pin) === sPin ||
           String(e.pin) === sPin ||
-          String(e.data?.admin_pin) === sPin
+          String(e.pinDisplay) === sPin ||
+          String(e.data?.admin_pin) === sPin ||
+          String(e.data?.pinDisplay) === sPin ||
+          String(e.data?.pin) === sPin
         ));
       }
 
@@ -135,6 +138,7 @@ export class AuthEngine {
     }
 
     const resolvedRoleName = role ? (role.name || role.roleName) : (
+      roleId === 'role-manager' ? 'Operations Manager' :
       roleId === 'role-admin' ? 'General Manager' :
       roleId === 'role-superadmin' ? 'System Superadmin' :
       roleId === 'role-chef' ? 'Head Chef' :

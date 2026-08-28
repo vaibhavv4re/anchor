@@ -1,0 +1,10 @@
+{
+  "name": "anchor-restaurant-os",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Anchor RestaurantOS - Modular Realtime Operating System",
+  "scripts": {
+    "dev": "npx serve .",
+    "start": "npx serve ."
+  }
+}

@@ -56,6 +56,14 @@ class PaymentModel {
   }
 
   /**
+   * Retrieve settled payment records for tenant
+   */
+  getSettledPayments(tenantId = null) {
+    const all = this.getAllPayments(tenantId);
+    return all.filter(p => p.status === 'SETTLED' || !p.status);
+  }
+
+  /**
    * Retrieve payment record for session
    */
   getPaymentForSession(sessionId, tenantId = null) {
