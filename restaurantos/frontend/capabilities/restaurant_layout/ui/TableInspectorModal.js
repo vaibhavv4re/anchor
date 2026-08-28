@@ -3,9 +3,11 @@
  * Seamlessly opens CreateSessionModal when seating guests, or ActiveSessionView when inspecting active sessions.
  */
 
-import { PhysicalTableStates } from '../../../../../businessos/platform/table_state/tableStateMachine.js';
+import { PhysicalTableStates, tableStateMachine } from '../../../../../businessos/platform/table_state/tableStateMachine.js';
 import { CreateSessionModal } from '../../guest_service/ui/CreateSessionModal.js';
 import { sessionProjectionService } from '../../../../../businessos/platform/session/sessionProjectionService.js';
+import { sessionStateMachine, SessionMilestones } from '../../../../../businessos/platform/session/sessionStateMachine.js';
+import { platformEventBus } from '../../../../../businessos/platform/events/platformEvents.js';
 
 export class TableInspectorModal {
   constructor({ projection, onClose, onActionComplete, onOpenActiveSession }) {
@@ -60,7 +62,7 @@ export class TableInspectorModal {
 
         <!-- Primary Action Engine Button -->
         <div style="display:flex; flex-direction:column; gap:var(--space-md);">
-          <button class="btn-primary w-full" id="btn-primary-action" data-type="${action.type}" style="padding:14px; font-weight:600;">
+          <button class="btn-primary w-full" id="btn-primary-action" data-type="${action.type}" style="padding:14px; font-weight:600; background:${action.type === 'CLOSE_SESSION' ? '#10b981' : 'var(--accent-primary)'}; color:${action.type === 'CLOSE_SESSION' ? '#000' : '#fff'};">
             ${action.label}
           </button>
 
@@ -77,7 +79,15 @@ export class TableInspectorModal {
   }
 
   bindEvents() {
+    this.modalEl.addEventListener('click', (e) => {
+      if (e.target === this.modalEl) {
+        this.modalEl.remove();
+        if (this.onClose) this.onClose();
+      }
+    });
+
     this.modalEl.querySelector('#btn-close-modal').addEventListener('click', () => {
+      this.modalEl.remove();
       if (this.onClose) this.onClose();
     });
 
@@ -106,6 +116,7 @@ export class TableInspectorModal {
           }
         } else if (type === 'OPEN_SESSION') {
           const activeProj = sessionProjectionService.getActiveProjectionForTable(this.projection.tableNumber);
+          this.modalEl.remove();
           if (activeProj && this.onOpenActiveSession) {
             this.onOpenActiveSession(activeProj.sessionId);
           } else {
@@ -114,14 +125,31 @@ export class TableInspectorModal {
           if (this.onClose) this.onClose();
         } else if (type === 'OPEN_BILL') {
           const activeProj = sessionProjectionService.getActiveProjectionForTable(this.projection.tableNumber);
+          this.modalEl.remove();
           if (activeProj && this.onOpenActiveSession) {
             this.onOpenActiveSession(activeProj.sessionId);
           } else {
             alert(`No active bill session found for Table ${this.projection.tableNumber}`);
           }
           if (this.onClose) this.onClose();
+        } else if (type === 'CLOSE_SESSION') {
+          const activeProj = sessionProjectionService.getActiveProjectionForTable(this.projection.tableNumber);
+          const sid = activeProj ? activeProj.sessionId : (this.projection.currentSessionId || null);
+          if (sid) {
+            sessionStateMachine.transitionMilestone(sid, SessionMilestones.CLOSED);
+          }
+          tableStateMachine.transitionTableState(this.projection.tableNumber, PhysicalTableStates.CLEANING);
+          platformEventBus.publish('table:state:changed', {
+            tableNumber: this.projection.tableNumber,
+            newState: PhysicalTableStates.CLEANING
+          });
+          alert(`✨ Session closed for Table ${this.projection.tableNumber}! Table moved to CLEANING.`);
+          this.modalEl.remove();
+          if (this.onActionComplete) this.onActionComplete();
+          if (this.onClose) this.onClose();
         } else if (type === 'MARK_CLEAN' || type === 'RESTORE_SERVICE') {
           tableStateMachine.transitionTableState(this.projection.tableNumber, PhysicalTableStates.AVAILABLE);
+          this.modalEl.remove();
           if (this.onActionComplete) this.onActionComplete();
           if (this.onClose) this.onClose();
         }

@@ -72,7 +72,15 @@ export class OrderReviewModal {
   }
 
   bindEvents() {
+    this.modalEl.addEventListener('click', (e) => {
+      if (e.target === this.modalEl) {
+        this.modalEl.remove();
+        if (this.onClose) this.onClose();
+      }
+    });
+
     this.modalEl.querySelector('#btn-cancel-review').addEventListener('click', () => {
+      this.modalEl.remove();
       if (this.onClose) this.onClose();
     });
 
@@ -93,6 +101,7 @@ export class OrderReviewModal {
       // 2. Advance Session Milestone to ORDER_CONFIRMED
       sessionStateMachine.transitionMilestone(this.sessionId, SessionMilestones.ORDERS_STARTED);
 
+      this.modalEl.remove();
       if (this.onOrderConfirmed) this.onOrderConfirmed(confirmedOrder);
     });
   }

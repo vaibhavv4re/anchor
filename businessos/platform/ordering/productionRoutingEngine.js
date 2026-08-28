@@ -298,8 +298,9 @@ class ProductionRoutingEngine {
     const allReady = items.every(i => (i.itemStatus || i.status) === 'READY' || (i.itemStatus || i.status) === 'SERVED');
     if (allReady) return 'READY';
 
-    const anyInProgress = items.some(i => (i.itemStatus || i.status) === 'PREPARING' || (i.itemStatus || i.status) === 'READY');
-    if (anyInProgress) return 'PREPARING';
+    // Entire ticket moves to PREPARING only when ALL items are being prepared (or ready/served)
+    const allPreparingOrBetter = items.every(i => (i.itemStatus || i.status) === 'PREPARING' || (i.itemStatus || i.status) === 'READY' || (i.itemStatus || i.status) === 'SERVED');
+    if (allPreparingOrBetter) return 'PREPARING';
 
     return 'QUEUED';
   }

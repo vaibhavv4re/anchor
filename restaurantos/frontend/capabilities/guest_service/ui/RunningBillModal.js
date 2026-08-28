@@ -7,6 +7,7 @@ import { sessionStateMachine, SessionMilestones } from '../../../../../businesso
 import { tableStateMachine, PhysicalTableStates } from '../../../../../businessos/platform/table_state/tableStateMachine.js';
 import { sessionProjectionService } from '../../../../../businessos/platform/session/sessionProjectionService.js';
 import { platformEventBus } from '../../../../../businessos/platform/events/platformEvents.js';
+import { billRevisionModel } from '../../../../../businessos/platform/billing/billRevisionModel.js';
 
 export class RunningBillModal {
   constructor({ sessionId, onClose, onAddMore, onBillFinalized }) {
@@ -206,8 +207,20 @@ export class RunningBillModal {
   }
 
   bindEvents(proj) {
+    this.modalEl.addEventListener('click', (e) => {
+      if (e.target === this.modalEl) {
+        this.modalEl.remove();
+        if (this.onClose) this.onClose();
+      }
+    });
+
     const closeBtn = this.modalEl.querySelector('#btn-close-bill-modal');
-    if (closeBtn) closeBtn.addEventListener('click', () => { if (this.onClose) this.onClose(); });
+    if (closeBtn) {
+      closeBtn.addEventListener('click', () => {
+        this.modalEl.remove();
+        if (this.onClose) this.onClose();
+      });
+    }
 
     const addMoreBtn = this.modalEl.querySelector('#btn-add-more-items');
     if (addMoreBtn) {
@@ -216,6 +229,7 @@ export class RunningBillModal {
           alert('🔒 Bill for this table is finalised and sent to Cashier. Only Cashier can re-open the bill to add or edit items.');
           return;
         }
+        this.modalEl.remove();
         if (this.onClose) this.onClose();
         if (this.onAddMore) this.onAddMore();
       });
@@ -231,6 +245,16 @@ export class RunningBillModal {
     const finaliseBtn = this.modalEl.querySelector('#btn-finalise-cashier');
     if (finaliseBtn) {
       finaliseBtn.addEventListener('click', () => {
+        const rev = billRevisionModel.createRevision({
+          sessionId: this.sessionId,
+          tableNumber: proj.tableNumber,
+          tableCode: proj.tableCode,
+          items: proj.itemizedList,
+          subtotal: proj.subtotal,
+          waiterId: proj.waiter ? proj.waiter.id : 'emp-waiter',
+          waiterName: proj.waiter ? proj.waiter.name : 'Staff'
+        });
+
         sessionStateMachine.transitionMilestone(this.sessionId, SessionMilestones.BILL_GENERATED);
         tableStateMachine.transitionTableState(proj.tableNumber, PhysicalTableStates.PAYMENT_PENDING);
 
@@ -238,16 +262,19 @@ export class RunningBillModal {
           sessionId: this.sessionId,
           tableNumber: proj.tableNumber,
           tableCode: proj.tableCode,
-          subtotal: proj.subtotal,
-          cgstAmount: proj.cgstAmount,
-          sgstAmount: proj.sgstAmount,
-          grandTotal: proj.grandTotal,
+          billNumber: rev.billNumber,
+          revisionNumber: rev.revisionNumber,
+          subtotal: rev.subtotal,
+          cgstAmount: rev.cgstAmount,
+          sgstAmount: rev.sgstAmount,
+          serviceChargeAmount: rev.serviceChargeAmount,
+          grandTotal: rev.grandTotal,
           itemizedList: proj.itemizedList,
-          waiterName: proj.waiter.name,
+          waiterName: proj.waiter ? proj.waiter.name : 'Staff',
           timestamp: new Date().toISOString()
         });
 
-        alert(`Bill for Table ${proj.tableNumber} (Total: ₹${(proj.grandTotal || 0).toFixed(2)}) has been finalised and sent to Cashier! Table status set to PAYMENT_PENDING.`);
+        alert(`Bill for Table ${proj.tableNumber} (Revision ${rev.revisionNumber} - Total: ₹${(rev.grandTotal || 0).toFixed(2)}) has been finalised and sent to Cashier! Table status set to PAYMENT_PENDING.`);
         if (this.onBillFinalized) this.onBillFinalized();
         this.updateContent();
       });
@@ -256,6 +283,7 @@ export class RunningBillModal {
     const doneBtn = this.modalEl.querySelector('#btn-done-bill');
     if (doneBtn) {
       doneBtn.addEventListener('click', () => {
+        this.modalEl.remove();
         if (this.onClose) this.onClose();
       });
     }

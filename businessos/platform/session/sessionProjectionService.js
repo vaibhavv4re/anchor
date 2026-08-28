@@ -78,11 +78,15 @@ class SessionProjectionService {
     const readyItems = [];
     const preparingItems = [];
     const queuedItems = [];
+    const servedItems = [];
 
     // Extract items from dispatched tickets
     tickets.forEach(t => {
       (t.items || []).forEach(item => {
         const itemStatus = item.itemStatus || item.status || t.status || 'QUEUED';
+        const createdAt = t.createdAt || session.createdAt || new Date().toISOString();
+        const elapsedMins = Math.max(0, Math.floor((new Date() - new Date(createdAt)) / 60000));
+
         const entry = {
           lineItemId: item.lineItemId || item.itemId || `${t.id}_${item.name}`,
           itemId: item.itemId,
@@ -93,22 +97,29 @@ class SessionProjectionService {
           ticketId: t.ticketId || t.id,
           ticketType: t.ticketType,
           stationName: item.stationName || t.destination || 'KITCHEN',
+          createdAt,
+          elapsedMinutes: elapsedMins,
+          notes: item.notes || '',
           isReady: itemStatus === 'READY',
           isPreparing: itemStatus === 'PREPARING',
           isQueued: itemStatus === 'QUEUED',
           isServed: itemStatus === 'SERVED'
         };
+
         if (t.ticketType === 'BOT' || t.destination === 'BAR' || item.routing === 'BAR_LINE') {
           drinkItems.push(entry);
         } else {
           foodItems.push(entry);
         }
+
         if (itemStatus === 'READY') {
           readyItems.push(entry);
         } else if (itemStatus === 'PREPARING') {
           preparingItems.push(entry);
         } else if (itemStatus === 'QUEUED') {
           queuedItems.push(entry);
+        } else if (itemStatus === 'SERVED') {
+          servedItems.push(entry);
         }
       });
     });
@@ -126,9 +137,11 @@ class SessionProjectionService {
             status: itemStatus,
             itemStatus: itemStatus,
             stationName: item.routing === 'BAR_LINE' ? 'BAR' : 'KITCHEN',
+            notes: item.notes || '',
             isReady: itemStatus === 'READY',
             isPreparing: itemStatus === 'PREPARING',
-            isQueued: itemStatus === 'QUEUED' || itemStatus === 'CONFIRMED'
+            isQueued: itemStatus === 'QUEUED' || itemStatus === 'CONFIRMED',
+            isServed: itemStatus === 'SERVED'
           };
           if (item.routing === 'BAR_LINE' || item.category === 'BEVERAGES & BAR') {
             drinkItems.push(entry);
@@ -137,6 +150,8 @@ class SessionProjectionService {
           }
           if (itemStatus === 'READY') {
             readyItems.push(entry);
+          } else if (itemStatus === 'SERVED') {
+            servedItems.push(entry);
           }
         });
       });
@@ -176,6 +191,20 @@ class SessionProjectionService {
     const elapsedMinutes = Math.max(0, Math.floor((new Date() - createdAt) / 60000));
     const elapsedTime = `${elapsedMinutes} min`;
 
+    const isPartiallyReady = readyItems.length > 0 && (preparingItems.length > 0 || queuedItems.length > 0);
+    const isFullyReady = readyItems.length > 0 && preparingItems.length === 0 && queuedItems.length === 0;
+
+    let guestScript = 'Order is in queue.';
+    if (isFullyReady) {
+      guestScript = 'All ordered dishes are ready for table service!';
+    } else if (isPartiallyReady) {
+      guestScript = `${readyItems.length} dish${readyItems.length !== 1 ? 'es are' : ' is'} ready for pickup, and remaining dishes are being prepared.`;
+    } else if (preparingItems.length > 0) {
+      guestScript = `${preparingItems.length} dish${preparingItems.length !== 1 ? 'es are' : ' is'} currently being prepared in the kitchen.`;
+    } else if (queuedItems.length > 0) {
+      guestScript = `Order confirmed and queued in kitchen.`;
+    }
+
     return {
       sessionId: session.id || session.sessionId,
       tableId: session.tableId || `tbl_${session.tableNumber}`,
@@ -195,6 +224,10 @@ class SessionProjectionService {
       readyItems,
       preparingItems,
       queuedItems,
+      servedItems,
+      isPartiallyReady,
+      isFullyReady,
+      guestScript,
       itemizedList,
       subtotal,
       cgstAmount,

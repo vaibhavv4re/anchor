@@ -134,6 +134,16 @@ export class AuthEngine {
       workspace = emp.workspaceDefault || emp.workspace_default;
     }
 
+    const resolvedRoleName = role ? (role.name || role.roleName) : (
+      roleId === 'role-admin' ? 'General Manager' :
+      roleId === 'role-superadmin' ? 'System Superadmin' :
+      roleId === 'role-chef' ? 'Head Chef' :
+      roleId === 'role-inventory-manager' ? 'Inventory Manager' :
+      roleId === 'role-cashier' ? 'Cashier' :
+      roleId === 'role-waiter' ? 'Floor Server' :
+      (roleId ? roleId.replace('role-', '').replace(/-/g, ' ').toUpperCase() : 'Staff')
+    );
+
     const session = {
       sessionId: 'sess-' + Math.random().toString(36).substring(2, 9),
       pin: sPin,
@@ -142,6 +152,7 @@ export class AuthEngine {
       employeeName,
       tenantId,
       roleId,
+      roleName: resolvedRoleName,
       workspace,
       deviceId,
       authenticatedAt: new Date().toISOString(),

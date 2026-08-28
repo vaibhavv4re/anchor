@@ -6,6 +6,7 @@
 
 import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
+import { productionRoutingEngine } from './productionRoutingEngine.js';
 
 class OrderModel {
   constructor() {
@@ -251,6 +252,27 @@ class OrderModel {
     this._broadcastChange('CLOUD_MUTATION', { table: 'orders', operation: 'UPDATE', record: order });
 
     return order;
+  }
+
+  /**
+   * Update status of an entire KOT/BOT ticket
+   */
+  updateTicketStatus(ticketId, status, tenantId = null) {
+    return productionRoutingEngine.updateTicketStatus(ticketId, status, tenantId);
+  }
+
+  /**
+   * Update status of an individual item inside a KOT/BOT ticket
+   */
+  updateTicketItemStatus(ticketId, itemId, status, tenantId = null) {
+    return productionRoutingEngine.updateTicketItemStatus(ticketId, itemId, status, tenantId);
+  }
+
+  /**
+   * Alias for updateTicketItemStatus for backwards-compatibility
+   */
+  updateItemStatusInTicket(ticketId, itemId, status, tenantId = null) {
+    return productionRoutingEngine.updateTicketItemStatus(ticketId, itemId, status, tenantId);
   }
 
   _broadcastChange(type, data) {

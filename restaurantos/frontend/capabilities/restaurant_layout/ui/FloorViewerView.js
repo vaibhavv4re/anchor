@@ -7,6 +7,7 @@
 import { tableProjectionService } from '../../../../../businessos/platform/table_state/tableProjectionService.js';
 import { tableStateMachine, PhysicalTableStates } from '../../../../../businessos/platform/table_state/tableStateMachine.js';
 import { sessionProjectionService } from '../../../../../businessos/platform/session/sessionProjectionService.js';
+import { sessionStateMachine, SessionMilestones } from '../../../../../businessos/platform/session/sessionStateMachine.js';
 import { platformEventBus } from '../../../../../businessos/platform/events/platformEvents.js';
 import { diningAreaModel } from '../../../../../businessos/platform/layout/diningAreaModel.js';
 
@@ -92,24 +93,19 @@ export class FloorViewerView {
           <p style="color:var(--text-muted); font-size:0.875rem; margin-top:2px;">Single unified real-time table state projection across all workspaces (PD-006 & PD-009)</p>
         </div>
         <div style="display:flex; gap:var(--space-sm); align-items:center; flex-wrap:wrap;">
-          <span class="badge" style="background:#10b98122; color:#10b981; border:1px solid #10b981;">🟢 Available</span>
-          <span class="badge" style="background:#8b5cf622; color:#8b5cf6; border:1px solid #8b5cf6;">🔵 Occupied</span>
-          <span class="badge" style="background:#f59e0b22; color:#f59e0b; border:1px solid #f59e0b;">🟡 Order In Progress</span>
-          <span class="badge" style="background:#d9770622; color:#d97706; border:1px solid #d97706;">🟠 Payment Pending</span>
-          <span class="badge" style="background:#8b5cf622; color:#8b5cf6; border:1px solid #8b5cf6;">🟣 Paid / Clearing</span>
-          <span class="badge" style="background:#6b728022; color:#6b7280; border:1px solid #6b7280;">⚪ Cleaning</span>
+          <span class="badge" style="background:#10b98122; color:#10b981; border:1px solid #10b981;">🟢 AVAILABLE</span>
+          <span class="badge" style="background:#3b82f622; color:#3b82f6; border:1px solid #3b82f6;">🔵 OCCUPIED</span>
+          <span class="badge" style="background:#f59e0b22; color:#f59e0b; border:1px solid #f59e0b;">🟠 ORDER IN PROGRESS</span>
+          <span class="badge" style="background:#ef444422; color:#ef4444; border:1px solid #ef4444;">🔴 PAYMENT PENDING</span>
+          <span class="badge" style="background:#8b5cf622; color:#8b5cf6; border:1px solid #8b5cf6;">🟣 PAID / CLEARING</span>
+          <span class="badge" style="background:#6b728022; color:#9ca3af; border:1px solid #6b7280;">⚪ CLEANING</span>
         </div>
       </div>
 
-      <div id="area-tabs-mount"></div>
+      <div id="area-tabs-mount" style="margin-bottom:16px;"></div>
 
-      <div class="grid-2col-responsive">
-        <!-- Visual Floor Grid Mount -->
-        <div id="table-grid-mount" class="grid grid-cols-3 gap-md"></div>
-
-        <!-- Sidebar Timeline Widget -->
-        <div id="timeline-widget-mount"></div>
-      </div>
+      <!-- Visual Floor Grid Mount (Full Width Responsive Grid) -->
+      <div id="table-grid-mount" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:16px; width:100%;"></div>
 
       <div id="inspector-modal-mount"></div>
     `;
@@ -124,11 +120,6 @@ export class FloorViewerView {
       }
     });
     tabsMount.appendChild(tabsComponent.render());
-
-    // Mount Sidebar Timeline
-    const timelineMount = this.container.querySelector('#timeline-widget-mount');
-    const timelineWidget = new TimelineWidget();
-    timelineMount.appendChild(timelineWidget.render());
 
     this.updateGridContent();
   }
@@ -216,6 +207,19 @@ export class FloorViewerView {
           } else {
             alert(`No active session found for Table ${projection.tableNumber}`);
           }
+        } else if (actionType === 'CLOSE_SESSION') {
+          const activeProj = sessionProjectionService.getActiveProjectionForTable(projection.tableNumber);
+          const sid = activeProj ? activeProj.sessionId : (projection.currentSessionId || null);
+          if (sid) {
+            sessionStateMachine.transitionMilestone(sid, SessionMilestones.CLOSED);
+          }
+          tableStateMachine.transitionTableState(projection.tableNumber, PhysicalTableStates.CLEANING);
+          platformEventBus.publish('table:state:changed', {
+            tableNumber: projection.tableNumber,
+            newState: PhysicalTableStates.CLEANING
+          });
+          alert(`✨ Session closed for Table ${projection.tableNumber}! Table moved to CLEANING.`);
+          this.updateGridContent();
         } else if (actionType === 'MARK_CLEAN' || actionType === 'RESTORE_SERVICE') {
           tableStateMachine.transitionTableState(projection.tableNumber, PhysicalTableStates.AVAILABLE);
           this.updateGridContent();

@@ -122,20 +122,20 @@ class SessionModel {
    * @param {string|null} tenantId 
    * @returns {Object|null}
    */
-  getActiveSessionForTable(tableNumber, tenantId = null) {
+  getActiveSessionForTable(target, tenantId = null) {
     const sessions = this.getAllSessions(tenantId);
-    if (tableNumber === undefined || tableNumber === null) return null;
-    const str = String(tableNumber).trim().toLowerCase();
-    const digitsOnly = str.replace(/\D/g, '');
-    const num = digitsOnly.length > 0 ? parseInt(digitsOnly, 10) : (typeof tableNumber === 'number' ? tableNumber : null);
+    if (target === undefined || target === null) return null;
+
+    const master = tableMasterModel.getTableMaster(target);
+    const targetId = master ? master.id : null;
+    const targetNum = master ? master.tableNumber : (typeof target === 'number' ? target : parseInt(String(target).replace(/\D/g, ''), 10));
+    const targetCode = master ? master.tableCode : String(target).trim().toLowerCase();
 
     return sessions.find(s => 
       s.status !== 'CLOSED' && (
-        (num !== null && (s.tableNumber === num || s.table_number === num)) ||
-        (s.tableCode && String(s.tableCode).toLowerCase() === str) ||
-        (s.table_code && String(s.table_code).toLowerCase() === str) ||
-        (s.tableId && String(s.tableId).toLowerCase() === str) ||
-        (s.tableNumber && String(s.tableNumber).toLowerCase() === str)
+        (targetId && (s.tableId === targetId || s.table_id === targetId)) ||
+        (targetNum && (s.tableNumber === targetNum || s.table_number === targetNum)) ||
+        (targetCode && String(s.tableCode || s.table_code || '').toLowerCase() === targetCode.toLowerCase())
       )
     ) || null;
   }

@@ -42,6 +42,7 @@ import { SuperAdminWorkspaceView } from './capabilities/setup_wizard/ui/SuperAdm
 import { InventoryWorkspaceView } from './capabilities/inventory/ui/InventoryWorkspaceView.js';
 import { KitchenDisplaySystemView } from './capabilities/kitchen/ui/KitchenDisplaySystemView.js';
 import { WaiterWorkspaceView } from './capabilities/guest_service/ui/WaiterWorkspaceView.js';
+import { CashierWorkspaceView } from './capabilities/billing/ui/CashierWorkspaceView.js';
 import { orderModel } from '../../businessos/platform/ordering/orderModel.js';
 import { productionRoutingEngine } from '../../businessos/platform/ordering/productionRoutingEngine.js';
 
@@ -100,7 +101,8 @@ export class ApplicationShell {
     if (this.activeSubView === 'auto') {
       if (session.workspace === 'kitchen') this.activeSubView = 'kitchen';
       else if (session.workspace === 'inventory') this.activeSubView = 'kitchen_inventory';
-      else if (session.workspace === 'bar' || session.workspace === 'cashier') this.activeSubView = 'menu_browser';
+      else if (session.workspace === 'cashier') this.activeSubView = 'cashier';
+      else if (session.workspace === 'bar') this.activeSubView = 'menu_browser';
       else if (session.workspace === 'admin' || session.workspace === 'manager' || session.workspace === 'superadmin') this.activeSubView = 'dashboard';
       else this.activeSubView = 'floor';
     }
@@ -134,6 +136,8 @@ export class ApplicationShell {
   async renderWorkspace(session) {
     if (!this.appEl) return;
 
+    const displayRoleName = session.roleName || session.role_name || session.role || (session.roleId ? session.roleId.replace('role-', '').replace(/-/g, ' ').toUpperCase() : session.workspace || 'Staff');
+
     this.appEl.innerHTML = `
       <div class="flex-col h-full" style="min-height:100vh;">
         <!-- Top Header Controls -->
@@ -144,17 +148,11 @@ export class ApplicationShell {
           </div>
 
           <div class="flex items-center gap-md" style="flex-wrap:wrap;">
-            <button class="btn-secondary" id="btn-run-m1-tests" style="padding:8px 12px; border-color:var(--status-success); color:var(--status-success);">🚩 Milestone 1</button>
-            <button class="btn-secondary" id="btn-run-tests" style="padding:8px 12px; border-color:var(--accent-primary); color:var(--accent-primary);">🧪 Group 1</button>
-            <button class="btn-secondary" id="btn-run-group2-tests" style="padding:8px 12px; border-color:var(--accent-secondary); color:var(--accent-secondary);">🧪 Group 2</button>
-            <button class="btn-secondary" id="btn-run-group3-tests" style="padding:8px 12px; border-color:var(--status-warning); color:var(--status-warning);">🧪 Group 3</button>
-            <button class="btn-secondary" id="btn-run-group4-tests" style="padding:8px 12px; border-color:var(--status-info); color:var(--status-info);">🧪 Group 4</button>
-
             <div class="employee-confirm-avatar" style="padding:4px 12px;">
               <img src="${session.avatarUrl || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(session.employeeName || 'Staff')}" class="employee-avatar-img" alt="${session.employeeName}" style="width:32px; height:32px; border-radius:50%;">
               <div style="font-size:0.875rem;">
-                <span style="font-weight:600;">${session.employeeName}</span>
-                <span style="color:var(--text-muted); margin-left:4px;">(${session.roleName})</span>
+                <span style="font-weight:600;">${session.employeeName || session.name || 'Staff'}</span>
+                <span style="color:var(--text-muted); margin-left:4px;">(${displayRoleName})</span>
               </div>
             </div>
 
@@ -209,12 +207,42 @@ export class ApplicationShell {
   }
 
   renderSidebarNav(session) {
+    const isCashier = session.workspace === 'cashier' || session.roleId === 'role-cashier';
     const isManagerOrAdmin = this.rbacEngine.hasPermission(session.roleId, 'user.create') || this.rbacEngine.hasPermission(session.roleId, '*');
+
+    if (isCashier) {
+      return `
+        <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase; margin-bottom:6px; padding-left:8px;">💰 CASHIER & BILLING</div>
+        <button class="nav-item ${this.activeSubView === 'cashier' || this.activeSubView === 'inbox' ? 'active' : ''}" data-view="cashier">📥 Bill Inbox</button>
+        <button class="nav-item ${this.activeSubView === 'invoices' ? 'active' : ''}" data-view="invoices">🧾 Invoice Register</button>
+        <button class="nav-item ${this.activeSubView === 'payments' ? 'active' : ''}" data-view="payments">💳 Payments Ledger</button>
+        <button class="nav-item ${this.activeSubView === 'reports' ? 'active' : ''}" data-view="reports">📊 Cashier Reports</button>
+        <button class="nav-item ${this.activeSubView === 'shift' ? 'active' : ''}" data-view="shift">🕐 My Shift</button>
+
+        <style>
+          .nav-item {
+            width: 100%;
+            text-align: left;
+            padding: var(--space-sm) var(--space-md);
+            border-radius: var(--radius-sm);
+            font-size: var(--font-size-sm);
+            color: var(--text-secondary);
+            transition: all var(--transition-fast);
+          }
+          .nav-item:hover, .nav-item.active {
+            background-color: var(--bg-surface-2);
+            color: var(--accent-primary);
+            font-weight: 600;
+          }
+        </style>
+      `;
+    }
 
     return `
       <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; margin-bottom:4px; padding-left:8px;">Workspace Modules</div>
       
       <button class="nav-item ${this.activeSubView === 'dashboard' ? 'active' : ''}" data-view="dashboard">📌 Main Overview</button>
+      <button class="nav-item ${this.activeSubView === 'cashier' ? 'active' : ''}" data-view="cashier">💰 Bill Inbox & Cashier</button>
       <button class="nav-item ${this.activeSubView === 'kitchen' ? 'active' : ''}" data-view="kitchen">👨‍🍳 Kitchen Tower</button>
       <button class="nav-item ${this.activeSubView === 'kds' ? 'active' : ''}" data-view="kds">🔥 Live KDS Display</button>
       <button class="nav-item ${this.activeSubView === 'floor' ? 'active' : ''}" data-view="floor">🗺️ Floor & Layout</button>
@@ -257,45 +285,6 @@ export class ApplicationShell {
 
   bindHeaderEvents() {
     if (!this.appEl) return;
-    const m1TestBtn = this.appEl.querySelector('#btn-run-m1-tests');
-    if (m1TestBtn) {
-      m1TestBtn.addEventListener('click', async () => {
-        const { total, passed } = await window.runMilestone1Tests();
-        alert(`🚩 Milestone 1 Playbook Test Results: ${passed}/${total} Scenarios Passed!`);
-      });
-    }
-
-    const testBtn = this.appEl.querySelector('#btn-run-tests');
-    if (testBtn) {
-      testBtn.addEventListener('click', async () => {
-        const { total, passed } = await window.runTestSuite();
-        alert(`🧪 Group 1 Test Suite Results: ${passed}/${total} Assertions Passed!`);
-      });
-    }
-
-    const group2TestBtn = this.appEl.querySelector('#btn-run-group2-tests');
-    if (group2TestBtn) {
-      group2TestBtn.addEventListener('click', async () => {
-        const { total, passed } = await window.runGroup2Tests();
-        alert(`🧪 Group 2 Operational Test Results: ${passed}/${total} Scenarios Passed!`);
-      });
-    }
-
-    const group3TestBtn = this.appEl.querySelector('#btn-run-group3-tests');
-    if (group3TestBtn) {
-      group3TestBtn.addEventListener('click', async () => {
-        const { total, passed } = await window.runGroup3Tests();
-        alert(`🧪 Group 3 Vertical Slice Test Results: ${passed}/${total} Scenarios Passed!`);
-      });
-    }
-
-    const group4TestBtn = this.appEl.querySelector('#btn-run-group4-tests');
-    if (group4TestBtn) {
-      group4TestBtn.addEventListener('click', async () => {
-        const { total, passed } = await window.runGroup4Tests();
-        alert(`🧪 Group 4 Order & Production Routing Test Results: ${passed}/${total} Scenarios Passed!`);
-      });
-    }
 
     const lockBtn = this.appEl.querySelector('#btn-lock-session');
     if (lockBtn) {
@@ -338,7 +327,10 @@ export class ApplicationShell {
       platformEventBus: this.platformEventBus
     };
 
-    if (this.activeSubView === 'kitchen') {
+    if (this.activeSubView === 'cashier' || this.activeSubView === 'inbox' || this.activeSubView === 'invoices' || this.activeSubView === 'payments' || this.activeSubView === 'reports' || this.activeSubView === 'shift') {
+      const view = new CashierWorkspaceView(opts);
+      mount.appendChild(view.render(mount, session, this.activeSubView));
+    } else if (this.activeSubView === 'kitchen') {
       this.renderKitchenTower(mount, session, opts);
     } else if (this.activeSubView === 'kds') {
       this.renderKDSWorkspace(mount, session);

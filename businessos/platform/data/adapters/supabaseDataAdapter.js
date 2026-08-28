@@ -11,7 +11,8 @@ export class SupabaseDataAdapter {
     const virtualCollections = [
       'roles', 'sessions', 'table_sessions', 'table_runtime_states',
       'stock_transactions', 'stock_requisitions', 'menu_catalog',
-      'production_batches', 'devices', 'system_config'
+      'production_batches', 'devices', 'system_config',
+      'payments', 'bill_revisions'
     ];
     if (!this.client || virtualCollections.includes(collection)) return [];
     
@@ -121,21 +122,36 @@ export class SupabaseDataAdapter {
   }
 
   async create(collection, record) {
-    if (!this.client || collection === 'roles' || collection === 'sessions') return record;
-    const res = await this.client.createRecord(collection, record);
-    return res.success ? (res.data || record) : record;
+    if (!this.client || collection === 'roles' || collection === 'sessions' || collection === 'payments' || collection === 'bill_revisions') return record;
+    try {
+      const res = await this.client.createRecord(collection, record);
+      return res.success ? (res.data || record) : record;
+    } catch (e) {
+      console.warn(`[SupabaseDataAdapter] Cloud create Record for ${collection} caught:`, e.message);
+      return record;
+    }
   }
 
   async update(collection, id, patch) {
-    if (!this.client || collection === 'roles' || collection === 'sessions') return patch;
-    const res = await this.client.updateRecord(collection, id, patch);
-    return res.success ? (res.data || patch) : patch;
+    if (!this.client || collection === 'roles' || collection === 'sessions' || collection === 'payments' || collection === 'bill_revisions') return patch;
+    try {
+      const res = await this.client.updateRecord(collection, id, patch);
+      return res.success ? (res.data || patch) : patch;
+    } catch (e) {
+      console.warn(`[SupabaseDataAdapter] Cloud update Record for ${collection} caught:`, e.message);
+      return patch;
+    }
   }
 
   async delete(collection, id) {
-    if (!this.client || collection === 'roles' || collection === 'sessions') return true;
-    const filter = collection === 'tenants' ? `tenant_id=eq.${id}` : `id=eq.${id}`;
-    const res = await this.client.deleteRecords(collection, filter);
-    return res.success;
+    if (!this.client || collection === 'roles' || collection === 'sessions' || collection === 'payments' || collection === 'bill_revisions') return true;
+    try {
+      const filter = collection === 'tenants' ? `tenant_id=eq.${id}` : `id=eq.${id}`;
+      const res = await this.client.deleteRecords(collection, filter);
+      return res.success;
+    } catch (e) {
+      console.warn(`[SupabaseDataAdapter] Cloud delete Record for ${collection} caught:`, e.message);
+      return true;
+    }
   }
 }

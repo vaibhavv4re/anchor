@@ -23,16 +23,16 @@ export class TimelineWidget {
 
     const items = (Array.isArray(entries) && entries.length) ? entries.map(e => {
       const time = e.timestamp ? new Date(e.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const title = e.title || e.event_type || e.action || 'System Audit Event';
-      const actor = e.actorName || e.user || e.actor || 'System Engine';
-      const type = e.type || 'AUDIT';
+      const title = e.summary || e.title || e.eventType || e.event_type || e.action || 'System Audit Event';
+      const actorName = (typeof e.actor === 'object' && e.actor && e.actor.name) ? e.actor.name : (typeof e.actor === 'string' ? e.actor : (e.actorName || e.user || 'System Engine'));
+      const type = e.eventType || e.type || 'AUDIT';
 
       return `
         <div style="display:flex; gap:var(--space-md); padding:var(--space-xs) 0; border-bottom:1px solid var(--border-subtle);">
           <div style="font-size:0.75rem; color:var(--accent-primary); font-weight:600; width:55px;">${time}</div>
           <div style="flex:1; font-size:0.875rem;">
-            <div style="font-weight:600;">${title}</div>
-            <div style="font-size:0.75rem; color:var(--text-muted);">${actor} • ${type}</div>
+            <div style="font-weight:600; color:var(--text-primary);">${title}</div>
+            <div style="font-size:0.75rem; color:var(--text-muted);">${actorName} • ${type}</div>
           </div>
         </div>
       `;

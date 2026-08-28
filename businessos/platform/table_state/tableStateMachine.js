@@ -8,6 +8,7 @@ import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
 import { sessionModel } from '../session/sessionModel.js';
 import { orderModel } from '../ordering/orderModel.js';
+import { tableMasterModel } from '../layout/tableMasterModel.js';
 
 export const PhysicalTableStates = Object.freeze({
   AVAILABLE: 'AVAILABLE',
@@ -49,13 +50,15 @@ class TableStateMachine {
    * @param {string|null} tenantId 
    * @returns {Object} Runtime state
    */
-  getTableRuntimeState(tableNumber, tenantId = null) {
-    if (tableNumber === undefined || tableNumber === null) return { currentState: PhysicalTableStates.AVAILABLE };
-    const str = String(tableNumber).trim().toLowerCase();
-    const digitsOnly = str.replace(/\D/g, '');
-    const num = digitsOnly.length > 0 ? parseInt(digitsOnly, 10) : (typeof tableNumber === 'number' ? tableNumber : null);
+  getTableRuntimeState(target, tenantId = null) {
+    if (target === undefined || target === null) return { currentState: PhysicalTableStates.AVAILABLE };
 
-    const activeSession = sessionModel.getActiveSessionForTable(tableNumber, tenantId);
+    const master = tableMasterModel.getTableMaster(target);
+    const targetId = master ? master.id : null;
+    const tableNum = master ? master.tableNumber : (typeof target === 'number' ? target : parseInt(String(target).replace(/\D/g, ''), 10));
+    const str = master ? master.tableCode.toLowerCase() : String(target).trim().toLowerCase();
+
+    const activeSession = sessionModel.getActiveSessionForTable(master ? master.id : target, tenantId);
 
     if (activeSession) {
       const orders = orderModel.getOrdersForSession(activeSession.id || activeSession.sessionId, tenantId);
@@ -73,7 +76,7 @@ class TableStateMachine {
       }
 
       return {
-        tableNumber: activeSession.tableNumber || num || tableNumber,
+        tableNumber: activeSession.tableNumber || tableNum || target,
         currentState: derivedState,
         currentSessionId: activeSession.id || activeSession.sessionId,
         assignedWaiterId: activeSession.assignedWaiterId || null,
@@ -86,14 +89,14 @@ class TableStateMachine {
     // No active session — check manual operational state overrides
     const states = offlineStore.getCollection('table_runtime_states') || [];
     const manualState = states.find(s => 
-      (num !== null && (s.tableNumber === num || s.table_number === num)) ||
-      (s.tableCode && String(s.tableCode).toLowerCase() === str) ||
-      (s.tableNumber && String(s.tableNumber).toLowerCase() === str)
+      (targetId && (s.tableId === targetId || s.table_id === targetId)) ||
+      (tableNum !== null && !isNaN(tableNum) && (s.tableNumber === tableNum || s.table_number === tableNum)) ||
+      (s.tableCode && String(s.tableCode).toLowerCase() === str)
     );
 
     if (manualState && (manualState.currentState === PhysicalTableStates.CLEANING || manualState.currentState === PhysicalTableStates.RESERVED || manualState.currentState === PhysicalTableStates.OUT_OF_SERVICE)) {
       return {
-        tableNumber: num || tableNumber,
+        tableNumber: tableNum || target,
         currentState: manualState.currentState,
         currentSessionId: null,
         assignedWaiterId: manualState.assignedWaiterId || null,
@@ -104,7 +107,7 @@ class TableStateMachine {
     }
 
     return {
-      tableNumber: num || tableNumber,
+      tableNumber: tableNum || target,
       currentState: PhysicalTableStates.AVAILABLE,
       currentSessionId: null,
       assignedWaiterId: null,
