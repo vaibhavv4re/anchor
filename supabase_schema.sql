@@ -308,6 +308,81 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+CREATE TABLE IF NOT EXISTS orders (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT,
+  order_number TEXT,
+  session_id TEXT,
+  table_number INT,
+  table_code TEXT,
+  order_status TEXT DEFAULT 'CONFIRMED',
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS table_sessions (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT,
+  table_number INT,
+  table_code TEXT,
+  status TEXT DEFAULT 'OCCUPIED',
+  bill_status TEXT DEFAULT 'UNBILLED',
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS bill_revisions (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT,
+  session_id TEXT,
+  bill_number TEXT,
+  revision_number INT DEFAULT 1,
+  grand_total NUMERIC DEFAULT 0,
+  revision_status TEXT DEFAULT 'GENERATED',
+  invoice_status TEXT DEFAULT 'NOT_ISSUED',
+  payment_status TEXT DEFAULT 'UNPAID',
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS invoices (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT,
+  session_id TEXT,
+  invoice_number TEXT,
+  bill_number TEXT,
+  grand_total NUMERIC DEFAULT 0,
+  status TEXT DEFAULT 'ISSUED',
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS payments (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT,
+  session_id TEXT,
+  bill_number TEXT,
+  invoice_number TEXT,
+  amount NUMERIC DEFAULT 0,
+  payment_method TEXT DEFAULT 'CASH',
+  status TEXT DEFAULT 'SETTLED',
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS session_audit_logs (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT,
+  session_id TEXT,
+  event_type TEXT,
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- 🔓 STEP 2: DISABLE ROW LEVEL SECURITY (RLS) & GRANT FULL ANON ACCESS
 ALTER TABLE tenants DISABLE ROW LEVEL SECURITY;
 ALTER TABLE identities DISABLE ROW LEVEL SECURITY;
@@ -332,6 +407,12 @@ ALTER TABLE stock_balances DISABLE ROW LEVEL SECURITY;
 ALTER TABLE inventory_requests DISABLE ROW LEVEL SECURITY;
 ALTER TABLE offline_journal DISABLE ROW LEVEL SECURITY;
 ALTER TABLE audit_logs DISABLE ROW LEVEL SECURITY;
+ALTER TABLE orders DISABLE ROW LEVEL SECURITY;
+ALTER TABLE table_sessions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE bill_revisions DISABLE ROW LEVEL SECURITY;
+ALTER TABLE invoices DISABLE ROW LEVEL SECURITY;
+ALTER TABLE payments DISABLE ROW LEVEL SECURITY;
+ALTER TABLE session_audit_logs DISABLE ROW LEVEL SECURITY;
 
 -- Add permissive policies safely
 DROP POLICY IF EXISTS "Anon Access Tenants" ON tenants;
