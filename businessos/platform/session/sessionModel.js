@@ -73,9 +73,11 @@ class SessionModel {
 
     offlineStore.appendItem('table_sessions', newSession);
 
-    // Sync to Supabase offline_journal for multi-device cross-replication
+    // Sync to Supabase cloud table & offline_journal for multi-device cross-replication
     const dg = this._getDataGateway();
     if (dg && typeof dg.create === 'function') {
+      dg.create('table_sessions', newSession).catch(e => console.warn('[sessionModel] Cloud table_sessions sync error:', e.message));
+
       const journalEntry = {
         job_id: 'job_' + sessionId,
         job_type: 'SESSION_OPENED',

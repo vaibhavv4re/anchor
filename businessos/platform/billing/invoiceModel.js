@@ -196,9 +196,11 @@ class InvoiceModel {
     // 2. Save Tax Invoice to local offline store
     offlineStore.appendItem('invoices', invoiceRecord);
 
-    // 3. Sync to Supabase offline_journal / DataGateway
+    // 3. Sync to Supabase cloud table & offline_journal / DataGateway
     const dg = this._getDataGateway();
     if (dg && typeof dg.create === 'function') {
+      dg.create('invoices', invoiceRecord).catch(e => console.warn('[invoiceModel] Cloud invoices sync error:', e.message));
+
       const journalEntry = {
         job_id: 'job_' + invoiceRecord.id,
         job_type: 'TAX_INVOICE_ISSUED',

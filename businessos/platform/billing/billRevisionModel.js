@@ -148,9 +148,11 @@ class BillRevisionModel {
     // 2. Write to local offline store
     offlineStore.appendItem('bill_revisions', revisionRecord);
 
-    // 3. Sync to Supabase offline_journal / DataGateway
+    // 3. Sync to Supabase cloud table & offline_journal / DataGateway
     const dg = this._getDataGateway();
     if (dg && typeof dg.create === 'function') {
+      dg.create('bill_revisions', revisionRecord).catch(e => console.warn('[billRevisionModel] Cloud bill_revisions sync error:', e.message));
+
       const journalEntry = {
         job_id: 'job_' + revisionId,
         job_type: 'BILL_REVISION_CREATED',
