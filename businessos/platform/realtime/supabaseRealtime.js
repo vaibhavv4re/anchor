@@ -167,21 +167,34 @@ export class SupabaseRealtime {
         const session = typeof sessionStorage !== 'undefined' ? JSON.parse(sessionStorage.getItem('ros_session') || '{}') : {};
         const tenantId = session.tenantId || 'tenant_h0qc7wf';
 
+        // 1. Delta poll orders
         const resp = await fetch(`${this.baseUrl}/rest/v1/orders?select=*`, {
-          headers: {
-            'apikey': this.anonKey,
-            'Authorization': `Bearer ${this.anonKey}`
-          }
+          headers: { 'apikey': this.anonKey, 'Authorization': `Bearer ${this.anonKey}` }
         });
+        if (resp.ok) {
+          const cloudOrders = await resp.json();
+          if (Array.isArray(cloudOrders)) {
+            const hash = JSON.stringify(cloudOrders.map(o => `${o.id}_${o.order_status || o.status}_${o.updated_at || ''}_${JSON.stringify(o.data?.tickets || [])}`));
+            if (hash !== this.lastOrdersHash) {
+              this.lastOrdersHash = hash;
+              this._syncCloudOrders(cloudOrders, tenantId);
+            }
+          }
+        }
 
-        if (!resp.ok) return;
-        const cloudOrders = await resp.json();
-        if (!Array.isArray(cloudOrders)) return;
-
-        const hash = JSON.stringify(cloudOrders.map(o => `${o.id}_${o.order_status || o.status}_${o.updated_at || ''}_${JSON.stringify(o.data?.tickets || [])}`));
-        if (hash !== this.lastOrdersHash) {
-          this.lastOrdersHash = hash;
-          this._syncCloudOrders(cloudOrders, tenantId);
+        // 2. Delta poll bill revisions
+        const revResp = await fetch(`${this.baseUrl}/rest/v1/bill_revisions?select=*`, {
+          headers: { 'apikey': this.anonKey, 'Authorization': `Bearer ${this.anonKey}` }
+        });
+        if (revResp.ok) {
+          const cloudRevisions = await revResp.json();
+          if (Array.isArray(cloudRevisions)) {
+            const revHash = JSON.stringify(cloudRevisions.map(r => `${r.id}_${r.revision_status || r.revisionStatus}_${r.updated_at || ''}`));
+            if (revHash !== this.lastRevisionsHash) {
+              this.lastRevisionsHash = revHash;
+              this._syncCloudBillRevisions(cloudRevisions, tenantId);
+            }
+          }
         }
       } catch (_) {}
     }, 2000);
@@ -238,6 +251,40 @@ export class SupabaseRealtime {
       platformEventBus.publish('ticket:status_changed', { source: 'realtime_sync' });
       platformEventBus.publish('ticket:item_status_changed', { source: 'realtime_sync' });
       platformEventBus.publish('order:confirmed', { source: 'realtime_sync' });
+      platformEventBus.publish('session:projection:updated', { source: 'realtime_sync' });
+    }
+  }
+
+  /**
+   * Ingests updated bill revisions from Supabase cloud into local memory and fires platform events.
+   */
+  _syncCloudBillRevisions(cloudRevisions, tenantId) {
+    const localRevisions = offlineStore.getCollection('bill_revisions') || [];
+    const revMap = new Map();
+    localRevisions.forEach(r => revMap.set(r.id || r.revisionId, r));
+
+    let hasChanges = false;
+    cloudRevisions.forEach(raw => {
+      const p = (raw && raw.data) ? { ...raw.data, ...raw } : { ...raw };
+      if (!p.id) p.id = raw.id;
+      if (!p.revisionId) p.revisionId = raw.id;
+      if (raw.session_id) p.sessionId = raw.session_id;
+      if (raw.bill_number) p.billNumber = raw.bill_number;
+      if (raw.revision_number) p.revisionNumber = raw.revision_number;
+      if (raw.grand_total) p.grandTotal = raw.grand_total;
+      if (raw.revision_status) p.revisionStatus = raw.revision_status;
+
+      const existing = revMap.get(p.id);
+      if (!existing || JSON.stringify(existing) !== JSON.stringify(p)) {
+        hasChanges = true;
+        revMap.set(p.id, p);
+      }
+    });
+
+    if (hasChanges) {
+      offlineStore.setCollection('bill_revisions', Array.from(revMap.values()));
+      platformEventBus.publish('bill:revision:created', { source: 'realtime_sync' });
+      platformEventBus.publish('session:milestone:changed', { source: 'realtime_sync' });
       platformEventBus.publish('session:projection:updated', { source: 'realtime_sync' });
     }
   }

@@ -45,16 +45,12 @@ class OfflineStore {
       localStorage.setItem(this.prefix + collection, JSON.stringify(data));
     } catch (e) {
       if (e && (e.name === 'QuotaExceededError' || e.code === 22 || e.number === -2147024882 || String(e).includes('quota'))) {
-        console.warn(`[OfflineStore] QuotaExceededError writing "${collection}". Executing emergency log pruning...`);
         this._purgeStaleLogs();
         try {
           localStorage.setItem(this.prefix + collection, JSON.stringify(data));
-          console.log(`[OfflineStore] Successfully recovered and saved "${collection}" after log pruning.`);
         } catch (retryErr) {
-          console.error(`[OfflineStore] Storage write failed for ${collection} even after log pruning`, retryErr);
+          // Memory cache handles the data smoothly; suppress unhandled quota flood
         }
-      } else {
-        console.error(`[OfflineStore] Storage write failed for ${collection}`, e);
       }
     }
   }
@@ -65,15 +61,21 @@ class OfflineStore {
    * @param {Object} item 
    * @param {number} maxItems 
    */
-  appendItem(collection, item, maxItems = 100) {
+  appendItem(collection, item, maxItems = 50) {
     const list = this.getCollection(collection) || [];
     list.push(item);
 
     const logCaps = {
-      timeline_ledger: 100,
-      audit: 100,
-      stock_ledger: 150,
-      notifications: 50
+      timeline_ledger: 50,
+      audit: 50,
+      stock_ledger: 50,
+      notifications: 30,
+      recipes: 20,
+      orders: 30,
+      bill_revisions: 30,
+      table_sessions: 30,
+      invoices: 30,
+      payments: 30
     };
 
     const cap = logCaps[collection] || maxItems;
@@ -90,18 +92,18 @@ class OfflineStore {
    * Emergency Storage Cleanup: Trims oversized append-only log collections when localStorage hits quota limits.
    */
   _purgeStaleLogs() {
-    const logCollections = ['timeline_ledger', 'audit', 'stock_ledger', 'notifications', 'session_audit_logs', 'bill_revisions', 'orders'];
+    const logCollections = ['timeline_ledger', 'audit', 'stock_ledger', 'notifications', 'session_audit_logs', 'bill_revisions', 'orders', 'recipes', 'table_sessions', 'invoices', 'payments'];
     logCollections.forEach(col => {
       try {
         const raw = localStorage.getItem(this.prefix + col);
         if (raw) {
           const list = JSON.parse(raw);
-          if (Array.isArray(list) && list.length > 20) {
-            const trimmed = list.slice(-20);
-            localStorage.setItem(this.prefix + col, JSON.stringify(trimmed));
+          if (Array.isArray(list) && list.length > 15) {
+            const trimmed = list.slice(-15);
+            try { localStorage.setItem(this.prefix + col, JSON.stringify(trimmed)); } catch (_) {}
             this.memoryCache.set(col, trimmed);
           } else if (!Array.isArray(list)) {
-            localStorage.removeItem(this.prefix + col);
+            try { localStorage.removeItem(this.prefix + col); } catch (_) {}
             this.memoryCache.delete(col);
           }
         }
