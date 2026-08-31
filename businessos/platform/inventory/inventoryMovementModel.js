@@ -13,62 +13,275 @@ class InventoryMovementModel {
     this._initSeedMovements();
   }
 
+  _getCanonicalSeedMovements() {
+    return [
+      // KITCHEN RAW MATERIALS MOVEMENTS
+      {
+        movementId: 'MOV-2026-000101',
+        inventoryItemId: 'invitem_chicken',
+        movementType: 'OPENING_BALANCE',
+        quantity: 50.0,
+        unit: 'KG',
+        normalizedQuantity: 50.0,
+        unitCost: 400.00,
+        totalCost: 20000.00,
+        sourceType: 'OPENING',
+        sourceId: 'OPENING-2026-01',
+        operationId: 'inv-op-opening-chk',
+        performedBy: 'Sachin (Owner)',
+        notes: 'Initial Opening Stock Audit',
+        tenantId: 'tenant_h0qc7wf',
+        createdAt: '2026-08-01T08:00:00.000Z'
+      },
+      {
+        movementId: 'MOV-2026-000102',
+        inventoryItemId: 'invitem_chicken',
+        movementType: 'PURCHASE_RECEIPT',
+        quantity: 30.0,
+        unit: 'KG',
+        normalizedQuantity: 30.0,
+        unitCost: 450.00,
+        totalCost: 13500.00,
+        sourceType: 'GRN',
+        sourceId: 'GRN-2026-0042',
+        operationId: 'inv-op-grn-42-chk',
+        performedBy: 'Jitu (Manager)',
+        notes: 'Fresh Chicken Delivery GRN-0042',
+        tenantId: 'tenant_h0qc7wf',
+        createdAt: '2026-08-10T10:30:00.000Z'
+      },
+      {
+        movementId: 'MOV-2026-000103',
+        inventoryItemId: 'invitem_paneer',
+        movementType: 'OPENING_BALANCE',
+        quantity: 25.0,
+        unit: 'KG',
+        normalizedQuantity: 25.0,
+        unitCost: 350.00,
+        totalCost: 8750.00,
+        sourceType: 'OPENING',
+        sourceId: 'OPENING-2026-01',
+        operationId: 'inv-op-opening-pnr',
+        performedBy: 'Sachin (Owner)',
+        notes: 'Initial Opening Stock Audit',
+        tenantId: 'tenant_h0qc7wf',
+        createdAt: '2026-08-01T08:00:00.000Z'
+      },
+      {
+        movementId: 'MOV-2026-000104',
+        inventoryItemId: 'invitem_butter',
+        movementType: 'OPENING_BALANCE',
+        quantity: 15.0,
+        unit: 'KG',
+        normalizedQuantity: 15.0,
+        unitCost: 520.00,
+        totalCost: 7800.00,
+        sourceType: 'OPENING',
+        sourceId: 'OPENING-2026-01',
+        operationId: 'inv-op-opening-btr',
+        performedBy: 'Sachin (Owner)',
+        notes: 'Initial Opening Stock Audit',
+        tenantId: 'tenant_h0qc7wf',
+        createdAt: '2026-08-01T08:00:00.000Z'
+      },
+      {
+        movementId: 'MOV-2026-000105',
+        inventoryItemId: 'invitem_oil',
+        movementType: 'OPENING_BALANCE',
+        quantity: 60.0,
+        unit: 'L',
+        normalizedQuantity: 60.0,
+        unitCost: 140.00,
+        totalCost: 8400.00,
+        sourceType: 'OPENING',
+        sourceId: 'OPENING-2026-01',
+        operationId: 'inv-op-opening-oil',
+        performedBy: 'Sachin (Owner)',
+        notes: 'Initial Opening Stock Audit',
+        tenantId: 'tenant_h0qc7wf',
+        createdAt: '2026-08-01T08:00:00.000Z'
+      },
+      {
+        movementId: 'MOV-2026-000106',
+        inventoryItemId: 'invitem_cream',
+        movementType: 'OPENING_BALANCE',
+        quantity: 12.0,
+        unit: 'L',
+        normalizedQuantity: 12.0,
+        unitCost: 210.00,
+        totalCost: 2520.00,
+        sourceType: 'OPENING',
+        sourceId: 'OPENING-2026-01',
+        operationId: 'inv-op-opening-crm',
+        performedBy: 'Sachin (Owner)',
+        notes: 'Initial Opening Stock Audit',
+        tenantId: 'tenant_h0qc7wf',
+        createdAt: '2026-08-01T08:00:00.000Z'
+      },
+      {
+        movementId: 'MOV-2026-000107',
+        inventoryItemId: 'invitem_rice',
+        movementType: 'OPENING_BALANCE',
+        quantity: 100.0,
+        unit: 'KG',
+        normalizedQuantity: 100.0,
+        unitCost: 110.00,
+        totalCost: 11000.00,
+        sourceType: 'OPENING',
+        sourceId: 'OPENING-2026-01',
+        operationId: 'inv-op-opening-rce',
+        performedBy: 'Sachin (Owner)',
+        notes: 'Aged Basmati Rice Audit',
+        tenantId: 'tenant_h0qc7wf',
+        createdAt: '2026-08-01T08:00:00.000Z'
+      },
+
+      // BAR SPIRITS & BEVERAGES MOVEMENTS
+      {
+        movementId: 'MOV-2026-000201',
+        inventoryItemId: 'invitem_tequila_donjulio',
+        movementType: 'OPENING_BALANCE',
+        quantity: 4500.0,
+        unit: 'ML',
+        normalizedQuantity: 4500.0,
+        unitCost: 3.80,
+        totalCost: 17100.00,
+        sourceType: 'OPENING',
+        sourceId: 'OPENING-BAR-2026-01',
+        operationId: 'inv-op-opening-teq',
+        performedBy: 'Sibu (Bartender)',
+        notes: '6x 750ml Bottles Don Julio Tequila',
+        tenantId: 'tenant_h0qc7wf',
+        createdAt: '2026-08-01T08:00:00.000Z'
+      },
+      {
+        movementId: 'MOV-2026-000202',
+        inventoryItemId: 'invitem_whisky_glenfiddich',
+        movementType: 'OPENING_BALANCE',
+        quantity: 3750.0,
+        unit: 'ML',
+        normalizedQuantity: 3750.0,
+        unitCost: 4.50,
+        totalCost: 16875.00,
+        sourceType: 'OPENING',
+        sourceId: 'OPENING-BAR-2026-01',
+        operationId: 'inv-op-opening-glen',
+        performedBy: 'Sibu (Bartender)',
+        notes: '5x 750ml Bottles Glenfiddich Single Malt',
+        tenantId: 'tenant_h0qc7wf',
+        createdAt: '2026-08-01T08:00:00.000Z'
+      },
+      {
+        movementId: 'MOV-2026-000203',
+        inventoryItemId: 'invitem_whisky_jwblack',
+        movementType: 'OPENING_BALANCE',
+        quantity: 6000.0,
+        unit: 'ML',
+        normalizedQuantity: 6000.0,
+        unitCost: 2.80,
+        totalCost: 16800.00,
+        sourceType: 'OPENING',
+        sourceId: 'OPENING-BAR-2026-01',
+        operationId: 'inv-op-opening-jwb',
+        performedBy: 'Sibu (Bartender)',
+        notes: '8x 750ml Bottles JW Black Label',
+        tenantId: 'tenant_h0qc7wf',
+        createdAt: '2026-08-01T08:00:00.000Z'
+      },
+      {
+        movementId: 'MOV-2026-000204',
+        inventoryItemId: 'invitem_gin_bombay',
+        movementType: 'OPENING_BALANCE',
+        quantity: 3000.0,
+        unit: 'ML',
+        normalizedQuantity: 3000.0,
+        unitCost: 2.20,
+        totalCost: 6600.00,
+        sourceType: 'OPENING',
+        sourceId: 'OPENING-BAR-2026-01',
+        operationId: 'inv-op-opening-bmb',
+        performedBy: 'Sibu (Bartender)',
+        notes: '4x 750ml Bottles Bombay Sapphire Gin',
+        tenantId: 'tenant_h0qc7wf',
+        createdAt: '2026-08-01T08:00:00.000Z'
+      },
+      {
+        movementId: 'MOV-2026-000205',
+        inventoryItemId: 'invitem_vodka_absolut',
+        movementType: 'OPENING_BALANCE',
+        quantity: 4500.0,
+        unit: 'ML',
+        normalizedQuantity: 4500.0,
+        unitCost: 1.90,
+        totalCost: 8550.00,
+        sourceType: 'OPENING',
+        sourceId: 'OPENING-BAR-2026-01',
+        operationId: 'inv-op-opening-abs',
+        performedBy: 'Sibu (Bartender)',
+        notes: '6x 750ml Bottles Absolut Vodka',
+        tenantId: 'tenant_h0qc7wf',
+        createdAt: '2026-08-01T08:00:00.000Z'
+      },
+      {
+        movementId: 'MOV-2026-000206',
+        inventoryItemId: 'invitem_beer_kf',
+        movementType: 'OPENING_BALANCE',
+        quantity: 48.0,
+        unit: 'BOTTLE',
+        normalizedQuantity: 48.0,
+        unitCost: 160.00,
+        totalCost: 7680.00,
+        sourceType: 'OPENING',
+        sourceId: 'OPENING-BAR-2026-01',
+        operationId: 'inv-op-opening-kf',
+        performedBy: 'Sibu (Bartender)',
+        notes: '2 Cases Kingfisher Premium',
+        tenantId: 'tenant_h0qc7wf',
+        createdAt: '2026-08-01T08:00:00.000Z'
+      },
+      {
+        movementId: 'MOV-2026-000207',
+        inventoryItemId: 'invitem_lime_juice',
+        movementType: 'OPENING_BALANCE',
+        quantity: 15000.0,
+        unit: 'ML',
+        normalizedQuantity: 15000.0,
+        unitCost: 0.25,
+        totalCost: 3750.00,
+        sourceType: 'OPENING',
+        sourceId: 'OPENING-BAR-2026-01',
+        operationId: 'inv-op-opening-lme',
+        performedBy: 'Sibu (Bartender)',
+        notes: 'Fresh Lime Juice Batch 15L',
+        tenantId: 'tenant_h0qc7wf',
+        createdAt: '2026-08-01T08:00:00.000Z'
+      },
+      {
+        movementId: 'MOV-2026-000208',
+        inventoryItemId: 'invitem_sugar_syrup',
+        movementType: 'OPENING_BALANCE',
+        quantity: 25000.0,
+        unit: 'ML',
+        normalizedQuantity: 25000.0,
+        unitCost: 0.10,
+        totalCost: 2500.00,
+        sourceType: 'OPENING',
+        sourceId: 'OPENING-BAR-2026-01',
+        operationId: 'inv-op-opening-syp',
+        performedBy: 'Sibu (Bartender)',
+        notes: 'Sugar Syrup Batch 25L',
+        tenantId: 'tenant_h0qc7wf',
+        createdAt: '2026-08-01T08:00:00.000Z'
+      }
+    ];
+  }
+
   _initSeedMovements() {
-    if (!offlineStore.getCollection('inventory_movements')) {
-      const initialMovements = [
-        {
-          movementId: 'MOV-2026-000101',
-          inventoryItemId: 'invitem_chicken',
-          movementType: 'OPENING_BALANCE',
-          quantity: 50.0,
-          unit: 'KG',
-          normalizedQuantity: 50.0,
-          unitCost: 400.00,
-          totalCost: 20000.00,
-          sourceType: 'OPENING',
-          sourceId: 'OPENING-2026-01',
-          operationId: 'inv-op-opening-chk',
-          performedBy: 'Sachin (Owner)',
-          notes: 'Initial Opening Stock Audit',
-          tenantId: 'tenant_h0qc7wf',
-          createdAt: '2026-08-01T08:00:00.000Z'
-        },
-        {
-          movementId: 'MOV-2026-000102',
-          inventoryItemId: 'invitem_chicken',
-          movementType: 'PURCHASE_RECEIPT',
-          quantity: 30.0,
-          unit: 'KG',
-          normalizedQuantity: 30.0,
-          unitCost: 450.00,
-          totalCost: 13500.00,
-          sourceType: 'GRN',
-          sourceId: 'GRN-2026-0042',
-          operationId: 'inv-op-grn-42-chk',
-          performedBy: 'Jitu (Manager)',
-          notes: 'Fresh Chicken Delivery GRN-0042',
-          tenantId: 'tenant_h0qc7wf',
-          createdAt: '2026-08-10T10:30:00.000Z'
-        },
-        {
-          movementId: 'MOV-2026-000103',
-          inventoryItemId: 'invitem_paneer',
-          movementType: 'OPENING_BALANCE',
-          quantity: 25.0,
-          unit: 'KG',
-          normalizedQuantity: 25.0,
-          unitCost: 350.00,
-          totalCost: 8750.00,
-          sourceType: 'OPENING',
-          sourceId: 'OPENING-2026-01',
-          operationId: 'inv-op-opening-pnr',
-          performedBy: 'Sachin (Owner)',
-          notes: 'Initial Opening Stock Audit',
-          tenantId: 'tenant_h0qc7wf',
-          createdAt: '2026-08-01T08:00:00.000Z'
-        }
-      ];
-      offlineStore.setCollection('inventory_movements', initialMovements);
+    const canonical = this._getCanonicalSeedMovements();
+    const store = offlineStore.getCollection('inventory_movements');
+
+    if (!store || !Array.isArray(store) || store.length < canonical.length) {
+      offlineStore.setCollection('inventory_movements', canonical);
     }
   }
 
@@ -90,128 +303,81 @@ class InventoryMovementModel {
     return 'tenant_h0qc7wf';
   }
 
-  /**
-   * Post an immutable Inventory Movement record with strict Idempotency.
-   * Signed normalizedQuantity:
-   *   (+) OPENING_BALANCE, PURCHASE_RECEIPT, TRANSFER_IN
-   *   (-) THEORETICAL_CONSUMPTION, ACTUAL_CONSUMPTION, WASTAGE, TRANSFER_OUT, RETURN_TO_SUPPLIER
-   */
-  recordMovement({
-    inventoryItemId,
-    movementType,
-    quantity,
-    unit = null,
-    unitCost = null,
-    sourceType = 'SYSTEM',
-    sourceId = '',
-    operationId = null,
-    performedBy = 'System',
-    notes = '',
-    tenantId = null
-  }) {
+  getMovementsForItem(inventoryItemId, tenantId = null) {
     const targetTenantId = this._getTenantId(tenantId);
-    const store = offlineStore.getCollection('inventory_movements') || [];
-
-    const item = inventoryItemModel.getItemById(inventoryItemId, targetTenantId);
-    const baseUnit = item ? item.baseUnit : 'KG';
-    const effectiveUnit = unit || baseUnit;
-
-    const opId = operationId || `op-${sourceType.toLowerCase()}-${sourceId || Math.random().toString(36).substring(2, 9)}`;
-
-    // 1. Idempotency Check: if operationId already processed, return existing movement
-    const existing = store.find(m => m.operationId === opId && m.inventoryItemId === inventoryItemId);
-    if (existing) {
-      return existing;
+    let store = offlineStore.getCollection('inventory_movements') || [];
+    if (!Array.isArray(store) || store.length === 0) {
+      store = this._getCanonicalSeedMovements();
+      offlineStore.setCollection('inventory_movements', store);
     }
-
-    const dg = this._getDataGateway();
-    if (dg && typeof dg.isOperationProcessed === 'function' && dg.isOperationProcessed(opId)) {
-      const match = store.find(m => m.operationId === opId && m.inventoryItemId === inventoryItemId);
-      if (match) return match;
-    }
-    if (dg && typeof dg.markOperationProcessed === 'function') {
-      dg.markOperationProcessed(opId);
-    }
-
-    // 2. Calculate signed normalized quantity
-    const rawQty = Math.abs(parseFloat(quantity) || 0);
-    const normQty = inventoryItemModel.normalizeQuantity(rawQty, effectiveUnit, baseUnit);
-
-    const isReduction = [
-      'THEORETICAL_CONSUMPTION',
-      'ACTUAL_CONSUMPTION',
-      'WASTAGE',
-      'TRANSFER_OUT',
-      'RETURN_TO_SUPPLIER'
-    ].includes(movementType.toUpperCase());
-
-    const signedNormQty = isReduction ? -normQty : normQty;
-
-    const effectiveUnitCost = unitCost !== null ? parseFloat(unitCost) : (item ? item.currentUnitCost : 0);
-    const totalCost = Math.round(normQty * effectiveUnitCost * 100) / 100;
-
-    const count = store.length;
-    const now = new Date();
-    const movementId = `MOV-${now.getFullYear()}-${String(100001 + count).padStart(6, '0')}`;
-
-    const record = {
-      movementId,
-      id: movementId,
-      inventoryItemId,
-      movementType: movementType.toUpperCase(),
-      quantity: rawQty,
-      unit: effectiveUnit,
-      baseUnit,
-      normalizedQuantity: signedNormQty,
-      unitCost: effectiveUnitCost,
-      totalCost,
-      sourceType: sourceType.toUpperCase(),
-      sourceId,
-      operationId: opId,
-      performedBy,
-      notes,
-      tenantId: targetTenantId,
-      tenant_id: targetTenantId,
-      createdAt: now.toISOString()
-    };
-
-    store.unshift(record);
-    offlineStore.setCollection('inventory_movements', store);
-
-    // Sync to Supabase Cloud via DataGateway
-    if (dg && typeof dg.create === 'function') {
-      dg.create('inventory_movements', record).catch(() => {});
-      const journalEntry = {
-        job_id: `job_${movementId}`,
-        job_type: 'INVENTORY_MOVEMENT',
-        tenant_id: targetTenantId,
-        entity_name: 'inventory_movements',
-        payload: record,
-        device_id: typeof navigator !== 'undefined' ? navigator.userAgent.substring(0, 30) : 'POS-TERMINAL',
-        version: 1,
-        actor: performedBy,
-        correlation_id: `CID-${Math.floor(10000 + Math.random() * 90000)}`,
-        sync_state: 'SYNCED',
-        created_at: now.toISOString()
-      };
-      dg.create('offline_journal', journalEntry).catch(() => {});
-    }
-
-    platformEventBus.publish('inventory:movement:recorded', record);
-    platformEventBus.publish('data:changed', { collection: 'inventory_movements' });
-
-    return record;
+    return store.filter(m => 
+      (m.inventoryItemId === inventoryItemId || m.inventory_item_id === inventoryItemId) &&
+      (!targetTenantId || m.tenantId === targetTenantId || m.tenant_id === targetTenantId)
+    );
   }
 
   getAllMovements(tenantId = null) {
     const targetTenantId = this._getTenantId(tenantId);
-    const store = offlineStore.getCollection('inventory_movements') || [];
+    let store = offlineStore.getCollection('inventory_movements') || [];
+    if (!Array.isArray(store) || store.length === 0) {
+      store = this._getCanonicalSeedMovements();
+      offlineStore.setCollection('inventory_movements', store);
+    }
     return store.filter(m => !targetTenantId || m.tenantId === targetTenantId || m.tenant_id === targetTenantId);
   }
 
-  getMovementsForItem(inventoryItemId, tenantId = null) {
-    const all = this.getAllMovements(tenantId);
-    return all.filter(m => m.inventoryItemId === inventoryItemId);
+  recordMovement(movementData, tenantId = null) {
+    const targetTenantId = this._getTenantId(tenantId);
+    const item = inventoryItemModel.getItemById(movementData.inventoryItemId, targetTenantId);
+    const baseUnit = item ? item.baseUnit : (movementData.unit || 'KG');
+
+    const normalizedQuantity = inventoryItemModel.normalizeQuantity(
+      movementData.quantity,
+      movementData.unit || baseUnit,
+      baseUnit
+    );
+
+    const isSubtraction = [
+      'ACTUAL_CONSUMPTION',
+      'THEORETICAL_CONSUMPTION',
+      'WASTAGE',
+      'STOCK_TRANSFER_OUT',
+      'EXPIRED_DISPOSAL'
+    ].includes(movementData.movementType);
+
+    const signedNormalizedQty = isSubtraction ? -Math.abs(normalizedQuantity) : Math.abs(normalizedQuantity);
+    const unitCost = parseFloat(movementData.unitCost) || 0;
+    const totalCost = Math.round(Math.abs(signedNormalizedQty) * unitCost * 100) / 100;
+
+    const opId = movementData.operationId || `inv-op-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`;
+
+    const movementRecord = {
+      movementId: `MOV-${new Date().getFullYear()}-${Math.floor(100000 + Math.random() * 900000)}`,
+      inventoryItemId: movementData.inventoryItemId,
+      movementType: movementData.movementType,
+      quantity: parseFloat(movementData.quantity) || 0,
+      unit: movementData.unit || baseUnit,
+      normalizedQuantity: signedNormalizedQty,
+      unitCost,
+      totalCost,
+      sourceType: movementData.sourceType || 'MANUAL',
+      sourceId: movementData.sourceId || 'MANUAL-ENTRY',
+      operationId: opId,
+      performedBy: movementData.performedBy || 'System User',
+      notes: movementData.notes || '',
+      tenantId: targetTenantId,
+      createdAt: new Date().toISOString()
+    };
+
+    let store = offlineStore.getCollection('inventory_movements') || [];
+    const existing = store.find(m => m.operationId === opId);
+    if (existing) return existing;
+
+    store.push(movementRecord);
+    offlineStore.setCollection('inventory_movements', store);
+
+    platformEventBus.publish('inventory:movement:recorded', { movement: movementRecord });
+    return movementRecord;
   }
 }
 

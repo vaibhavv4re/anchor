@@ -87,6 +87,7 @@ export class AuthEngine {
         '111111': 'Aabhas',
         '222222': 'Suresh',
         '333333': 'Kirtan',
+        '444444': 'Sibu (Bartender)',
         '555555': 'Sibu',
         '666666': 'Jitu',
         '777777': 'CA Auditor',
@@ -100,8 +101,8 @@ export class AuthEngine {
           emp = { 
             id: `emp-${sPin}`, 
             name: (sPin === '000000' || sPin === '888888') ? 'Nagesh' : expectedName, 
-            roleId: (sPin === '000000' || sPin === '888888') ? 'role-owner' : (sPin === '777777' ? 'role-ca' : (sPin === '333333' ? 'role-inventory-manager' : (sPin === '111111' ? 'role-chef' : 'role-waiter'))),
-            workspaceDefault: (sPin === '000000' || sPin === '888888') ? 'owner' : (sPin === '777777' ? 'ca' : (sPin === '333333' ? 'inventory' : (sPin === '111111' ? 'kitchen' : 'waiter')))
+            roleId: (sPin === '000000' || sPin === '888888') ? 'role-owner' : (sPin === '444444' ? 'role-bartender' : (sPin === '777777' ? 'role-ca' : (sPin === '333333' ? 'role-inventory-manager' : (sPin === '111111' ? 'role-chef' : 'role-waiter')))),
+            workspaceDefault: (sPin === '000000' || sPin === '888888') ? 'owner' : (sPin === '444444' ? 'bar' : (sPin === '777777' ? 'ca' : (sPin === '333333' ? 'inventory' : (sPin === '111111' ? 'kitchen' : 'waiter'))))
           };
         }
       }

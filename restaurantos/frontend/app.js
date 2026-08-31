@@ -45,6 +45,7 @@ import { KitchenDisplaySystemView } from './capabilities/kitchen/ui/KitchenDispl
 import { WaiterWorkspaceView } from './capabilities/guest_service/ui/WaiterWorkspaceView.js';
 import { AccountsCaWorkspaceView } from './capabilities/accounting/ui/AccountsCaWorkspaceView.js';
 import { OwnerWorkspaceView } from './capabilities/owner/ui/OwnerWorkspaceView.js';
+import { BarWorkspaceView } from './capabilities/bar/ui/BarWorkspaceView.js';
 import { orderModel } from '../../businessos/platform/ordering/orderModel.js';
 import { productionRoutingEngine } from '../../businessos/platform/ordering/productionRoutingEngine.js';
 
@@ -194,6 +195,9 @@ export class ApplicationShell {
     } else if (session.workspace === 'owner' || session.roleId === 'role-owner') {
       const ownerWs = new OwnerWorkspaceView(opts);
       await ownerWs.render(rootMount, session);
+    } else if (session.workspace === 'bar' || session.roleId === 'role-bartender') {
+      const barWs = new BarWorkspaceView(opts);
+      await barWs.render(rootMount, session);
     } else if (session.workspace === 'ca' || session.workspace === 'accounts' || session.roleId === 'role-ca') {
       const caWs = new AccountsCaWorkspaceView(opts);
       await caWs.render(rootMount, session);

@@ -53,8 +53,8 @@ class ProductionRoutingEngine {
       const menuItem = menuItems.find(m => m.id === itemId || m.itemCode === itemId || m.item_code === itemId);
       const spec = prodSpecModel.getProdSpecForItem(itemId);
 
-      const isBar = (lineItem.routing === 'BAR_LINE' || lineItem.routing === 'BAR') ||
-        (menuItem && (menuItem.routing === 'BAR_LINE' || menuItem.routing === 'BAR' || menuItem.category === 'BEVERAGES' || menuItem.category === 'BAR')) ||
+      const isBar = (lineItem.productionArea === 'BAR' || lineItem.routing === 'BAR_LINE' || lineItem.routing === 'BAR') ||
+        (menuItem && (menuItem.productionArea === 'BAR' || menuItem.routing === 'BAR_LINE' || menuItem.routing === 'BAR' || menuItem.category === 'BEVERAGES' || menuItem.category === 'BAR')) ||
         (spec && spec.destination === ProductionDestinations.BAR);
 
       const stationName = (menuItem ? menuItem.category : null) || spec.stationName || (isBar ? 'Bar Station' : 'Main Kitchen');

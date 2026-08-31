@@ -12,6 +12,7 @@
 
 import { offlineStore } from '../offline_store/offlineStore.js';
 import { kitchenMenuModel } from './kitchenMenuModel.js';
+import { inventoryItemModel } from '../inventory/inventoryItemModel.js';
 
 class RecipeModel {
   /**
@@ -254,13 +255,20 @@ class RecipeModel {
    * @returns {{ totalCost: number, costPerPortion: number, lines: Array<Object> }}
    */
   calculateCost(recipe, tenantId = null) {
+    const masterItems = inventoryItemModel.getAllItems(tenantId) || [];
     const rawMasterInv = offlineStore.getCollection('inventory', tenantId) || [];
+    const allMasterInv = [...masterItems, ...rawMasterInv];
     const ingredients = recipe.ingredients || [];
     let totalCost = 0;
 
     const evaluatedLines = ingredients.map(line => {
-      // Find Master Inventory item by canonical itemCode
-      const masterItem = rawMasterInv.find(i => i.itemCode === line.inventoryItemCode || i.item_code === line.inventoryItemCode);
+      // Find Master Inventory item by canonical itemCode, id, or sku
+      const masterItem = allMasterInv.find(i => 
+        (i.itemCode && line.inventoryItemCode && String(i.itemCode).toLowerCase() === String(line.inventoryItemCode).toLowerCase()) ||
+        (i.sku && line.inventoryItemCode && String(i.sku).toLowerCase() === String(line.inventoryItemCode).toLowerCase()) ||
+        (i.id && line.inventoryItemCode && String(i.id).toLowerCase() === String(line.inventoryItemCode).toLowerCase()) ||
+        (i.id && line.inventoryItemId && String(i.id).toLowerCase() === String(line.inventoryItemId).toLowerCase())
+      );
 
       const unitCost = masterItem
         ? (parseFloat(masterItem.lastPurchasePrice || masterItem.unitValuation || masterItem.unit_valuation) || 0)
@@ -309,6 +317,102 @@ class RecipeModel {
   }
 
   /**
+   * Validate that all ingredients strictly originate from Master Inventory.
+   * Throws error if any free-text ingredient or unconfigured item is present.
+   * @param {Array<Object>} ingredients 
+   * @param {string|null} tenantId 
+   */
+  validateIngredientsAgainstInventoryMaster(ingredients = [], tenantId = null) {
+    if (!Array.isArray(ingredients)) return;
+    const rawMasterInv = offlineStore.getCollection('inventory', tenantId) || [];
+    const masterItems = offlineStore.getCollection('inventory_items', tenantId) || [];
+    const allInv = [...rawMasterInv, ...masterItems];
+
+    ingredients.forEach(line => {
+      const itemCode = line.inventoryItemCode || line.inventory_item_code || line.inventoryItemId || line.id;
+      const found = allInv.some(i => 
+        (i.itemCode && itemCode && String(i.itemCode).toLowerCase() === String(itemCode).toLowerCase()) ||
+        (i.id && itemCode && String(i.id).toLowerCase() === String(itemCode).toLowerCase()) ||
+        (i.itemName && line.inventoryItemName && String(i.itemName).toLowerCase() === String(line.inventoryItemName).toLowerCase()) ||
+        (i.name && line.inventoryItemName && String(i.name).toLowerCase() === String(line.inventoryItemName).toLowerCase())
+      );
+      if (!found && line.inventoryItemName) {
+        throw new Error(`❌ Ingredient unavailable: "${line.inventoryItemName}" is not configured in Inventory Master. Contact Inventory Manager.`);
+      }
+    });
+  }
+
+  /**
+   * Submit DRAFT recipe for Supervisor/Manager approval
+   * @param {string} recipeId 
+   * @returns {Object}
+   */
+  submitRecipe(recipeId) {
+    const list = offlineStore.getCollection('recipes') || [];
+    const recipe = list.find(r => r.id === recipeId);
+    if (!recipe) throw new Error(`Recipe ${recipeId} not found.`);
+    if (recipe.status === 'APPROVED' || recipe.status === 'PUBLISHED') {
+      throw new Error(`Recipe ${recipe.recipeName} is already published.`);
+    }
+
+    this.validateIngredientsAgainstInventoryMaster(recipe.ingredients, recipe.tenantId);
+
+    recipe.status = 'SUBMITTED';
+    recipe.updatedAt = new Date().toISOString();
+    offlineStore.setCollection('recipes', list);
+    this._syncToCloud('update', recipe);
+    return recipe;
+  }
+
+  /**
+   * Publish an APPROVED recipe (locking revision & updating status to PUBLISHED)
+   * @param {string} recipeId 
+   * @param {string} approvedBy 
+   * @returns {Object}
+   */
+  publishRecipe(recipeId, approvedBy = 'Manager') {
+    const recipe = this.approveRecipe(recipeId);
+    recipe.status = 'PUBLISHED';
+    recipe.approvedBy = approvedBy;
+    recipe.publishedAt = new Date().toISOString();
+    
+    const list = offlineStore.getCollection('recipes') || [];
+    const idx = list.findIndex(r => r.id === recipeId);
+    if (idx !== -1) {
+      list[idx] = recipe;
+      offlineStore.setCollection('recipes', list);
+    }
+    this._syncToCloud('update', recipe);
+    return recipe;
+  }
+
+  /**
+   * Create a new DRAFT revision from a PUBLISHED recipe (e.g. Rev 1 -> Rev 2)
+   * Preserves Rev 1 as immutable historical context.
+   * @param {string} publishedRecipeId 
+   * @returns {Object}
+   */
+  createNewRevision(publishedRecipeId) {
+    const original = this.getById(publishedRecipeId);
+    if (!original) throw new Error(`Original recipe ${publishedRecipeId} not found.`);
+
+    const nextRev = (parseInt(original.revisionNumber || original.revision || 1)) + 1;
+    const newRecipe = this.createRecipe({
+      ...original,
+      id: `rcp-${Math.random().toString(36).substring(2, 9)}`,
+      recipeCode: `RCP-${Math.floor(1000 + Math.random() * 9000)}`,
+      revisionNumber: nextRev,
+      revision: nextRev,
+      status: 'DRAFT',
+      parentRecipeId: original.id,
+      instructions: original.instructions,
+      ingredients: (original.ingredients || []).map(i => ({ ...i }))
+    });
+
+    return newRecipe;
+  }
+
+  /**
    * Approve a Recipe (Locking revision & creating cost snapshot)
    * Link approved recipe back to menuItem.recipeId
    * @param {string} recipeId 
@@ -345,12 +449,14 @@ class RecipeModel {
     recipe.costSnapshotAtApproval = snapshot;
     recipe.updatedAt = now;
 
-    // Archive any previous APPROVED recipes for this menuItemId
+    // Archive any previous APPROVED recipes for this menuItemId / variantId
     if (recipe.menuItemId) {
       list.forEach(r => {
-        if (r.menuItemId === recipe.menuItemId && r.id !== recipe.id && r.status === 'APPROVED') {
-          r.status = 'ARCHIVED';
-          r.updatedAt = now;
+        if (r.menuItemId === recipe.menuItemId && r.id !== recipe.id && (r.status === 'APPROVED' || r.status === 'PUBLISHED')) {
+          if ((!recipe.variantId && !r.variantId) || (recipe.variantId && r.variantId === recipe.variantId)) {
+            r.status = 'SUPERSEDED';
+            r.updatedAt = now;
+          }
         }
       });
 

@@ -99,6 +99,58 @@ class KitchenMenuModel {
   }
 
   /**
+   * Deduplicate existing menu items collection by (category + itemName).
+   * Merges variants from duplicates into the primary item and removes duplicate records.
+   * @returns {number} Number of duplicate records removed
+   */
+  deduplicateMenuItems() {
+    const list = offlineStore.getCollection('kitchen_menu_items') || [];
+    const map = new Map();
+    const uniqueList = [];
+    let removedCount = 0;
+
+    list.forEach(item => {
+      const name = (item.itemName || item.name || '').toLowerCase().trim();
+      const cat = (item.category || '').toLowerCase().trim();
+      if (!name) return;
+
+      const normKey = `${cat}_${name}`;
+
+      if (map.has(normKey)) {
+        const primary = map.get(normKey);
+        // Merge variants
+        if (Array.isArray(item.variants)) {
+          item.variants.forEach(nv => {
+            const ex = primary.variants.find(v => v.name === nv.name || v.id === nv.id);
+            if (ex) {
+              if (nv.sellingPrice > 0) ex.sellingPrice = nv.sellingPrice;
+            } else {
+              primary.variants.push(nv);
+            }
+          });
+        }
+        if (primary.sellingPrice === 0 && (item.sellingPrice || item.price) > 0) {
+          primary.sellingPrice = item.sellingPrice || item.price;
+        }
+        removedCount++;
+      } else {
+        const cleanedVariants = Array.isArray(item.variants) ? [...item.variants] : [];
+        const primary = { ...item, variants: cleanedVariants };
+        map.set(normKey, primary);
+        uniqueList.push(primary);
+      }
+    });
+
+    if (removedCount > 0) {
+      offlineStore.setCollection('kitchen_menu_items', uniqueList);
+      if (typeof platformEventBus !== 'undefined') {
+        platformEventBus.publish('data:changed', { collection: 'kitchen_menu_items' });
+      }
+    }
+    return removedCount;
+  }
+
+  /**
    * Create or update a menu item record adhering to K-02 Core Schema
    * @param {Object} itemData 
    * @returns {Object}
@@ -110,36 +162,61 @@ class KitchenMenuModel {
     let existingIndex = -1;
     if (itemData.id) {
       existingIndex = list.findIndex(i => i.id === itemData.id);
-    } else if (itemData.itemCode) {
+    }
+    if (existingIndex < 0 && itemData.itemCode) {
       existingIndex = list.findIndex(i => i.itemCode === itemData.itemCode);
+    }
+    if (existingIndex < 0 && itemData.itemName) {
+      existingIndex = list.findIndex(i => 
+        (i.itemName || i.name || '').toLowerCase().trim() === itemData.itemName.toLowerCase().trim() &&
+        (i.category || '').toLowerCase().trim() === (itemData.category || '').toLowerCase().trim()
+      );
+    }
+
+    const existing = existingIndex >= 0 ? list[existingIndex] : null;
+
+    // Merge or replace variants if updating existing item
+    let finalVariants = Array.isArray(itemData.variants) ? [...itemData.variants] : [];
+    if (!itemData.replaceVariants && existing && Array.isArray(existing.variants)) {
+      existing.variants.forEach(ev => {
+        const nvMatch = finalVariants.find(v => v.name === ev.name || v.id === ev.id);
+        if (nvMatch) {
+          if (nvMatch.sellingPrice === 0 && ev.sellingPrice > 0) {
+            nvMatch.sellingPrice = ev.sellingPrice;
+          }
+        } else {
+          finalVariants.push(ev);
+        }
+      });
     }
 
     const cleanedItem = {
-      id: itemData.id || `menu-item-${Math.random().toString(36).substring(2, 9)}`,
-      itemCode: itemData.itemCode || `MENU-${Math.floor(1000 + Math.random() * 9000)}`,
-      itemName: itemData.itemName || 'Untitled Menu Item',
-      category: itemData.category || 'GENERAL',
-      description: itemData.description || '',
-      sellingPrice: parseFloat(itemData.sellingPrice) || 0,
-      taxProfile: itemData.taxProfile || 'GST_5',
-      dietaryType: itemData.dietaryType || 'VEG',
-      portionSize: itemData.portionSize || '1 Portion',
-      availabilityStatus: itemData.availabilityStatus || 'AVAILABLE',
-      lifecycleStatus: itemData.lifecycleStatus || 'ACTIVE',
-      recipeId: itemData.recipeId || null,
-      routing: itemData.routing || 'KITCHEN_LINE',
-      recipeNotes: itemData.recipeNotes || '',
-      spicinessLevel: itemData.spicinessLevel || 'MEDIUM',
-      region: itemData.region || 'Coastal India',
-      hasVariants: Boolean(itemData.hasVariants || (Array.isArray(itemData.variants) && itemData.variants.length > 0)),
-      variants: Array.isArray(itemData.variants) ? itemData.variants : [],
-      tenantId: itemData.tenantId || null,
-      createdAt: existingIndex >= 0 ? (list[existingIndex].createdAt || now) : now,
+      id: existing ? existing.id : (itemData.id || `menu-item-${Math.random().toString(36).substring(2, 9)}`),
+      itemCode: existing ? existing.itemCode : (itemData.itemCode || `MENU-${Math.floor(1000 + Math.random() * 9000)}`),
+      itemName: itemData.itemName || (existing ? existing.itemName : 'Untitled Menu Item'),
+      category: itemData.category || (existing ? existing.category : 'GENERAL'),
+      description: itemData.description || (existing ? existing.description : ''),
+      sellingPrice: parseFloat(itemData.sellingPrice) || parseFloat(itemData.price) || (existing ? existing.sellingPrice : 0),
+      taxProfile: itemData.taxProfile || (existing ? existing.taxProfile : 'GST_5'),
+      dietaryType: itemData.dietaryType || (existing ? existing.dietaryType : 'VEG'),
+      portionSize: itemData.portionSize || (existing ? existing.portionSize : '1 Portion'),
+      availabilityStatus: itemData.availabilityStatus || (existing ? existing.availabilityStatus : 'AVAILABLE'),
+      lifecycleStatus: itemData.lifecycleStatus || (existing ? existing.lifecycleStatus : 'ACTIVE'),
+      recipeId: itemData.recipeId || (existing ? existing.recipeId : null),
+      routing: itemData.routing || (existing ? existing.routing : 'KITCHEN_LINE'),
+      productionArea: itemData.productionArea || (existing ? existing.productionArea : 'BAR'),
+      recipeNotes: itemData.recipeNotes || (existing ? existing.recipeNotes : ''),
+      spicinessLevel: itemData.spicinessLevel || (existing ? existing.spicinessLevel : 'MEDIUM'),
+      region: itemData.region || (existing ? existing.region : 'Coastal India'),
+      hasVariants: Boolean(finalVariants.length > 0),
+      variants: finalVariants,
+      tenantId: itemData.tenantId || (existing ? existing.tenantId : null),
+      createdAt: existing ? (existing.createdAt || now) : now,
       updatedAt: now
     };
 
     if (existingIndex >= 0) {
-      list[existingIndex] = cleanedItem;
+      list[existingIndex] = { ...list[existingIndex], ...cleanedItem };
       this._syncToCloud('update', cleanedItem);
     } else {
       list.push(cleanedItem);
@@ -147,7 +224,80 @@ class KitchenMenuModel {
     }
 
     offlineStore.setCollection('kitchen_menu_items', list);
+    if (typeof platformEventBus !== 'undefined') {
+      platformEventBus.publish('data:changed', { collection: 'kitchen_menu_items', item: cleanedItem });
+    }
     return cleanedItem;
+  }
+
+  /**
+   * Update item availability status (e.g. AVAILABLE / UNAVAILABLE)
+   */
+  updateItemStatus(id, newStatus) {
+    const list = offlineStore.getCollection('kitchen_menu_items') || [];
+    const item = list.find(i => i.id === id || i.itemCode === id);
+    if (item) {
+      item.availabilityStatus = newStatus;
+      item.updatedAt = new Date().toISOString();
+      offlineStore.setCollection('kitchen_menu_items', list);
+      if (typeof platformEventBus !== 'undefined') {
+        platformEventBus.publish('data:changed', { collection: 'kitchen_menu_items', item });
+      }
+      return item;
+    }
+    return null;
+  }
+
+  /**
+   * Update operational 86 availability status for a specific variant
+   * Emits MENU_VARIANT_86ED platform audit event.
+   * @param {string} itemId 
+   * @param {string} variantId 
+   * @param {'AVAILABLE'|'UNAVAILABLE_86'} newStatus 
+   * @param {string} performedBy 
+   * @param {string} reason 
+   * @returns {Object|null}
+   */
+  updateVariantAvailability(itemId, variantId, newStatus, performedBy = 'Bartender', reason = 'OUT_OF_STOCK') {
+    const list = offlineStore.getCollection('kitchen_menu_items') || [];
+    const item = list.find(i => i.id === itemId || i.itemCode === itemId);
+    if (!item) return null;
+
+    if (!Array.isArray(item.variants)) {
+      item.variants = [
+        { id: `${item.id}_reg`, name: 'Regular', sellingPrice: item.price || item.sellingPrice || 350, availabilityStatus: item.availabilityStatus || 'AVAILABLE' }
+      ];
+    }
+
+    const variant = item.variants.find(v => v.id === variantId || v.variantId === variantId);
+    if (variant) {
+      variant.availabilityStatus = newStatus;
+      variant.updatedAt = new Date().toISOString();
+    } else {
+      // Item level update
+      item.variants.forEach(v => { v.availabilityStatus = newStatus; });
+    }
+
+    const hasAvailable = item.variants.some(v => v.availabilityStatus === 'AVAILABLE');
+    item.availabilityStatus = hasAvailable ? 'AVAILABLE' : 'UNAVAILABLE_86';
+    item.updatedAt = new Date().toISOString();
+
+    offlineStore.setCollection('kitchen_menu_items', list);
+    this._syncToCloud('update', item);
+
+    if (typeof platformEventBus !== 'undefined') {
+      platformEventBus.publish('MENU_VARIANT_86ED', {
+        itemId: item.id,
+        variantId,
+        newStatus,
+        performedBy,
+        reason,
+        timestamp: new Date().toISOString(),
+        source: 'BAR_WORKSPACE'
+      });
+      platformEventBus.publish('data:changed', { collection: 'kitchen_menu_items', item });
+    }
+    return item;
   }
 
   /**

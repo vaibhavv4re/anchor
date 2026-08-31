@@ -11,86 +11,396 @@ class InventoryItemModel {
     this._initSeedItems();
   }
 
+  _getCanonicalSeedItems() {
+    return [
+      // KITCHEN RAW MATERIALS
+      {
+        id: 'invitem_chicken',
+        sku: 'RAW-CHK-01',
+        name: 'Fresh Chicken Breast',
+        category: 'RAW_MATERIAL',
+        baseUnit: 'KG',
+        purchaseUnit: 'KG',
+        conversionFactor: 1.0,
+        costingMethod: 'WEIGHTED_AVERAGE',
+        currentUnitCost: 420.00,
+        reorderLevel: 20.0,
+        reorderQuantity: 50.0,
+        active: true,
+        tenantId: 'tenant_h0qc7wf'
+      },
+      {
+        id: 'invitem_paneer',
+        sku: 'RAW-PNR-01',
+        name: 'Fresh Dairy Paneer',
+        category: 'RAW_MATERIAL',
+        baseUnit: 'KG',
+        purchaseUnit: 'KG',
+        conversionFactor: 1.0,
+        costingMethod: 'WEIGHTED_AVERAGE',
+        currentUnitCost: 360.00,
+        reorderLevel: 10.0,
+        reorderQuantity: 25.0,
+        active: true,
+        tenantId: 'tenant_h0qc7wf'
+      },
+      {
+        id: 'invitem_butter',
+        sku: 'RAW-BTR-01',
+        name: 'Amul Unsalted Butter',
+        category: 'RAW_MATERIAL',
+        baseUnit: 'KG',
+        purchaseUnit: 'CARTON_10KG',
+        conversionFactor: 10.0,
+        costingMethod: 'WEIGHTED_AVERAGE',
+        currentUnitCost: 520.00,
+        reorderLevel: 5.0,
+        reorderQuantity: 15.0,
+        active: true,
+        tenantId: 'tenant_h0qc7wf'
+      },
+      {
+        id: 'invitem_oil',
+        sku: 'RAW-OIL-01',
+        name: 'Refined Cooking Oil',
+        category: 'RAW_MATERIAL',
+        baseUnit: 'L',
+        purchaseUnit: 'CAN_15L',
+        conversionFactor: 15.0,
+        costingMethod: 'WEIGHTED_AVERAGE',
+        currentUnitCost: 140.00,
+        reorderLevel: 30.0,
+        reorderQuantity: 60.0,
+        active: true,
+        tenantId: 'tenant_h0qc7wf'
+      },
+      {
+        id: 'invitem_cream',
+        sku: 'RAW-CRM-01',
+        name: 'Fresh Cooking Cream',
+        category: 'RAW_MATERIAL',
+        baseUnit: 'L',
+        purchaseUnit: 'PACK_1L',
+        conversionFactor: 1.0,
+        costingMethod: 'WEIGHTED_AVERAGE',
+        currentUnitCost: 210.00,
+        reorderLevel: 8.0,
+        reorderQuantity: 20.0,
+        active: true,
+        tenantId: 'tenant_h0qc7wf'
+      },
+      {
+        id: 'invitem_rice',
+        sku: 'RAW-RCE-01',
+        name: 'Aged Basmati Rice',
+        category: 'RAW_MATERIAL',
+        baseUnit: 'KG',
+        purchaseUnit: 'BAG_25KG',
+        conversionFactor: 25.0,
+        costingMethod: 'WEIGHTED_AVERAGE',
+        currentUnitCost: 110.00,
+        reorderLevel: 40.0,
+        reorderQuantity: 100.0,
+        active: true,
+        tenantId: 'tenant_h0qc7wf'
+      },
+      {
+        id: 'invitem_mutton',
+        sku: 'RAW-MTN-01',
+        name: 'Mutton Curry Cut',
+        category: 'RAW_MATERIAL',
+        baseUnit: 'KG',
+        purchaseUnit: 'KG',
+        conversionFactor: 1.0,
+        costingMethod: 'WEIGHTED_AVERAGE',
+        currentUnitCost: 750.00,
+        reorderLevel: 10.0,
+        reorderQuantity: 20.0,
+        active: true,
+        tenantId: 'tenant_h0qc7wf'
+      },
+      {
+        id: 'invitem_tomato',
+        sku: 'RAW-VEG-01',
+        name: 'Fresh Red Tomatoes',
+        category: 'RAW_MATERIAL',
+        baseUnit: 'KG',
+        purchaseUnit: 'CRATE_20KG',
+        conversionFactor: 20.0,
+        costingMethod: 'WEIGHTED_AVERAGE',
+        currentUnitCost: 40.00,
+        reorderLevel: 15.0,
+        reorderQuantity: 40.0,
+        active: true,
+        tenantId: 'tenant_h0qc7wf'
+      },
+      {
+        id: 'invitem_onion',
+        sku: 'RAW-VEG-02',
+        name: 'Fresh Red Onions',
+        category: 'RAW_MATERIAL',
+        baseUnit: 'KG',
+        purchaseUnit: 'BAG_50KG',
+        conversionFactor: 50.0,
+        costingMethod: 'WEIGHTED_AVERAGE',
+        currentUnitCost: 35.00,
+        reorderLevel: 25.0,
+        reorderQuantity: 50.0,
+        active: true,
+        tenantId: 'tenant_h0qc7wf'
+      },
+      {
+        id: 'invitem_ginger_garlic',
+        sku: 'RAW-SPC-01',
+        name: 'Garlic & Ginger Paste',
+        category: 'RAW_MATERIAL',
+        baseUnit: 'KG',
+        purchaseUnit: 'KG',
+        conversionFactor: 1.0,
+        costingMethod: 'WEIGHTED_AVERAGE',
+        currentUnitCost: 180.00,
+        reorderLevel: 5.0,
+        reorderQuantity: 15.0,
+        active: true,
+        tenantId: 'tenant_h0qc7wf'
+      },
+
+      // BAR SPIRITS & BEVERAGES
+      {
+        id: 'invitem_tequila_donjulio',
+        sku: 'BAR-TEQ-01',
+        name: 'Don Julio Blanco Tequila 750ml',
+        category: 'BAR_SPIRIT',
+        baseUnit: 'ML',
+        purchaseUnit: 'BOTTLE_750ML',
+        conversionFactor: 750.0,
+        costingMethod: 'WEIGHTED_AVERAGE',
+        currentUnitCost: 3.80,
+        reorderLevel: 1500.0,
+        reorderQuantity: 4500.0,
+        active: true,
+        department: 'BAR',
+        tenantId: 'tenant_h0qc7wf'
+      },
+      {
+        id: 'invitem_whisky_glenfiddich',
+        sku: 'BAR-WKY-01',
+        name: 'Glenfiddich 12 Yr Single Malt 750ml',
+        category: 'BAR_SPIRIT',
+        baseUnit: 'ML',
+        purchaseUnit: 'BOTTLE_750ML',
+        conversionFactor: 750.0,
+        costingMethod: 'WEIGHTED_AVERAGE',
+        currentUnitCost: 4.50,
+        reorderLevel: 1500.0,
+        reorderQuantity: 3750.0,
+        active: true,
+        department: 'BAR',
+        tenantId: 'tenant_h0qc7wf'
+      },
+      {
+        id: 'invitem_whisky_jwblack',
+        sku: 'BAR-WKY-02',
+        name: 'Johnnie Walker Black Label 750ml',
+        category: 'BAR_SPIRIT',
+        baseUnit: 'ML',
+        purchaseUnit: 'BOTTLE_750ML',
+        conversionFactor: 750.0,
+        costingMethod: 'WEIGHTED_AVERAGE',
+        currentUnitCost: 2.80,
+        reorderLevel: 2250.0,
+        reorderQuantity: 6000.0,
+        active: true,
+        department: 'BAR',
+        tenantId: 'tenant_h0qc7wf'
+      },
+      {
+        id: 'invitem_gin_bombay',
+        sku: 'BAR-GIN-01',
+        name: 'Bombay Sapphire Gin 750ml',
+        category: 'BAR_SPIRIT',
+        baseUnit: 'ML',
+        purchaseUnit: 'BOTTLE_750ML',
+        conversionFactor: 750.0,
+        costingMethod: 'WEIGHTED_AVERAGE',
+        currentUnitCost: 2.20,
+        reorderLevel: 1500.0,
+        reorderQuantity: 3000.0,
+        active: true,
+        department: 'BAR',
+        tenantId: 'tenant_h0qc7wf'
+      },
+      {
+        id: 'invitem_vodka_absolut',
+        sku: 'BAR-VDK-01',
+        name: 'Absolut Vodka 750ml',
+        category: 'BAR_SPIRIT',
+        baseUnit: 'ML',
+        purchaseUnit: 'BOTTLE_750ML',
+        conversionFactor: 750.0,
+        costingMethod: 'WEIGHTED_AVERAGE',
+        currentUnitCost: 1.90,
+        reorderLevel: 1500.0,
+        reorderQuantity: 4500.0,
+        active: true,
+        department: 'BAR',
+        tenantId: 'tenant_h0qc7wf'
+      },
+      {
+        id: 'invitem_rum_bacardi',
+        sku: 'BAR-RUM-01',
+        name: 'Bacardi Superior White Rum 750ml',
+        category: 'BAR_SPIRIT',
+        baseUnit: 'ML',
+        purchaseUnit: 'BOTTLE_750ML',
+        conversionFactor: 750.0,
+        costingMethod: 'WEIGHTED_AVERAGE',
+        currentUnitCost: 1.40,
+        reorderLevel: 1500.0,
+        reorderQuantity: 3750.0,
+        active: true,
+        department: 'BAR',
+        tenantId: 'tenant_h0qc7wf'
+      },
+      {
+        id: 'invitem_beer_kf',
+        sku: 'BAR-BER-01',
+        name: 'Kingfisher Premium Beer 650ml',
+        category: 'BEVERAGE',
+        baseUnit: 'BOTTLE',
+        purchaseUnit: 'CASE_24',
+        conversionFactor: 24.0,
+        costingMethod: 'WEIGHTED_AVERAGE',
+        currentUnitCost: 160.00,
+        reorderLevel: 24.0,
+        reorderQuantity: 72.0,
+        active: true,
+        department: 'BAR',
+        tenantId: 'tenant_h0qc7wf'
+      },
+      {
+        id: 'invitem_beer_corona',
+        sku: 'BAR-BER-02',
+        name: 'Corona Extra Beer 330ml',
+        category: 'BEVERAGE',
+        baseUnit: 'BOTTLE',
+        purchaseUnit: 'CASE_24',
+        conversionFactor: 24.0,
+        costingMethod: 'WEIGHTED_AVERAGE',
+        currentUnitCost: 220.00,
+        reorderLevel: 24.0,
+        reorderQuantity: 48.0,
+        active: true,
+        department: 'BAR',
+        tenantId: 'tenant_h0qc7wf'
+      },
+
+      // BAR MIXERS & PREP INFUSIONS
+      {
+        id: 'invitem_lime_juice',
+        sku: 'MIX-LME-01',
+        name: 'Fresh Lime Juice 1L',
+        category: 'BAR_MIXER',
+        baseUnit: 'ML',
+        purchaseUnit: 'PACK_1L',
+        conversionFactor: 1000.0,
+        costingMethod: 'WEIGHTED_AVERAGE',
+        currentUnitCost: 0.25,
+        reorderLevel: 5000.0,
+        reorderQuantity: 15000.0,
+        active: true,
+        department: 'BAR',
+        tenantId: 'tenant_h0qc7wf'
+      },
+      {
+        id: 'invitem_sugar_syrup',
+        sku: 'MIX-SYP-01',
+        name: 'Sugar Syrup 1L',
+        category: 'BAR_MIXER',
+        baseUnit: 'ML',
+        purchaseUnit: 'PACK_1L',
+        conversionFactor: 1000.0,
+        costingMethod: 'WEIGHTED_AVERAGE',
+        currentUnitCost: 0.10,
+        reorderLevel: 8000.0,
+        reorderQuantity: 25000.0,
+        active: true,
+        department: 'BAR',
+        tenantId: 'tenant_h0qc7wf'
+      },
+      {
+        id: 'invitem_tonic_water',
+        sku: 'MIX-TNC-01',
+        name: 'Schweppes Tonic Water Cans 250ml',
+        category: 'BAR_MIXER',
+        baseUnit: 'CAN',
+        purchaseUnit: 'CASE_24',
+        conversionFactor: 24.0,
+        costingMethod: 'WEIGHTED_AVERAGE',
+        currentUnitCost: 40.00,
+        reorderLevel: 24.0,
+        reorderQuantity: 72.0,
+        active: true,
+        department: 'BAR',
+        tenantId: 'tenant_h0qc7wf'
+      },
+      {
+        id: 'invitem_club_soda',
+        sku: 'MIX-SDA-01',
+        name: 'Kinley Club Soda Cans 250ml',
+        category: 'BAR_MIXER',
+        baseUnit: 'CAN',
+        purchaseUnit: 'CASE_24',
+        conversionFactor: 24.0,
+        costingMethod: 'WEIGHTED_AVERAGE',
+        currentUnitCost: 20.00,
+        reorderLevel: 48.0,
+        reorderQuantity: 120.0,
+        active: true,
+        department: 'BAR',
+        tenantId: 'tenant_h0qc7wf'
+      },
+
+      // PACKAGING & OPERATING SUPPLIES
+      {
+        id: 'invitem_meal_box',
+        sku: 'PKG-BOX-01',
+        name: '3-Compartment Meal Box 1000ml',
+        category: 'PACKAGING',
+        baseUnit: 'PC',
+        purchaseUnit: 'CARTON_500',
+        conversionFactor: 500.0,
+        costingMethod: 'WEIGHTED_AVERAGE',
+        currentUnitCost: 8.50,
+        reorderLevel: 100.0,
+        reorderQuantity: 500.0,
+        active: true,
+        tenantId: 'tenant_h0qc7wf'
+      },
+      {
+        id: 'invitem_carry_bags',
+        sku: 'PKG-BAG-01',
+        name: 'Eco Paper Carry Bags Large',
+        category: 'PACKAGING',
+        baseUnit: 'PC',
+        purchaseUnit: 'PACK_100',
+        conversionFactor: 100.0,
+        costingMethod: 'WEIGHTED_AVERAGE',
+        currentUnitCost: 3.20,
+        reorderLevel: 200.0,
+        reorderQuantity: 1000.0,
+        active: true,
+        tenantId: 'tenant_h0qc7wf'
+      }
+    ];
+  }
+
   _initSeedItems() {
-    if (!offlineStore.getCollection('inventory_items')) {
-      const initialItems = [
-        {
-          id: 'invitem_chicken',
-          sku: 'RAW-CHK-01',
-          name: 'Fresh Chicken Breast',
-          category: 'RAW_MATERIAL',
-          baseUnit: 'KG',
-          purchaseUnit: 'KG',
-          conversionFactor: 1.0,
-          costingMethod: 'WEIGHTED_AVERAGE',
-          currentUnitCost: 420.00,
-          reorderLevel: 20.0,
-          reorderQuantity: 50.0,
-          active: true,
-          tenantId: 'tenant_h0qc7wf'
-        },
-        {
-          id: 'invitem_paneer',
-          sku: 'RAW-PNR-01',
-          name: 'Fresh Dairy Paneer',
-          category: 'RAW_MATERIAL',
-          baseUnit: 'KG',
-          purchaseUnit: 'KG',
-          conversionFactor: 1.0,
-          costingMethod: 'WEIGHTED_AVERAGE',
-          currentUnitCost: 360.00,
-          reorderLevel: 10.0,
-          reorderQuantity: 25.0,
-          active: true,
-          tenantId: 'tenant_h0qc7wf'
-        },
-        {
-          id: 'invitem_butter',
-          sku: 'RAW-BTR-01',
-          name: 'Amul Unsalted Butter',
-          category: 'RAW_MATERIAL',
-          baseUnit: 'KG',
-          purchaseUnit: 'CARTON_10KG',
-          conversionFactor: 10.0,
-          costingMethod: 'WEIGHTED_AVERAGE',
-          currentUnitCost: 520.00,
-          reorderLevel: 5.0,
-          reorderQuantity: 15.0,
-          active: true,
-          tenantId: 'tenant_h0qc7wf'
-        },
-        {
-          id: 'invitem_oil',
-          sku: 'RAW-OIL-01',
-          name: 'Refined Cooking Oil',
-          category: 'RAW_MATERIAL',
-          baseUnit: 'L',
-          purchaseUnit: 'CAN_15L',
-          conversionFactor: 15.0,
-          costingMethod: 'WEIGHTED_AVERAGE',
-          currentUnitCost: 140.00,
-          reorderLevel: 30.0,
-          reorderQuantity: 60.0,
-          active: true,
-          tenantId: 'tenant_h0qc7wf'
-        },
-        {
-          id: 'invitem_cream',
-          sku: 'RAW-CRM-01',
-          name: 'Fresh Cooking Cream',
-          category: 'RAW_MATERIAL',
-          baseUnit: 'L',
-          purchaseUnit: 'PACK_1L',
-          conversionFactor: 1.0,
-          costingMethod: 'WEIGHTED_AVERAGE',
-          currentUnitCost: 210.00,
-          reorderLevel: 8.0,
-          reorderQuantity: 20.0,
-          active: true,
-          tenantId: 'tenant_h0qc7wf'
-        }
-      ];
-      offlineStore.setCollection('inventory_items', initialItems);
+    const canonical = this._getCanonicalSeedItems();
+    const store = offlineStore.getCollection('inventory_items');
+
+    if (!store || !Array.isArray(store) || store.length < canonical.length) {
+      offlineStore.setCollection('inventory_items', canonical);
     }
   }
 
@@ -133,18 +443,56 @@ class InventoryItemModel {
 
   getAllItems(tenantId = null) {
     const targetTenantId = this._getTenantId(tenantId);
-    const store = offlineStore.getCollection('inventory_items') || [];
-    return store.filter(i => !targetTenantId || i.tenantId === targetTenantId || i.tenant_id === targetTenantId);
+    let store = [];
+
+    if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.dataGateway) {
+      const cached = window.__APP__.platform.dataGateway.getCachedCollection('inventory', targetTenantId);
+      if (Array.isArray(cached) && cached.length > 0) store = cached;
+    }
+
+    if (store.length === 0) {
+      store = offlineStore.getCollection('inventory', targetTenantId) || [];
+    }
+
+    if (!Array.isArray(store) || store.length === 0) {
+      store = offlineStore.getCollection('inventory_items', targetTenantId) || [];
+    }
+
+    if (!Array.isArray(store) || store.length === 0) {
+      store = this._getCanonicalSeedItems();
+      offlineStore.setCollection('inventory_items', store);
+      offlineStore.setCollection('inventory', store);
+    }
+
+    // Normalize items for consistent property access (itemName/name, itemCode/sku/id, currentUnitCost/unitValuation)
+    const normalized = store.map(i => ({
+      id: i.id || i.uuid || i.itemCode || i.item_code,
+      sku: i.sku || i.itemCode || i.item_code || i.id,
+      itemCode: i.itemCode || i.item_code || i.sku || i.id,
+      name: i.name || i.itemName || i.item_name || 'Untitled Item',
+      itemName: i.itemName || i.item_name || i.name || 'Untitled Item',
+      category: i.category || i.categoryName || i.category_name || 'RAW_MATERIAL',
+      baseUnit: i.baseUnit || i.baseUom || i.base_uom || 'KG',
+      purchaseUnit: i.purchaseUnit || i.purchase_unit || i.baseUnit || 'KG',
+      currentUnitCost: parseFloat(i.currentUnitCost || i.unitValuation || i.unit_valuation || i.lastPurchasePrice || 0),
+      weightedAverageCost: parseFloat(i.currentUnitCost || i.unitValuation || i.unit_valuation || i.lastPurchasePrice || 0),
+      reorderLevel: parseFloat(i.reorderLevel || i.reorder_level || 10),
+      reorderQuantity: parseFloat(i.reorderQuantity || i.reorder_quantity || 20),
+      active: i.active !== undefined ? i.active : true,
+      tenantId: i.tenantId || i.tenant_id || targetTenantId
+    }));
+
+    return normalized.filter(i => !targetTenantId || i.tenantId === targetTenantId || i.tenant_id === targetTenantId);
   }
 
   getItemById(itemId, tenantId = null) {
     const items = this.getAllItems(tenantId);
-    return items.find(i => i.id === itemId || i.sku === itemId) || null;
+    return items.find(i => i.id === itemId || i.sku === itemId || i.name === itemId) || null;
   }
 
   createItem(itemData, tenantId = null) {
     const targetTenantId = this._getTenantId(tenantId);
-    const store = offlineStore.getCollection('inventory_items') || [];
+    const store = this.getAllItems(targetTenantId);
 
     const itemId = itemData.id || `invitem_${(itemData.name || 'item').toLowerCase().replace(/[^a-z0-9]/g, '_')}`;
     const newItem = {
