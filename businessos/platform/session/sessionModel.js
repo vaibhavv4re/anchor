@@ -219,7 +219,9 @@ class SessionModel {
       sessionToUpdate = {
         ...allSessions[index],
         ...updates,
-        lastActivityAt: new Date().toISOString()
+        version: (allSessions[index].version || 1) + 1,
+        lastActivityAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
       };
       allSessions[index] = sessionToUpdate;
     } else {
@@ -228,7 +230,9 @@ class SessionModel {
         sessionToUpdate = {
           ...existing,
           ...updates,
-          lastActivityAt: new Date().toISOString()
+          version: (existing.version || 1) + 1,
+          lastActivityAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString()
         };
         allSessions.push(sessionToUpdate);
       }
@@ -236,6 +240,12 @@ class SessionModel {
 
     if (sessionToUpdate) {
       offlineStore.setCollection('table_sessions', allSessions);
+
+      // Sync updated table_session to Supabase Cloud
+      const dg = this._getDataGateway();
+      if (dg && typeof dg.update === 'function') {
+        dg.update('table_sessions', sessionId, sessionToUpdate).catch(e => console.warn('[sessionModel] Cloud table_sessions update error:', e.message));
+      }
 
       // Also update linked orders in localStore if status is updated
       if (updates.status) {

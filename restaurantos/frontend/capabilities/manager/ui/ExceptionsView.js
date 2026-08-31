@@ -11,6 +11,9 @@ import { orderModel } from '../../../../../businessos/platform/ordering/orderMod
 import { sessionModel } from '../../../../../businessos/platform/session/sessionModel.js';
 import { platformEventBus } from '../../../../../businessos/platform/events/platformEvents.js';
 import { ManagerTableInspectorModal } from './ManagerTableInspectorModal.js';
+import { accountingProjectionService } from '../../../../../businessos/platform/accounting/accountingProjectionService.js';
+import { paymentModel } from '../../../../../businessos/platform/billing/paymentModel.js';
+import { productionBatchModel } from '../../../../../businessos/platform/kitchen/productionBatchModel.js';
 
 export class ExceptionsView {
   constructor(deps = {}) {
@@ -29,6 +32,14 @@ export class ExceptionsView {
     this.subscribePlatformEvents();
     this.updateContent();
 
+    if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.dataGateway) {
+      window.__APP__.platform.dataGateway.getCollection('offline_journal', this.tenantId).then(() => {
+        if (this.container && document.body.contains(this.container)) {
+          this.updateContent();
+        }
+      }).catch(() => {});
+    }
+
     return this.container;
   }
 
@@ -43,8 +54,96 @@ export class ExceptionsView {
       platformEventBus.subscribe('bill:revision:created', refresh),
       platformEventBus.subscribe('discount:approved', refresh),
       platformEventBus.subscribe('discount:rejected', refresh),
-      platformEventBus.subscribe('exception:resolved', refresh)
+      platformEventBus.subscribe('exception:resolved', refresh),
+      platformEventBus.subscribe('reconciliation:exception:flagged', refresh),
+      platformEventBus.subscribe('data:changed', refresh)
     ];
+  }
+
+  renderCaFlaggedSection() {
+    const flagged = accountingProjectionService.getFlaggedExceptions(this.tenantId);
+    if (!flagged || flagged.length === 0) return '';
+
+    return `
+      <div class="card animate-fade-in" style="padding:20px; background:var(--bg-surface-1); border-left:6px solid #ef4444; border-radius:8px; margin-bottom:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <h3 style="margin:0; font-size:1.1rem; color:#ef4444; font-weight:800; display:flex; align-items:center; gap:8px;">
+            <span>🚩</span> CA Flagged Financial Discrepancies (${flagged.length} Pending Review)
+          </h3>
+          <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">Requires Manager Action to Reconcile</span>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          ${flagged.map(f => `
+            <div style="padding:14px; background:var(--bg-surface-2); border-radius:6px; border:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+              <div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span class="badge badge-danger">${f.type}</span>
+                  <span style="font-weight:800; color:var(--accent-primary);">${f.invoiceNumber}</span>
+                  <span style="font-size:0.8rem; color:var(--text-muted);">(Table ${f.tableNumber})</span>
+                </div>
+                <div style="font-size:0.85rem; margin-top:4px;">
+                  Expected Invoiced: <strong>₹${(f.expectedAmount || 0).toFixed(2)}</strong> | Settled: <strong>₹${(f.collectedAmount || 0).toFixed(2)}</strong> | Difference: <strong style="color:#ef4444;">₹${(f.difference || 0).toFixed(2)}</strong>
+                </div>
+                <div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">
+                  Flagged by: <strong>${f.flaggedBy}</strong> at ${new Date(f.flaggedAt).toLocaleTimeString()} — <em>${f.reason}</em>
+                </div>
+              </div>
+
+              <div style="display:flex; gap:8px;">
+                <button class="btn-primary btn-resolve-missing-payment" data-exc-id="${f.id}" data-inv-number="${f.invoiceNumber}" data-sess-id="${f.sessionId}" data-diff="${f.difference}" style="padding:8px 14px; font-size:0.8rem; font-weight:800; background:#10b981; border:none; border-radius:6px; color:#fff; cursor:pointer;">
+                  💳 Record Missing Payment (₹${Math.abs(f.difference).toFixed(2)})
+                </button>
+                <button class="btn-secondary btn-resolve-adjustment" data-exc-id="${f.id}" data-inv-number="${f.invoiceNumber}" data-sess-id="${f.sessionId}" style="padding:8px 14px; font-size:0.8rem; font-weight:700;">
+                  🔄 Issue Corrective Entry
+                </button>
+              </div>
+            </div>
+          `).join('')}
+        </div>
+      </div>
+    `;
+  }
+
+  renderProductionYieldExceptionsSection() {
+    const batches = productionBatchModel.getAllBatches(this.tenantId);
+    const lowYieldBatches = batches.filter(b => b.status === 'COMPLETED' && b.yieldPercent < 95.0);
+
+    if (lowYieldBatches.length === 0) return '';
+
+    return `
+      <div class="card animate-fade-in" style="padding:20px; background:var(--bg-surface-1); border-left:6px solid #f59e0b; border-radius:8px; margin-bottom:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+          <h3 style="margin:0; font-size:1.1rem; color:#f59e0b; font-weight:800; display:flex; align-items:center; gap:8px;">
+            <span>🍳</span> Kitchen Production Yield Exceptions (${lowYieldBatches.length} Batches &lt; 95% Yield)
+          </h3>
+          <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">Requires Manager Review &amp; Station Inspection</span>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          ${lowYieldBatches.map(b => `
+            <div style="padding:14px; background:var(--bg-surface-2); border-radius:6px; border:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <span class="badge badge-warning">LOW YIELD: ${b.yieldPercent}%</span>
+                  <span style="font-weight:800; color:var(--accent-primary);">${b.batchNumber} (${b.recipeName})</span>
+                  <span class="badge badge-info">${b.station}</span>
+                </div>
+                <div style="font-size:0.85rem; margin-top:4px;">
+                  Planned: <strong>${b.plannedPortions} portions</strong> | Produced: <strong>${b.actualPortionsProduced} portions</strong> | Cost Leakage: <strong style="color:#ef4444;">+₹${b.totalYieldLeakageValue.toFixed(2)}</strong>
+                </div>
+                <div style="font-size:0.75rem; color:var(--text-muted); margin-top:4px;">
+                  Chef: <strong>${b.completedBy}</strong> | Completed at: ${new Date(b.completedAt).toLocaleTimeString()}
+                </div>
+              </div>
+
+              <button class="btn-secondary btn-inspect-yield-batch" data-batch-id="${b.id}" style="padding:8px 14px; font-size:0.8rem; font-weight:700;">
+                🔍 Investigate Batch Trace
+              </button>
+            </div>
+          `).join('')}
+        </div>
+    `;
   }
 
   updateContent() {
@@ -83,6 +182,12 @@ export class ExceptionsView {
         </div>
       </div>
 
+      <!-- CA FLAGGED FINANCIAL DISCREPANCIES SECTION -->
+      ${this.renderCaFlaggedSection()}
+
+      <!-- KITCHEN PRODUCTION YIELD EXCEPTIONS SECTION -->
+      ${this.renderProductionYieldExceptionsSection()}
+
       <!-- Severity Filter Toolbar -->
       <div style="display:flex; gap:8px; border-bottom:1px solid var(--border-subtle); padding-bottom:12px; margin-bottom:16px; flex-wrap:wrap;">
         <button class="btn-secondary filter-tab-btn ${this.activeFilter === 'ALL' ? 'active' : ''}" data-filter="ALL" style="padding:8px 14px; font-size:0.82rem;">
@@ -108,7 +213,7 @@ export class ExceptionsView {
           displayedQueue.length === 0 ? `
             <div class="card" style="padding:32px; text-align:center; background:var(--bg-surface-1); border-left:4px solid #10b981;">
               <div style="font-size:2rem;">🟢</div>
-              <h3 style="margin:8px 0 4px 0; color:#10b981;">Zero Active Exceptions in this Category</h3>
+              <h3 style="margin:8px 0 4px 0; color:#10b981;">Zero Active Operational Exceptions</h3>
               <p style="color:var(--text-muted); font-size:0.85rem; margin:0;">All kitchen orders, bill revisions, and guest services are running within operational SLA parameters.</p>
             </div>
           ` : displayedQueue.map(exp => this.renderEvidenceCard(exp)).join('')
@@ -374,6 +479,63 @@ export class ExceptionsView {
 
         platformEventBus.publish('exception:resolved', { expId });
         alert('🚀 Marked exception expedited & resolved in Shift Audit Log!');
+        this.updateContent();
+      });
+    });
+
+    // CA Flagged Discrepancy: Record Missing Payment Button
+    this.container.querySelectorAll('.btn-resolve-missing-payment').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const excId = btn.dataset.excId;
+        const invNumber = btn.dataset.invNumber;
+        const sessId = btn.dataset.sessId;
+        const diff = parseFloat(btn.dataset.diff) || 0;
+
+        const pAmt = Math.abs(diff) || 100;
+        const method = prompt(`Record Missing Payment for Invoice ${invNumber}:\nEnter Payment Method (CASH / UPI / CARD):`, 'UPI');
+        if (!method) return;
+
+        const refNo = prompt(`Enter Transaction Reference Number (e.g. UPI/984271039 or Cash Receipt Ref):`, `REF-${Math.floor(100000 + Math.random() * 900000)}`);
+        if (!refNo) return;
+
+        // 1. Create Immutable Payment Receipt
+        paymentModel.recordPayment({
+          sessionId: sessId,
+          invoiceNumber: invNumber,
+          amount: pAmt,
+          paymentMethod: method.toUpperCase(),
+          referenceNo: refNo,
+          status: 'SETTLED',
+          notes: 'Recorded via CA Discrepancy Resolution Workflow'
+        });
+
+        // 2. Propose Resolution for CA Review & Acceptance
+        accountingProjectionService.proposeResolution(excId, {
+          resolutionType: 'PAYMENT_RECORDED',
+          resolutionReason: `Recorded missing payment of ₹${pAmt} via ${method.toUpperCase()} (${refNo})`
+        }, 'Manager');
+
+        alert(`✅ Resolution proposed for ${invNumber}!\n\nDiscrepancy resolution sent to CA for review. Status updated to PROPOSED_RESOLUTION.`);
+        this.updateContent();
+      });
+    });
+
+    // CA Flagged Discrepancy: Issue Corrective Entry Button
+    this.container.querySelectorAll('.btn-resolve-adjustment').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const excId = btn.dataset.excId;
+        const invNumber = btn.dataset.invNumber;
+        const sessId = btn.dataset.sessId;
+
+        const reason = prompt(`Issue Corrective Entry for Invoice ${invNumber}:\nEnter Adjustment / Resolution Reason:`, 'Manager Approved Adjustment / Reversal');
+        if (!reason) return;
+
+        accountingProjectionService.proposeResolution(excId, {
+          resolutionType: 'CORRECTIVE_ENTRY_ISSUED',
+          resolutionReason: reason
+        }, 'Manager');
+
+        alert(`✅ Corrective resolution proposed for ${invNumber}!\n\nDiscrepancy resolution sent to CA for review.`);
         this.updateContent();
       });
     });

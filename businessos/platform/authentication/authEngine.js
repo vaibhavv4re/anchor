@@ -83,11 +83,14 @@ export class AuthEngine {
 
       // Map PIN to known staff credentials if pin not on object
       const pinMap = {
+        '000000': 'Nagesh (Owner)',
         '111111': 'Aabhas',
         '222222': 'Suresh',
         '333333': 'Kirtan',
         '555555': 'Sibu',
-        '666666': 'Jitu'
+        '666666': 'Jitu',
+        '777777': 'CA Auditor',
+        '888888': 'System Superadmin'
       };
 
       const expectedName = pinMap[sPin];
@@ -96,9 +99,9 @@ export class AuthEngine {
         if (!emp) {
           emp = { 
             id: `emp-${sPin}`, 
-            name: expectedName, 
-            roleId: sPin === '333333' ? 'role-inventory-manager' : (sPin === '111111' ? 'role-chef' : 'role-waiter'),
-            workspaceDefault: sPin === '333333' ? 'inventory' : (sPin === '111111' ? 'kitchen' : 'waiter')
+            name: (sPin === '000000' || sPin === '888888') ? 'Nagesh' : expectedName, 
+            roleId: (sPin === '000000' || sPin === '888888') ? 'role-owner' : (sPin === '777777' ? 'role-ca' : (sPin === '333333' ? 'role-inventory-manager' : (sPin === '111111' ? 'role-chef' : 'role-waiter'))),
+            workspaceDefault: (sPin === '000000' || sPin === '888888') ? 'owner' : (sPin === '777777' ? 'ca' : (sPin === '333333' ? 'inventory' : (sPin === '111111' ? 'kitchen' : 'waiter')))
           };
         }
       }
@@ -138,6 +141,7 @@ export class AuthEngine {
     }
 
     const resolvedRoleName = role ? (role.name || role.roleName) : (
+      roleId === 'role-owner' ? 'Restaurant Owner' :
       roleId === 'role-manager' ? 'Operations Manager' :
       roleId === 'role-admin' ? 'General Manager' :
       roleId === 'role-superadmin' ? 'System Superadmin' :

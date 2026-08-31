@@ -15,43 +15,24 @@ class TableProjectionService {
   }
 
   _initSubscriber() {
-    platformEventBus.subscribe('table:state:changed', (envelope) => {
+    const notifyTableChange = (envelope) => {
       const payload = envelope.payload || envelope;
-      const projection = this.getTableProjection(payload.tableNumber);
-      if (projection) platformEventBus.publish('table:projection:updated', projection);
-    });
-
-    platformEventBus.subscribe('session:created', (envelope) => {
-      const payload = envelope.payload || envelope;
-      if (payload.tableNumber) {
-        const projection = this.getTableProjection(payload.tableNumber);
+      const tNum = payload.tableNumber || payload.table_number;
+      if (tNum) {
+        const projection = this.getTableProjection(tNum);
         if (projection) platformEventBus.publish('table:projection:updated', projection);
       }
-    });
+    };
 
-    platformEventBus.subscribe('session:milestone:changed', (envelope) => {
-      const payload = envelope.payload || envelope;
-      if (payload.tableNumber) {
-        const projection = this.getTableProjection(payload.tableNumber);
-        if (projection) platformEventBus.publish('table:projection:updated', projection);
-      }
-    });
-
-    platformEventBus.subscribe('order:confirmed', (envelope) => {
-      const payload = envelope.payload || envelope;
-      if (payload.tableNumber) {
-        const projection = this.getTableProjection(payload.tableNumber);
-        if (projection) platformEventBus.publish('table:projection:updated', projection);
-      }
-    });
-
-    platformEventBus.subscribe('bill:settled', (envelope) => {
-      const payload = envelope.payload || envelope;
-      if (payload.tableNumber) {
-        const projection = this.getTableProjection(payload.tableNumber);
-        if (projection) platformEventBus.publish('table:projection:updated', projection);
-      }
-    });
+    platformEventBus.subscribe('table:state:changed', notifyTableChange);
+    platformEventBus.subscribe('session:created', notifyTableChange);
+    platformEventBus.subscribe('session:milestone:changed', notifyTableChange);
+    platformEventBus.subscribe('order:confirmed', notifyTableChange);
+    platformEventBus.subscribe('bill:settled', notifyTableChange);
+    platformEventBus.subscribe('bill:finalized', notifyTableChange);
+    platformEventBus.subscribe('bill:revision:created', notifyTableChange);
+    platformEventBus.subscribe('payment:recorded', notifyTableChange);
+    platformEventBus.subscribe('invoice:issued', notifyTableChange);
   }
 
   /**

@@ -72,18 +72,30 @@ class PaymentModel {
   }
 
   /**
+   * Alias for recordPayment
+   */
+  createPayment(params) {
+    return this.recordPayment(params);
+  }
+
+  /**
    * Record an immutable payment transaction record (PAY-2026-XXXX).
    * @param {Object} params { sessionId, billNumber, revisionNumber, invoiceNumber, amount, paymentMethod, referenceNo, receivedBy, receivedByName, tenantId, correlationId }
    * @returns {Object} Payment Record
    */
-  recordPayment({ sessionId, billNumber = null, revisionNumber = null, invoiceNumber = null, amount, paymentMethod = 'CASH', referenceNo = '', receivedBy = 'emp-cashier', receivedByName = 'Cashier', tenantId = null, correlationId = null }) {
+  recordPayment({ sessionId, billNumber = null, revisionNumber = null, invoiceNumber = null, amount, paymentMethod = 'CASH', referenceNo = '', receivedBy = 'emp-cashier', receivedByName = 'Cashier', tenantId = null, correlationId = null, operationId = null }) {
     const targetTenantId = this._getTenantId(tenantId);
-    const existingPayment = this.getPaymentForSession(sessionId, targetTenantId);
-    if (existingPayment) {
-      return existingPayment; // Already settled
-    }
 
     const cid = correlationId || 'CID-' + Math.floor(10000 + Math.random() * 90000);
+    const opId = operationId || cid;
+    const dg = this._getDataGateway();
+    if (dg && typeof dg.isOperationProcessed === 'function' && dg.isOperationProcessed(opId)) {
+      const existingPayment = this.getPaymentForSession(sessionId, targetTenantId);
+      if (existingPayment) return existingPayment;
+    }
+    if (dg && typeof dg.markOperationProcessed === 'function') {
+      dg.markOperationProcessed(opId);
+    }
     
     // Ensure Tax Invoice is issued via invoiceModel if not provided
     let issuedInvoiceNo = invoiceNumber;
@@ -137,7 +149,6 @@ class PaymentModel {
     billRevisionModel.markRevisionPaid(sessionId, targetTenantId);
 
     // 3. Sync to Supabase offline_journal and payments table
-    const dg = this._getDataGateway();
     if (dg) {
       if (typeof dg.create === 'function') {
         dg.create('payments', paymentRecord).catch(e => console.warn('[paymentModel] Cloud payment sync error:', e.message));

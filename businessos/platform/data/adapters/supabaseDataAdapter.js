@@ -9,10 +9,9 @@ export class SupabaseDataAdapter {
 
   async getCollection(collection, tenantId = null) {
     const virtualCollections = [
-      'roles', 'sessions', 'table_sessions', 'table_runtime_states',
+      'roles', 'sessions', 'table_runtime_states',
       'stock_transactions', 'stock_requisitions', 'menu_catalog',
-      'production_batches', 'devices', 'system_config',
-      'payments', 'bill_revisions'
+      'production_batches', 'devices', 'system_config'
     ];
     if (!this.client || virtualCollections.includes(collection)) return [];
     
@@ -91,6 +90,42 @@ export class SupabaseDataAdapter {
           if (!item.totalAmount && item.total_amount) item.totalAmount = parseFloat(item.total_amount);
         }
 
+        // Operational domain: table_sessions
+        if (collection === 'table_sessions') {
+          if (item.table_number && !item.tableNumber) item.tableNumber = parseInt(item.table_number);
+          if (item.table_code && !item.tableCode) item.tableCode = item.table_code;
+          if (item.assigned_waiter_id && !item.assignedWaiterId) item.assignedWaiterId = item.assigned_waiter_id;
+          if (item.guest_count && !item.guestCount) item.guestCount = parseInt(item.guest_count);
+          if (!item.sessionId) item.sessionId = item.id;
+        }
+
+        // Financial domain: bill_revisions
+        if (collection === 'bill_revisions') {
+          if (item.session_id && !item.sessionId) item.sessionId = item.session_id;
+          if (item.bill_number && !item.billNumber) item.billNumber = item.bill_number;
+          if (item.revision_number !== undefined && item.revisionNumber === undefined) item.revisionNumber = parseInt(item.revision_number);
+          if (item.grand_total !== undefined && item.grandTotal === undefined) item.grandTotal = parseFloat(item.grand_total);
+          if (item.revision_status && !item.revisionStatus) item.revisionStatus = item.revision_status;
+          if (!item.revisionId) item.revisionId = item.id;
+        }
+
+        // Financial domain: invoices
+        if (collection === 'invoices') {
+          if (item.session_id && !item.sessionId) item.sessionId = item.session_id;
+          if (item.invoice_number && !item.invoiceNumber) item.invoiceNumber = item.invoice_number;
+          if (item.bill_number && !item.billNumber) item.billNumber = item.bill_number;
+          if (item.grand_total !== undefined && item.grandTotal === undefined) item.grandTotal = parseFloat(item.grand_total);
+        }
+
+        // Financial domain: payments
+        if (collection === 'payments') {
+          if (item.session_id && !item.sessionId) item.sessionId = item.session_id;
+          if (item.bill_number && !item.billNumber) item.billNumber = item.bill_number;
+          if (item.invoice_number && !item.invoiceNumber) item.invoiceNumber = item.invoice_number;
+          if (item.payment_method && !item.paymentMethod) item.paymentMethod = item.payment_method;
+          if (!item.paymentId) item.paymentId = item.id;
+        }
+
         // Inventory Requests domain: inventory_requests
         if (item.request_number && !item.requestNumber) item.requestNumber = item.request_number;
         if (item.request_number && !item.reqCode) item.reqCode = item.request_number;
@@ -122,7 +157,7 @@ export class SupabaseDataAdapter {
   }
 
   async create(collection, record) {
-    if (!this.client || collection === 'roles' || collection === 'sessions' || collection === 'payments' || collection === 'bill_revisions') return record;
+    if (!this.client || collection === 'roles' || collection === 'sessions') return record;
     try {
       const res = await this.client.createRecord(collection, record);
       return res.success ? (res.data || record) : record;
@@ -133,7 +168,7 @@ export class SupabaseDataAdapter {
   }
 
   async update(collection, id, patch) {
-    if (!this.client || collection === 'roles' || collection === 'sessions' || collection === 'payments' || collection === 'bill_revisions') return patch;
+    if (!this.client || collection === 'roles' || collection === 'sessions') return patch;
     try {
       const res = await this.client.updateRecord(collection, id, patch);
       return res.success ? (res.data || patch) : patch;
@@ -144,7 +179,7 @@ export class SupabaseDataAdapter {
   }
 
   async delete(collection, id) {
-    if (!this.client || collection === 'roles' || collection === 'sessions' || collection === 'payments' || collection === 'bill_revisions') return true;
+    if (!this.client || collection === 'roles' || collection === 'sessions') return true;
     try {
       const filter = collection === 'tenants' ? `tenant_id=eq.${id}` : `id=eq.${id}`;
       const res = await this.client.deleteRecords(collection, filter);

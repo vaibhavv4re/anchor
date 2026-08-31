@@ -60,7 +60,7 @@ export function startModularApp(options = {}) {
         'kitchen_menu_items', 'recipes', 'recipe_ingredients', 'orders',
         'production_batches', 'stock_transactions', 'stock_requisitions',
         // Billing & Session domain collections (Cashier & Waiter Realtime Synchronization)
-        'table_sessions', 'bill_revisions', 'invoices', 'payments', 'session_audit_logs'
+        'table_sessions', 'bill_revisions', 'invoices', 'payments', 'session_audit_logs', 'offline_journal'
       ])
         .then(res => {
           console.log('☁️ [DataGateway] Pre-hydrated 16 domain collections from cloud:', Object.keys(res));

@@ -70,10 +70,13 @@ class InvoiceModel {
     const fy = this.getCurrentFinancialYear();
     const fyShort = fy.replace('20', '').replace('-20', '-'); // e.g. "26-27"
 
+    const existingNumberSet = new Set();
     let maxSeq = 1000;
+
     [...invoices, ...revisions].forEach(r => {
       const inv = r.invoiceNumber || r.invoice_number;
       if (inv) {
+        existingNumberSet.add(inv);
         const match = inv.match(/(\d{4})$/);
         if (match && match[1]) {
           const num = parseInt(match[1], 10);
@@ -82,8 +85,14 @@ class InvoiceModel {
       }
     });
 
-    const nextSeq = maxSeq + 1;
-    const invNo = `INV/${fyShort}/${nextSeq}`;
+    let nextSeq = maxSeq + 1;
+    let invNo = `INV/${fyShort}/${nextSeq}`;
+
+    // Collision Resolution: Ensure invNo is strictly unassigned
+    while (existingNumberSet.has(invNo)) {
+      nextSeq++;
+      invNo = `INV/${fyShort}/${nextSeq}`;
+    }
 
     return {
       financialYear: fy,
@@ -116,24 +125,50 @@ class InvoiceModel {
    * @param {Object} params { sessionId, revisionId, cashierId, cashierName, tenantId, correlationId }
    * @returns {Object} Tax Invoice Record
    */
-  issueInvoice({ sessionId, revisionId = null, cashierId = 'emp-cashier', cashierName = 'Cashier', tenantId = null, correlationId = null }) {
+  issueInvoice({ sessionId, revisionId = null, cashierId = 'emp-cashier', cashierName = 'Cashier', tenantId = null, correlationId = null, operationId = null }) {
     const targetTenantId = this._getTenantId(tenantId);
     const existingInvoice = this.getInvoiceForSession(sessionId, targetTenantId);
     if (existingInvoice) {
       return existingInvoice; // Invoice already issued
     }
 
-    const latestRevision = revisionId 
+    let cid = correlationId || null;
+    const opId = operationId || cid || ('CID-' + Math.floor(10000 + Math.random() * 90000));
+    const dg = this._getDataGateway();
+    if (dg && typeof dg.isOperationProcessed === 'function' && dg.isOperationProcessed(opId)) {
+      if (existingInvoice) return existingInvoice;
+    }
+    if (dg && typeof dg.markOperationProcessed === 'function') {
+      dg.markOperationProcessed(opId);
+    }
+
+    let latestRevision = revisionId 
       ? (offlineStore.getCollection('bill_revisions') || []).find(r => r.id === revisionId || r.revisionId === revisionId)
       : billRevisionModel.getLatestRevisionForSession(sessionId, targetTenantId);
 
     if (!latestRevision) {
-      throw new Error(`Cannot issue invoice: No bill revision found for session ${sessionId}`);
+      const sess = (offlineStore.getCollection('table_sessions') || []).find(s => s.id === sessionId || s.sessionId === sessionId);
+      const orders = (offlineStore.getCollection('orders') || []).filter(o => o.sessionId === sessionId || o.session_id === sessionId) || [];
+      const items = [];
+      orders.forEach(o => (o.items || []).forEach(it => items.push(it)));
+      const subtotal = orders.reduce((sum, o) => sum + (parseFloat(o.subtotal || o.totalAmount) || 0), 0) || 500;
+
+      latestRevision = billRevisionModel.createRevision({
+        sessionId,
+        tableNumber: sess ? (sess.tableNumber || 1) : 1,
+        tableCode: sess ? (sess.tableCode || 'T-01') : 'T-01',
+        items,
+        subtotal,
+        waiterId: sess ? (sess.assignedWaiterId || 'emp-waiter') : 'emp-waiter',
+        waiterName: 'Staff'
+      });
     }
 
+    if (!cid) {
+      cid = (latestRevision && latestRevision.correlationId) ? latestRevision.correlationId : ('CID-' + Math.floor(10000 + Math.random() * 90000));
+    }
     const primaryTenant = tenantModel.getPrimaryTenant() || {};
     const seqObj = this.generateNextInvoiceSequence('POS', targetTenantId);
-    const cid = correlationId || latestRevision.correlationId || ('CID-' + Math.floor(10000 + Math.random() * 90000));
     const now = new Date().toISOString();
 
     const invoiceRecord = {
@@ -197,7 +232,6 @@ class InvoiceModel {
     offlineStore.appendItem('invoices', invoiceRecord);
 
     // 3. Sync to Supabase cloud table & offline_journal / DataGateway
-    const dg = this._getDataGateway();
     if (dg && typeof dg.create === 'function') {
       dg.create('invoices', invoiceRecord).catch(e => console.warn('[invoiceModel] Cloud invoices sync error:', e.message));
 

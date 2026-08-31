@@ -170,6 +170,24 @@ class OfflineStore {
           roleId: 'role-manager',
           avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=150',
           workspaceDefault: 'manager'
+        },
+        {
+          id: 'emp-ca',
+          identityId: 'id-ca',
+          name: 'CA Rajesh Mehta',
+          roleId: 'role-ca',
+          avatarUrl: 'https://images.unsplash.com/photo-1560250097-0b93528c311a?w=150',
+          workspaceDefault: 'ca',
+          pinDisplay: '777777'
+        },
+        {
+          id: 'emp-owner',
+          identityId: 'id-owner',
+          name: 'Sachin (Restaurant Owner)',
+          roleId: 'role-owner',
+          avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150',
+          workspaceDefault: 'owner',
+          pinDisplay: '888888'
         }
       ];
       this.setCollection('employees', initialEmployees);
@@ -177,6 +195,18 @@ class OfflineStore {
 
     if (!this.getCollection('roles')) {
       const initialRoles = [
+        {
+          id: 'role-owner',
+          name: 'Restaurant Owner',
+          workspace: 'owner',
+          permissions: ['*']
+        },
+        {
+          id: 'role-ca',
+          name: 'Chartered Accountant / Auditor',
+          workspace: 'ca',
+          permissions: ['ca.view', 'accounting.view', 'reports.view', 'export.generate']
+        },
         {
           id: 'role-superadmin',
           name: 'System Superadmin',
@@ -227,6 +257,17 @@ class OfflineStore {
         }
       ];
       this.setCollection('roles', initialRoles);
+    } else {
+      const existingRoles = this.getCollection('roles') || [];
+      if (Array.isArray(existingRoles) && !existingRoles.some(r => r.id === 'role-ca')) {
+        existingRoles.push({
+          id: 'role-ca',
+          name: 'Chartered Accountant / CA Auditor',
+          workspace: 'ca',
+          permissions: ['ca.view', 'accounting.view', 'reports.view', 'export.generate']
+        });
+        this.setCollection('roles', existingRoles);
+      }
     }
 
     if (!this.getCollection('configuration')) {

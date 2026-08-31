@@ -148,7 +148,19 @@ export class SuperAdminWorkspaceView {
               </div>
 
               <div style="border-top:1px solid var(--border-subtle); padding-top:12px; margin-top:4px;">
-                <div style="font-size:0.85rem; font-weight:600; margin-bottom:8px;">Admin Credentials Setup</div>
+                <div style="font-size:0.85rem; font-weight:700; color:var(--accent-primary); margin-bottom:8px;">👑 Owner Credentials Setup</div>
+                <div class="grid grid-cols-2 gap-sm">
+                  <div>
+                    <label style="display:block; font-size:0.75rem; margin-bottom:2px;">Owner Name</label>
+                    <input type="text" id="inp-sa-owner-name" value="Nagesh" placeholder="e.g. Nagesh" style="width:100%; padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle);">
+                  </div>
+                  <div>
+                    <label style="display:block; font-size:0.75rem; margin-bottom:2px;">Owner PIN (Default: 000000)</label>
+                    <input type="text" id="inp-sa-owner-pin" value="000000" placeholder="000000" maxlength="6" style="width:100%; padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle);">
+                  </div>
+                </div>
+
+                <div style="font-size:0.85rem; font-weight:700; margin-top:12px; margin-bottom:8px;">👔 Store Manager Admin Credentials</div>
                 <div>
                   <label style="display:block; font-size:0.75rem; margin-bottom:2px;">Admin Name</label>
                   <input type="text" id="inp-sa-admin-name" placeholder="e.g. Priya Mehta" style="width:100%; padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle);">
@@ -160,7 +172,7 @@ export class SuperAdminWorkspaceView {
               </div>
 
               <button class="btn-primary" id="btn-sa-submit" style="margin-top:12px; padding:12px; font-weight:700;">
-                🚀 Create Restaurant & Generate Credentials
+                🚀 Create Restaurant &amp; Generate Credentials
               </button>
             </div>
           </div>

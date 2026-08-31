@@ -43,7 +43,8 @@ import { ManagerWorkspaceView } from './capabilities/manager/ui/ManagerWorkspace
 import { InventoryWorkspaceView } from './capabilities/inventory/ui/InventoryWorkspaceView.js';
 import { KitchenDisplaySystemView } from './capabilities/kitchen/ui/KitchenDisplaySystemView.js';
 import { WaiterWorkspaceView } from './capabilities/guest_service/ui/WaiterWorkspaceView.js';
-import { CashierWorkspaceView } from './capabilities/billing/ui/CashierWorkspaceView.js';
+import { AccountsCaWorkspaceView } from './capabilities/accounting/ui/AccountsCaWorkspaceView.js';
+import { OwnerWorkspaceView } from './capabilities/owner/ui/OwnerWorkspaceView.js';
 import { orderModel } from '../../businessos/platform/ordering/orderModel.js';
 import { productionRoutingEngine } from '../../businessos/platform/ordering/productionRoutingEngine.js';
 
@@ -190,6 +191,12 @@ export class ApplicationShell {
     } else if (session.workspace === 'inventory') {
       const inventoryWs = new InventoryWorkspaceView(opts);
       await inventoryWs.render(rootMount, session);
+    } else if (session.workspace === 'owner' || session.roleId === 'role-owner') {
+      const ownerWs = new OwnerWorkspaceView(opts);
+      await ownerWs.render(rootMount, session);
+    } else if (session.workspace === 'ca' || session.workspace === 'accounts' || session.roleId === 'role-ca') {
+      const caWs = new AccountsCaWorkspaceView(opts);
+      await caWs.render(rootMount, session);
     } else if (this.activeSubView === 'kds' || session.workspace === 'kds') {
       this.renderKDSWorkspace(rootMount, session);
     } else if (session.workspace === 'waiter' || session.roleId === 'role-waiter') {
@@ -246,6 +253,7 @@ export class ApplicationShell {
       <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; margin-bottom:4px; padding-left:8px;">Workspace Modules</div>
       
       <button class="nav-item ${this.activeSubView === 'dashboard' ? 'active' : ''}" data-view="dashboard">📌 Main Overview</button>
+      <button class="nav-item ${this.activeSubView === 'ca' || this.activeSubView === 'accounts' ? 'active' : ''}" data-view="ca">📚 Accounts & Compliance</button>
       <button class="nav-item ${this.activeSubView === 'cashier' ? 'active' : ''}" data-view="cashier">💰 Bill Inbox & Cashier</button>
       <button class="nav-item ${this.activeSubView === 'kitchen' ? 'active' : ''}" data-view="kitchen">👨‍🍳 Kitchen Tower</button>
       <button class="nav-item ${this.activeSubView === 'kds' ? 'active' : ''}" data-view="kds">🔥 Live KDS Display</button>
@@ -331,8 +339,14 @@ export class ApplicationShell {
       platformEventBus: this.platformEventBus
     };
 
-    if (this.activeSubView === 'cashier' || this.activeSubView === 'inbox' || this.activeSubView === 'invoices' || this.activeSubView === 'payments' || this.activeSubView === 'reports' || this.activeSubView === 'shift') {
+    if (this.activeSubView === 'owner') {
+      const view = new OwnerWorkspaceView(opts);
+      mount.appendChild(view.render(mount, session, this.activeSubView));
+    } else if (this.activeSubView === 'cashier' || this.activeSubView === 'inbox' || this.activeSubView === 'invoices' || this.activeSubView === 'payments' || this.activeSubView === 'reports' || this.activeSubView === 'shift') {
       const view = new CashierWorkspaceView(opts);
+      mount.appendChild(view.render(mount, session, this.activeSubView));
+    } else if (this.activeSubView === 'ca' || this.activeSubView === 'accounts') {
+      const view = new AccountsCaWorkspaceView(opts);
       mount.appendChild(view.render(mount, session, this.activeSubView));
     } else if (this.activeSubView === 'kitchen') {
       this.renderKitchenTower(mount, session, opts);

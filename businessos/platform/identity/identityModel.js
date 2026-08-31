@@ -69,12 +69,13 @@ export class IdentityModel {
       }
     }
 
-    if (!found && (pin === '888888' || pin === '999999')) {
+    if (!found && (pin === '888888' || pin === '999999' || pin === '777777')) {
       const isSuper = pin === '888888';
+      const isAdmin = pin === '999999';
       found = {
-        id: isSuper ? 'id-superadmin' : 'id-admin',
+        id: isSuper ? 'id-superadmin' : (isAdmin ? 'id-admin' : 'id-ca'),
         pinHash: hashed,
-        employeeId: isSuper ? 'emp-superadmin' : 'emp-admin',
+        employeeId: isSuper ? 'emp-superadmin' : (isAdmin ? 'emp-admin' : 'emp-ca'),
         status: 'ACTIVE'
       };
     }

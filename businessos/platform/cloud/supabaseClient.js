@@ -354,5 +354,88 @@ export function formatRecordForTable(entityName, job) {
     };
   }
 
+  if (entityName === 'table_sessions') {
+    return {
+      id: p.id || p.sessionId || ('sess_' + Math.random().toString(36).substring(2, 9)),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      status: p.status || 'GUESTS_SEATED',
+      data: p
+    };
+  }
+
+  if (entityName === 'bill_revisions') {
+    return {
+      id: p.id || p.revisionId || ('rev_' + Math.random().toString(36).substring(2, 9)),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      session_id: p.sessionId || p.session_id || '',
+      bill_number: p.billNumber || p.bill_number || `BILL-2026-${Math.floor(1000 + Math.random() * 9000)}`,
+      revision_number: parseInt(p.revisionNumber || p.revision_number) || 1,
+      grand_total: parseFloat(p.grandTotal || p.grand_total || p.subtotal) || 0,
+      revision_status: p.revisionStatus || p.revision_status || p.status || 'GENERATED',
+      data: p
+    };
+  }
+
+  if (entityName === 'invoices') {
+    return {
+      id: p.id || ('inv_' + Math.random().toString(36).substring(2, 9)),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      session_id: p.sessionId || p.session_id || '',
+      invoice_number: p.invoiceNumber || p.invoice_number || '',
+      bill_number: p.billNumber || p.bill_number || '',
+      grand_total: parseFloat(p.grandTotal || p.grand_total) || 0,
+      status: p.status || 'ISSUED',
+      data: p
+    };
+  }
+
+  if (entityName === 'payments') {
+    return {
+      id: p.id || p.paymentId || ('PAY-2026-' + Math.floor(1000 + Math.random() * 9000)),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      session_id: p.sessionId || p.session_id || '',
+      bill_number: p.billNumber || p.bill_number || '',
+      invoice_number: p.invoiceNumber || p.invoice_number || '',
+      amount: parseFloat(p.amount || p.grandTotal) || 0,
+      payment_method: (p.paymentMethod || p.payment_method || 'CASH').toUpperCase(),
+      status: p.status || 'SETTLED',
+      data: p
+    };
+  }
+
+  if (entityName === 'session_audit_logs') {
+    return {
+      id: p.id || ('audit_' + Math.random().toString(36).substring(2, 9)),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      session_id: p.sessionId || p.session_id || '',
+      event_type: p.eventType || p.event_type || 'GENERAL_EVENT',
+      data: p
+    };
+  }
+
+  if (entityName === 'identities') {
+    const rawPin = p.pin || p.pinDisplay || p.pin_hash || p.pinHash || '444444';
+    return {
+      id: p.id || ('id-' + Math.random().toString(36).substring(2, 9)),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      pin_hash: p.pin_hash || p.pinHash || rawPin,
+      status: p.status || 'ACTIVE'
+    };
+  }
+
+  if (entityName === 'employees') {
+    return {
+      id: p.id || ('emp-' + Math.random().toString(36).substring(2, 9)),
+      identity_id: p.identityId || p.identity_id || null,
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      employee_code: p.employeeCode || p.employee_code || p.id || '',
+      name: p.name || p.employeeName || 'Staff Member',
+      role_id: p.roleId || p.role_id || 'role-waiter',
+      workspace_default: p.workspaceDefault || p.workspace_default || 'waiter',
+      status: p.status || 'ACTIVE',
+      data: p
+    };
+  }
+
   return p;
 }

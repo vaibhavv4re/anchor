@@ -44,12 +44,26 @@ class BillRevisionModel {
    * @param {Object} params { sessionId, tableNumber, tableCode, items, subtotal, discountRecords, waiterId, waiterName, tenantId, correlationId }
    * @returns {Object} Bill Revision Record
    */
-  createRevision({ sessionId, tableNumber, tableCode, items = [], subtotal = 0, discountRecords = [], waiterId = 'emp-waiter', waiterName = 'Staff', tenantId = null, correlationId = null }) {
+  createRevision({ sessionId, tableNumber, tableCode, items = [], subtotal = 0, discountRecords = [], waiterId = 'emp-waiter', waiterName = 'Staff', tenantId = null, correlationId = null, operationId = null }) {
     const targetTenantId = this._getTenantId(tenantId);
     const primaryTenant = tenantModel.getPrimaryTenant() || {};
     
     const cid = correlationId || 'CID-' + Math.floor(10000 + Math.random() * 90000);
+    const opId = operationId || cid;
     const existingRevisions = this.getRevisionsForSession(sessionId, targetTenantId);
+
+    // Idempotency check: if operationId or correlationId already processed, return existing revision
+    const existingMatch = existingRevisions.find(r => r.correlationId === cid || r.operationId === opId);
+    if (existingMatch) return existingMatch;
+    
+    const dg = this._getDataGateway();
+    if (dg && typeof dg.isOperationProcessed === 'function' && dg.isOperationProcessed(opId)) {
+      const match = existingRevisions.find(r => r.correlationId === cid || r.operationId === opId);
+      if (match) return match;
+    }
+    if (dg && typeof dg.markOperationProcessed === 'function') {
+      dg.markOperationProcessed(opId);
+    }
     
     // Mark previous revisions as SUPERSEDED if still GENERATED
     existingRevisions.forEach(r => {
@@ -149,7 +163,6 @@ class BillRevisionModel {
     offlineStore.appendItem('bill_revisions', revisionRecord);
 
     // 3. Sync to Supabase cloud table & offline_journal / DataGateway
-    const dg = this._getDataGateway();
     if (dg && typeof dg.create === 'function') {
       dg.create('bill_revisions', revisionRecord).catch(e => console.warn('[billRevisionModel] Cloud bill_revisions sync error:', e.message));
 

@@ -48,17 +48,17 @@ export class TaxInvoicePrintModal {
     const waiterName = proj ? proj.waiter.name : (activeRev ? activeRev.waiterName : 'Staff');
     const items = activeRev ? activeRev.items : (proj ? proj.itemizedList : []);
     
-    const grossSales = activeRev ? (activeRev.grossSales || activeRev.subtotal) : (proj ? proj.subtotal : 0);
-    const discountsTotal = activeRev ? (activeRev.discountsTotal || activeRev.discounts || 0) : 0;
+    const grossSales = parseFloat(activeRev ? (activeRev.grossSales || activeRev.subtotal) : (invoice ? (invoice.grossSales || invoice.grandTotal) : (proj ? proj.subtotal : 0))) || 0;
+    const discountsTotal = parseFloat(activeRev ? (activeRev.discountsTotal || activeRev.discounts || 0) : (invoice ? (invoice.discountsTotal || 0) : 0)) || 0;
     const discountRecords = activeRev ? (activeRev.discountRecords || []) : [];
-    const taxableAmount = activeRev ? activeRev.taxableAmount : (grossSales - discountsTotal);
+    const taxableAmount = parseFloat(activeRev && activeRev.taxableAmount !== undefined ? activeRev.taxableAmount : (invoice && invoice.taxableAmount !== undefined ? invoice.taxableAmount : (grossSales - discountsTotal))) || 0;
 
     const taxLines = activeRev ? (activeRev.taxLines || []) : [];
     const charges = activeRev ? (activeRev.charges || []) : [];
-    const cgst = activeRev ? activeRev.cgstAmount : (proj ? proj.cgstAmount : 0);
-    const sgst = activeRev ? activeRev.sgstAmount : (proj ? proj.sgstAmount : 0);
-    const serviceCharge = activeRev ? activeRev.serviceChargeAmount : (proj ? (proj.serviceChargeAmount || 0) : 0);
-    const grandTotal = activeRev ? activeRev.grandTotal : (proj ? proj.grandTotal : 0);
+    const cgst = parseFloat(activeRev ? activeRev.cgstAmount : (invoice ? (invoice.cgstAmount || (invoice.grandTotal * 0.025)) : (proj ? proj.cgstAmount : 0))) || 0;
+    const sgst = parseFloat(activeRev ? activeRev.sgstAmount : (invoice ? (invoice.sgstAmount || (invoice.grandTotal * 0.025)) : (proj ? proj.sgstAmount : 0))) || 0;
+    const serviceCharge = parseFloat(activeRev ? activeRev.serviceChargeAmount : (invoice ? (invoice.serviceChargeAmount || 0) : (proj ? (proj.serviceChargeAmount || 0) : 0))) || 0;
+    const grandTotal = parseFloat(activeRev ? activeRev.grandTotal : (invoice ? invoice.grandTotal : (proj ? proj.grandTotal : 0))) || 0;
     
     const invoiceNo = invoice ? invoice.invoiceNumber : (payment ? payment.invoiceNumber : (activeRev && activeRev.invoiceNumber ? activeRev.invoiceNumber : 'DRAFT PREVIEW'));
     const isPaid = payment !== null;

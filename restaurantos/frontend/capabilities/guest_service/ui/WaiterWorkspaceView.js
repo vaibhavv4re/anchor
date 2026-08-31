@@ -10,6 +10,7 @@
  */
 
 import { tableProjectionService } from '../../../../../businessos/platform/table_state/tableProjectionService.js';
+import { tableStateMachine } from '../../../../../businessos/platform/table_state/tableStateMachine.js';
 import { sessionModel } from '../../../../../businessos/platform/session/sessionModel.js';
 import { sessionProjectionService } from '../../../../../businessos/platform/session/sessionProjectionService.js';
 import { orderModel } from '../../../../../businessos/platform/ordering/orderModel.js';
@@ -75,8 +76,11 @@ export class WaiterWorkspaceView {
     const unsubFinalized = platformEventBus.subscribe('bill:finalized', refreshAll);
     const unsubSettled = platformEventBus.subscribe('bill:settled', refreshAll);
     const unsubReopened = platformEventBus.subscribe('bill:reopened', refreshAll);
+    const unsubPaid = platformEventBus.subscribe('payment:recorded', refreshAll);
+    const unsubInvoice = platformEventBus.subscribe('invoice:issued', refreshAll);
+    const unsubRevision = platformEventBus.subscribe('bill:revision:created', refreshAll);
 
-    this.unsubscribeEvents.push(unsubTicket, unsubItem, unsubKot, unsubBot, unsubOrder, unsubSession, unsubMilestone, unsubTable, unsubFinalized, unsubSettled, unsubReopened);
+    this.unsubscribeEvents.push(unsubTicket, unsubItem, unsubKot, unsubBot, unsubOrder, unsubSession, unsubMilestone, unsubTable, unsubFinalized, unsubSettled, unsubReopened, unsubPaid, unsubInvoice, unsubRevision);
   }
 
   getReadyTickets(tenantId) {
@@ -368,9 +372,22 @@ export class WaiterWorkspaceView {
           <div class="grid grid-cols-3 gap-md">
             ${mySessions.map(s => {
               const proj = sessionProjectionService.getSessionProjection(s.id, tenantId);
+              const runtime = tableStateMachine.getTableRuntimeState(s.tableNumber, tenantId);
+              const physicalState = runtime ? runtime.currentState : s.status;
+
               const readyCount = proj ? proj.readyItems.length : 0;
               const prepCount = proj ? proj.preparingItems.length : 0;
-              const statusBadgeClass = s.status === 'PAYMENT_PENDING' ? 'badge-warning' : (readyCount > 0 ? 'badge-success' : 'badge-info');
+
+              const isPending = s.status === 'BILL_GENERATED' || s.billStatus === 'GENERATED' || physicalState === 'PAYMENT_PENDING';
+              const isPaid = s.status === 'PAYMENT_RECEIVED' || s.billStatus === 'PAID' || physicalState === 'PAID_CLEARING';
+              const isRecalled = s.status === 'WAITER_REVISION_REQUIRED' || s.billStatus === 'RECALLED';
+
+              const statusBadgeClass = isPaid ? 'badge-success' : (isPending ? 'badge-warning' : (isRecalled ? 'badge-danger' : (readyCount > 0 ? 'badge-success' : 'badge-info')));
+              const badgeLabel = isPaid ? '🟣 PAID / CLEARING'
+                : (isPending ? '🟠 PAYMENT PENDING'
+                : (isRecalled ? '🔴 BILL RECALLED'
+                : (readyCount > 0 ? `🟢 ${readyCount} READY`
+                : (prepCount > 0 ? '🔥 IN KITCHEN' : '👤 GUESTS SEATED'))));
 
               return `
                 <div class="card btn-open-waiter-session" data-session-id="${s.id}" style="background:var(--bg-surface-1); border:1px solid var(--border-subtle); padding:16px; border-radius:8px; cursor:pointer; transition:transform 0.15s ease;" title="Click to open Table ${s.tableNumber} console">
@@ -379,7 +396,7 @@ export class WaiterWorkspaceView {
                       🍽️ Table ${s.tableNumber}
                     </div>
                     <span class="badge ${statusBadgeClass}" style="font-size:0.7rem; font-weight:800;">
-                      ${readyCount > 0 ? `🟢 ${readyCount} READY` : s.status}
+                      ${badgeLabel}
                     </span>
                   </div>
 

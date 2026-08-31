@@ -16,6 +16,7 @@ import { paymentModel } from '../../../../../businessos/platform/billing/payment
 import { sessionAuditModel } from '../../../../../businessos/platform/session/sessionAuditModel.js';
 import { tenantModel } from '../../../../../businessos/platform/tenant/tenantModel.js';
 import { TaxInvoicePrintModal } from './TaxInvoicePrintModal.js';
+import { accountingProjectionService } from '../../../../../businessos/platform/accounting/accountingProjectionService.js';
 
 export class CashierWorkspaceView {
   constructor(deps = {}) {
@@ -25,10 +26,64 @@ export class CashierWorkspaceView {
     this.selectedRevisionIndex = null;
     this.activeMainTab = 'inbox'; // 'inbox' | 'invoices' | 'payments' | 'reports' | 'shift'
     this.inboxSubTab = 'needs_review'; // 'needs_review' | 'recalled' | 'awaiting_payment' | 'settled' | 'all'
+    this.dateFilter = 'today'; // 'today' | 'yesterday' | 'week' | 'month' | 'all'
     this.searchQuery = '';
     this.authEngine = deps.authEngine || null;
     this.platformEventBus = deps.platformEventBus || platformEventBus;
     this.unsubscribeEvents = [];
+  }
+
+  filterRecordsByDateRange(records, dateRange = 'today', dateField = 'issuedAt') {
+    if (!Array.isArray(records)) return [];
+    if (dateRange === 'all') return records;
+
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const todayEnd = todayStart + (24 * 60 * 60 * 1000) - 1;
+
+    const yesterdayStart = todayStart - (24 * 60 * 60 * 1000);
+    const yesterdayEnd = todayStart - 1;
+
+    const weekStart = todayStart - (7 * 24 * 60 * 60 * 1000);
+    const monthStart = todayStart - (30 * 24 * 60 * 60 * 1000);
+
+    return records.filter(r => {
+      const rawDate = r[dateField] || r.issuedAt || r.receivedAt || r.createdAt || r.created_at;
+      if (!rawDate) return true;
+      const t = new Date(rawDate).getTime();
+      if (isNaN(t)) return true;
+
+      if (dateRange === 'today') {
+        return t >= todayStart && t <= todayEnd;
+      } else if (dateRange === 'yesterday') {
+        return t >= yesterdayStart && t <= yesterdayEnd;
+      } else if (dateRange === 'week') {
+        return t >= weekStart;
+      } else if (dateRange === 'month') {
+        return t >= monthStart;
+      }
+      return true;
+    });
+  }
+
+  renderDateFilterBar() {
+    const filters = [
+      { id: 'today', label: '📅 Today' },
+      { id: 'yesterday', label: '⏪ Yesterday' },
+      { id: 'week', label: '🗓️ Last 7 Days' },
+      { id: 'month', label: '📊 Last 30 Days' },
+      { id: 'all', label: '🌐 All Time' }
+    ];
+
+    return `
+      <div style="display:flex; align-items:center; gap:6px; background:var(--bg-surface-2); padding:4px; border-radius:8px; border:1px solid var(--border-subtle);">
+        ${filters.map(f => `
+          <button class="btn-date-filter ${this.dateFilter === f.id ? 'active' : ''}" data-date-filter="${f.id}" style="padding:6px 12px; font-size:0.78rem; font-weight:700; border-radius:6px; cursor:pointer; background:${this.dateFilter === f.id ? 'var(--accent-primary)' : 'transparent'}; color:${this.dateFilter === f.id ? '#000' : 'var(--text-secondary)'}; border:none; transition:all 0.15s ease;">
+            ${f.label}
+          </button>
+        `).join('')}
+      </div>
+    `;
   }
 
   render(mountEl, sessionUser = null, subView = 'inbox') {
@@ -42,6 +97,14 @@ export class CashierWorkspaceView {
 
     this.subscribeEvents();
     this.updateContent(sessionUser);
+
+    // Hydrate state asynchronously from Supabase Cloud on render
+    if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.dataGateway) {
+      window.__APP__.platform.dataGateway.hydrateCollections(['table_sessions', 'bill_revisions', 'invoices', 'payments', 'orders'])
+        .then(() => this.updateContent(sessionUser))
+        .catch(err => console.warn('[CashierWorkspaceView] Hydration error:', err));
+    }
+
     return this.container;
   }
 
@@ -61,8 +124,12 @@ export class CashierWorkspaceView {
     const unsub4 = this.platformEventBus.subscribe('invoice:issued', refresh);
     const unsub5 = this.platformEventBus.subscribe('payment:recorded', refresh);
     const unsub6 = this.platformEventBus.subscribe('session:milestone:changed', refresh);
+    const unsub7 = this.platformEventBus.subscribe('bill:revision:created', refresh);
+    const unsub8 = this.platformEventBus.subscribe('session:projection:updated', refresh);
+    const unsub9 = this.platformEventBus.subscribe('data:changed', refresh);
+    const unsub10 = this.platformEventBus.subscribe('order:confirmed', refresh);
 
-    this.unsubscribeEvents.push(unsub1, unsub2, unsub3, unsub4, unsub5, unsub6);
+    this.unsubscribeEvents.push(unsub1, unsub2, unsub3, unsub4, unsub5, unsub6, unsub7, unsub8, unsub9, unsub10);
   }
 
   getAllBillSessions() {
@@ -185,6 +252,9 @@ export class CashierWorkspaceView {
         </div>
       </div>
 
+      <!-- CA FLAGGED DISCREPANCY NOTICE BANNER FOR CASHIER -->
+      ${this.renderCaFlaggedNotice()}
+
       <!-- MAIN CONTENT BODY BASED ON ACTIVE TAB -->
       <div style="flex:1; display:flex; min-height:0; overflow:hidden;">
         ${this.renderMainTabContent()}
@@ -194,6 +264,23 @@ export class CashierWorkspaceView {
     `;
 
     this.bindEvents();
+  }
+
+  renderCaFlaggedNotice() {
+    const flagged = accountingProjectionService.getFlaggedExceptions().filter(e => e.status === 'FLAGGED');
+    if (flagged.length === 0) return '';
+
+    return `
+      <div style="background:rgba(239,68,68,0.15); border-bottom:1px solid #ef4444; padding:8px 24px; display:flex; justify-content:space-between; align-items:center; font-size:0.82rem;">
+        <div style="display:flex; align-items:center; gap:8px; color:#ef4444; font-weight:700;">
+          <span>🚩</span>
+          <span>${flagged.length} Financial Discrepancy Flagged by CA (e.g. Invoice ${flagged[0].invoiceNumber} — Missing Payment ₹${Math.abs(flagged[0].difference).toFixed(2)})</span>
+        </div>
+        <button class="btn-primary btn-cashier-settle-flagged" data-exc-id="${flagged[0].id}" data-inv-number="${flagged[0].invoiceNumber}" data-sess-id="${flagged[0].sessionId}" data-diff="${flagged[0].difference}" style="padding:4px 10px; font-size:0.75rem; font-weight:800; background:#10b981; border:none; border-radius:4px; color:#fff; cursor:pointer;">
+          💳 Record Settlement Now
+        </button>
+      </div>
+    `;
   }
 
   renderMainTabContent() {
@@ -524,6 +611,8 @@ export class CashierWorkspaceView {
     const tenantId = tenant.tenantId || 'tenant_h0qc7wf';
     let invoices = invoiceModel.getAllInvoices(tenantId);
 
+    invoices = this.filterRecordsByDateRange(invoices, this.dateFilter, 'issuedAt');
+
     if (this.searchQuery) {
       const q = this.searchQuery.toLowerCase();
       invoices = invoices.filter(i => 
@@ -535,12 +624,15 @@ export class CashierWorkspaceView {
 
     return `
       <div style="display:flex; flex-direction:column; width:100%; padding:20px; overflow-y:auto;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
           <div>
             <h3 style="font-size:1.4rem; margin:0; font-weight:800;">🧾 Issued Tax Invoice Register</h3>
             <p style="color:var(--text-muted); font-size:0.85rem; margin:2px 0 0;">Sequential FY GST financial audit log of all tax invoices issued.</p>
           </div>
-          <input type="text" id="input-search-invoices" class="input-field" placeholder="🔍 Search Invoice # / Table..." value="${this.searchQuery}" style="width:280px; padding:8px 12px; font-size:0.85rem;" />
+          <div style="display:flex; align-items:center; gap:12px;">
+            ${this.renderDateFilterBar()}
+            <input type="text" id="input-search-invoices" class="input-field" placeholder="🔍 Search Invoice # / Table..." value="${this.searchQuery}" style="width:240px; padding:8px 12px; font-size:0.85rem;" />
+          </div>
         </div>
 
         <div class="card" style="padding:0; overflow:hidden; border:1px solid var(--border-subtle);">
@@ -568,13 +660,13 @@ export class CashierWorkspaceView {
                   <td style="padding:12px 16px; text-align:right;">₹${(i.taxableAmount || 0).toFixed(2)}</td>
                   <td style="padding:12px 16px; text-align:right; font-weight:800; color:var(--text-primary);">₹${i.grandTotal.toFixed(2)}</td>
                   <td style="padding:12px 16px; font-weight:600;">${i.cashierName}</td>
-                  <td style="padding:12px 16px; text-align:right; color:var(--text-muted);">${new Date(i.issuedAt).toLocaleTimeString()}</td>
+                  <td style="padding:12px 16px; text-align:right; color:var(--text-muted);">${new Date(i.issuedAt || i.created_at || i.createdAt || Date.now()).toLocaleDateString([], { month:'short', day:'numeric' })} ${new Date(i.issuedAt || i.created_at || i.createdAt || Date.now()).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}</td>
                   <td style="padding:12px 16px; text-align:center;">
                     <button class="btn-secondary btn-reprint-invoice" data-session-id="${i.sessionId}" style="padding:4px 8px; font-size:0.75rem; font-weight:700;">🖨 Reprint</button>
                   </td>
                 </tr>
               `).join('') : `
-                <tr><td colspan="9" style="padding:24px; text-align:center; color:var(--text-muted);">No issued tax invoices found yet today.</td></tr>
+                <tr><td colspan="9" style="padding:24px; text-align:center; color:var(--text-muted);">No issued tax invoices found for selected period (${this.dateFilter.toUpperCase()}).</td></tr>
               `}
             </tbody>
           </table>
@@ -586,13 +678,17 @@ export class CashierWorkspaceView {
   renderPaymentsLedger() {
     const tenant = tenantModel.getPrimaryTenant() || {};
     const tenantId = tenant.tenantId || 'tenant_h0qc7wf';
-    const payments = paymentModel.getAllPayments(tenantId);
+    let payments = paymentModel.getAllPayments(tenantId);
+    payments = this.filterRecordsByDateRange(payments, this.dateFilter, 'receivedAt');
 
     return `
       <div style="display:flex; flex-direction:column; width:100%; padding:20px; overflow-y:auto;">
-        <div style="margin-bottom:16px;">
-          <h3 style="font-size:1.4rem; margin:0; font-weight:800;">💳 Immutable Payments Ledger</h3>
-          <p style="color:var(--text-muted); font-size:0.85rem; margin:2px 0 0;">Read-only financial ledger of all settled payment transactions (CASH, UPI, CARD).</p>
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
+          <div>
+            <h3 style="font-size:1.4rem; margin:0; font-weight:800;">💳 Immutable Payments Ledger</h3>
+            <p style="color:var(--text-muted); font-size:0.85rem; margin:2px 0 0;">Read-only financial ledger of all settled payment transactions (CASH, UPI, CARD).</p>
+          </div>
+          ${this.renderDateFilterBar()}
         </div>
 
         <div class="card" style="padding:0; overflow:hidden; border:1px solid var(--border-subtle);">
@@ -614,15 +710,15 @@ export class CashierWorkspaceView {
                 <tr style="border-bottom:1px solid var(--border-subtle);">
                   <td style="padding:12px 16px; font-family:monospace; color:var(--text-muted);">${p.paymentId || p.id}</td>
                   <td style="padding:12px 16px; font-weight:800; color:var(--accent-primary);">${p.invoiceNumber}</td>
-                  <td style="padding:12px 16px; font-weight:700;">Table ${p.tableNumber}</td>
+                  <td style="padding:12px 16px; font-weight:700;">Table ${p.tableNumber || 1}</td>
                   <td style="padding:12px 16px; text-align:center;"><span class="badge badge-success">${p.paymentMethod}</span></td>
                   <td style="padding:12px 16px; font-size:0.8rem; color:var(--text-muted);">${p.referenceNo || '—'}</td>
                   <td style="padding:12px 16px; text-align:right; font-weight:800; color:var(--status-success);">₹${p.amount.toFixed(2)}</td>
                   <td style="padding:12px 16px; font-weight:600;">${p.receivedByName || 'Cashier'}</td>
-                  <td style="padding:12px 16px; text-align:right; color:var(--text-muted);">${new Date(p.receivedAt).toLocaleTimeString()}</td>
+                  <td style="padding:12px 16px; text-align:right; color:var(--text-muted);">${new Date(p.receivedAt || p.created_at || p.createdAt || Date.now()).toLocaleDateString([], { month:'short', day:'numeric' })} ${new Date(p.receivedAt || p.created_at || p.createdAt || Date.now()).toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' })}</td>
                 </tr>
               `).join('') : `
-                <tr><td colspan="8" style="padding:24px; text-align:center; color:var(--text-muted);">No settled payment records yet today.</td></tr>
+                <tr><td colspan="8" style="padding:24px; text-align:center; color:var(--text-muted);">No settled payment records found for selected period (${this.dateFilter.toUpperCase()}).</td></tr>
               `}
             </tbody>
           </table>
@@ -634,8 +730,11 @@ export class CashierWorkspaceView {
   renderCashierReports() {
     const tenant = tenantModel.getPrimaryTenant() || {};
     const tenantId = tenant.tenantId || 'tenant_h0qc7wf';
-    const payments = paymentModel.getAllPayments(tenantId);
-    const invoices = invoiceModel.getAllInvoices(tenantId);
+    let payments = paymentModel.getAllPayments(tenantId);
+    let invoices = invoiceModel.getAllInvoices(tenantId);
+
+    payments = this.filterRecordsByDateRange(payments, this.dateFilter, 'receivedAt');
+    invoices = this.filterRecordsByDateRange(invoices, this.dateFilter, 'issuedAt');
 
     let grossSales = 0;
     let totalDiscounts = 0;
@@ -660,14 +759,17 @@ export class CashierWorkspaceView {
 
     return `
       <div style="display:flex; flex-direction:column; width:100%; padding:20px; overflow-y:auto; gap:20px;">
-        <div>
-          <h3 style="font-size:1.4rem; margin:0; font-weight:800;">📊 Financial Day Summary & Tax Breakdown</h3>
-          <p style="color:var(--text-muted); font-size:0.85rem; margin:2px 0 0;">Gross sales, discounts, taxable value, GST liability, and payment method totals.</p>
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+          <div>
+            <h3 style="font-size:1.4rem; margin:0; font-weight:800;">📊 Financial Report & Tax Breakdown</h3>
+            <p style="color:var(--text-muted); font-size:0.85rem; margin:2px 0 0;">Gross sales, discounts, taxable value, GST liability, and payment method totals.</p>
+          </div>
+          ${this.renderDateFilterBar()}
         </div>
 
         <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:16px;">
           <div class="card" style="padding:16px; background:var(--bg-surface-2); border-left:4px solid var(--accent-primary);">
-            <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">GROSS SALES TODAY</div>
+            <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">GROSS SALES (${this.dateFilter.toUpperCase()})</div>
             <div style="font-size:1.8rem; font-weight:800; color:var(--accent-primary); margin-top:4px;">₹${grossSales.toFixed(2)}</div>
             <div style="font-size:0.8rem; color:var(--text-secondary); margin-top:4px;">${invoices.length} Issued Invoices</div>
           </div>
@@ -765,6 +867,15 @@ export class CashierWorkspaceView {
 
   bindEvents() {
     if (!this.container) return;
+
+    // Date range filter buttons handler
+    this.container.querySelectorAll('.btn-date-filter').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this.dateFilter = btn.dataset.dateFilter;
+        const sessionUser = this.authEngine ? this.authEngine.getCurrentSession() : null;
+        this.updateContent(sessionUser);
+      });
+    });
 
     // KPI cards click handler -> sets subtab
     this.container.querySelectorAll('.kpi-card').forEach(card => {
@@ -868,6 +979,42 @@ export class CashierWorkspaceView {
         } else {
           alert(`Cannot recall bill: ${res ? res.error : 'Unknown error'}`);
         }
+      });
+    }
+
+    // CA Flagged Discrepancy: Cashier Settle Banner Button
+    const btnSettleFlagged = this.container.querySelector('.btn-cashier-settle-flagged');
+    if (btnSettleFlagged) {
+      btnSettleFlagged.addEventListener('click', () => {
+        const excId = btnSettleFlagged.dataset.excId;
+        const invNumber = btnSettleFlagged.dataset.invNumber;
+        const sessId = btnSettleFlagged.dataset.sessId;
+        const diff = parseFloat(btnSettleFlagged.dataset.diff) || 0;
+
+        const pAmt = Math.abs(diff) || 100;
+        const method = prompt(`Record Missing Settlement for Flagged Invoice ${invNumber}:\nEnter Payment Method (CASH / UPI / CARD):`, 'UPI');
+        if (!method) return;
+
+        const refNo = prompt(`Enter Transaction Reference Number (e.g. UPI/984271039 or Cash Receipt Ref):`, `REF-${Math.floor(100000 + Math.random() * 900000)}`);
+        if (!refNo) return;
+
+        paymentModel.recordPayment({
+          sessionId: sessId,
+          invoiceNumber: invNumber,
+          amount: pAmt,
+          paymentMethod: method.toUpperCase(),
+          referenceNo: refNo,
+          status: 'SETTLED',
+          notes: 'Settled by Cashier via CA Discrepancy Resolution Banner'
+        });
+
+        accountingProjectionService.proposeResolution(excId, {
+          resolutionType: 'PAYMENT_RECORDED',
+          resolutionReason: `Settled by Cashier: ₹${pAmt} via ${method.toUpperCase()} (${refNo})`
+        }, 'Cashier');
+
+        alert(`✅ Settlement of ₹${pAmt} recorded for ${invNumber}!\n\nDiscrepancy resolution sent to CA for review.`);
+        this.updateContent();
       });
     }
 

@@ -82,6 +82,13 @@ class KitchenMenuModel {
   }
 
   /**
+   * Alias for getAll(tenantId)
+   */
+  getAllMenuItems(tenantId = null, filters = {}) {
+    return this.getAll(tenantId, filters);
+  }
+
+  /**
    * Get single menu item by ID
    * @param {string} id 
    * @returns {Object|null}

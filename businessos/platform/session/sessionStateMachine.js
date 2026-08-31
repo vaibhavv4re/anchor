@@ -20,7 +20,7 @@ export const SessionMilestones = Object.freeze({
 });
 
 const AllowedMilestoneTransitions = {
-  [SessionMilestones.GUESTS_SEATED]: [SessionMilestones.ORDERS_STARTED, SessionMilestones.CLOSED],
+  [SessionMilestones.GUESTS_SEATED]: [SessionMilestones.ORDERS_STARTED, SessionMilestones.ORDERS_CONFIRMED, SessionMilestones.BILL_GENERATED, SessionMilestones.CLOSED],
   [SessionMilestones.ORDERS_STARTED]: [SessionMilestones.ORDERS_CONFIRMED, SessionMilestones.BILL_GENERATED, SessionMilestones.CLOSED],
   [SessionMilestones.ORDERS_CONFIRMED]: [SessionMilestones.KITCHEN_UPDATES, SessionMilestones.BILL_GENERATED, SessionMilestones.CLOSED],
   [SessionMilestones.KITCHEN_UPDATES]: [SessionMilestones.BILL_GENERATED, SessionMilestones.CLOSED],

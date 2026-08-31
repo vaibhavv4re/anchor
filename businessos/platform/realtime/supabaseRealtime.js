@@ -90,18 +90,21 @@ export class SupabaseRealtime {
         this.isConnected = true;
         console.log('⚡ [SupabaseRealtime] WebSocket connected to Supabase Realtime Engine.');
 
-        // Join Postgres Changes channel for 'orders'
-        this._sendWsMessage({
-          topic: 'realtime:public:orders',
-          event: 'phx_join',
-          payload: {
-            config: {
-              postgres_changes: [
-                { event: '*', schema: 'public', table: 'orders' }
-              ]
-            }
-          },
-          ref: String(this.refCounter++)
+        // Join Postgres Changes channel for all operational and financial tables
+        const tablesToSubscribe = ['orders', 'table_sessions', 'bill_revisions', 'invoices', 'payments'];
+        tablesToSubscribe.forEach(tbl => {
+          this._sendWsMessage({
+            topic: `realtime:public:${tbl}`,
+            event: 'phx_join',
+            payload: {
+              config: {
+                postgres_changes: [
+                  { event: '*', schema: 'public', table: tbl }
+                ]
+              }
+            },
+            ref: String(this.refCounter++)
+          });
         });
 
         // Start 25s Phoenix heartbeat
@@ -166,11 +169,10 @@ export class SupabaseRealtime {
       try {
         const session = typeof sessionStorage !== 'undefined' ? JSON.parse(sessionStorage.getItem('ros_session') || '{}') : {};
         const tenantId = session.tenantId || 'tenant_h0qc7wf';
+        const headers = { 'apikey': this.anonKey, 'Authorization': `Bearer ${this.anonKey}` };
 
         // 1. Delta poll orders
-        const resp = await fetch(`${this.baseUrl}/rest/v1/orders?select=*`, {
-          headers: { 'apikey': this.anonKey, 'Authorization': `Bearer ${this.anonKey}` }
-        });
+        const resp = await fetch(`${this.baseUrl}/rest/v1/orders?select=*`, { headers });
         if (resp.ok) {
           const cloudOrders = await resp.json();
           if (Array.isArray(cloudOrders)) {
@@ -182,10 +184,21 @@ export class SupabaseRealtime {
           }
         }
 
-        // 2. Delta poll bill revisions
-        const revResp = await fetch(`${this.baseUrl}/rest/v1/bill_revisions?select=*`, {
-          headers: { 'apikey': this.anonKey, 'Authorization': `Bearer ${this.anonKey}` }
-        });
+        // 2. Delta poll table_sessions
+        const sessResp = await fetch(`${this.baseUrl}/rest/v1/table_sessions?select=*`, { headers });
+        if (sessResp.ok) {
+          const cloudSessions = await sessResp.json();
+          if (Array.isArray(cloudSessions)) {
+            const sessHash = JSON.stringify(cloudSessions.map(s => `${s.id}_${s.status}_${s.updated_at || ''}`));
+            if (sessHash !== this.lastSessionsHash) {
+              this.lastSessionsHash = sessHash;
+              this._syncCloudTableSessions(cloudSessions, tenantId);
+            }
+          }
+        }
+
+        // 3. Delta poll bill revisions
+        const revResp = await fetch(`${this.baseUrl}/rest/v1/bill_revisions?select=*`, { headers });
         if (revResp.ok) {
           const cloudRevisions = await revResp.json();
           if (Array.isArray(cloudRevisions)) {
@@ -196,8 +209,54 @@ export class SupabaseRealtime {
             }
           }
         }
+
+        // 4. Delta poll invoices
+        const invResp = await fetch(`${this.baseUrl}/rest/v1/invoices?select=*`, { headers });
+        if (invResp.ok) {
+          const cloudInvoices = await invResp.json();
+          if (Array.isArray(cloudInvoices)) {
+            const invHash = JSON.stringify(cloudInvoices.map(i => `${i.id}_${i.status}_${i.updated_at || ''}`));
+            if (invHash !== this.lastInvoicesHash) {
+              this.lastInvoicesHash = invHash;
+              this._syncCloudInvoices(cloudInvoices, tenantId);
+            }
+          }
+        }
+
+        // 5. Delta poll payments
+        const payResp = await fetch(`${this.baseUrl}/rest/v1/payments?select=*`, { headers });
+        if (payResp.ok) {
+          const cloudPayments = await payResp.json();
+          if (Array.isArray(cloudPayments)) {
+            const payHash = JSON.stringify(cloudPayments.map(p => `${p.id}_${p.status}_${p.created_at || ''}`));
+            if (payHash !== this.lastPaymentsHash) {
+              this.lastPaymentsHash = payHash;
+              this._syncCloudPayments(cloudPayments, tenantId);
+            }
+          }
+        }
+
+        // 6. Delta poll offline_journal (Reconciliation exceptions & audit entries)
+        const journalResp = await fetch(`${this.baseUrl}/rest/v1/offline_journal?select=*&order=created_at.desc&limit=100`, { headers });
+        if (journalResp.ok) {
+          const cloudJournal = await journalResp.json();
+          if (Array.isArray(cloudJournal)) {
+            const journalHash = JSON.stringify(cloudJournal.map(j => `${j.job_id}_${j.sync_state}_${j.created_at || ''}`));
+            if (journalHash !== this.lastJournalHash) {
+              this.lastJournalHash = journalHash;
+              this._syncCloudOfflineJournal(cloudJournal, tenantId);
+            }
+          }
+        }
       } catch (_) {}
     }, 2000);
+  }
+
+  _syncCloudOfflineJournal(cloudJournal, tenantId) {
+    offlineStore.setCollection('offline_journal', cloudJournal);
+    this.eventBus.publish('reconciliation:exception:flagged', {});
+    this.eventBus.publish('exception:resolved', {});
+    this.eventBus.publish('data:changed', {});
   }
 
   /**
@@ -362,13 +421,126 @@ export class SupabaseRealtime {
     };
   }
 
+  /**
+   * Ingests updated table sessions from Supabase cloud into local memory and fires platform events.
+   */
+  _syncCloudTableSessions(cloudSessions, tenantId) {
+    const localSessions = offlineStore.getCollection('table_sessions') || [];
+    const sessMap = new Map();
+    localSessions.forEach(s => sessMap.set(s.id || s.sessionId, s));
+
+    let hasChanges = false;
+    cloudSessions.forEach(raw => {
+      const p = (raw && raw.data) ? { ...raw.data, ...raw } : { ...raw };
+      if (!p.id) p.id = raw.id;
+      if (!p.sessionId) p.sessionId = raw.id;
+      if (raw.table_number) p.tableNumber = parseInt(raw.table_number);
+      if (raw.table_code) p.tableCode = raw.table_code;
+      if (raw.assigned_waiter_id) p.assignedWaiterId = raw.assigned_waiter_id;
+      if (raw.guest_count) p.guestCount = parseInt(raw.guest_count);
+      if (raw.status) p.status = raw.status;
+
+      const existing = sessMap.get(p.id);
+      if (!existing || JSON.stringify(existing) !== JSON.stringify(p)) {
+        const pVer = parseInt(p.version) || 0;
+        const eVer = parseInt(existing?.version) || 0;
+        if (pVer > 0 && eVer > 0 && pVer < eVer) return;
+
+        hasChanges = true;
+        sessMap.set(p.id, p);
+      }
+    });
+
+    if (hasChanges) {
+      offlineStore.setCollection('table_sessions', Array.from(sessMap.values()));
+      platformEventBus.publish('session:milestone:changed', { source: 'realtime_sync' });
+      platformEventBus.publish('session:projection:updated', { source: 'realtime_sync' });
+      platformEventBus.publish('table:state:changed', { source: 'realtime_sync' });
+    }
+  }
+
+  /**
+   * Ingests updated tax invoices from Supabase cloud into local memory and fires platform events.
+   */
+  _syncCloudInvoices(cloudInvoices, tenantId) {
+    const localInvoices = offlineStore.getCollection('invoices') || [];
+    const invMap = new Map();
+    localInvoices.forEach(i => invMap.set(i.id || i.invoiceNumber, i));
+
+    let hasChanges = false;
+    cloudInvoices.forEach(raw => {
+      const p = (raw && raw.data) ? { ...raw.data, ...raw } : { ...raw };
+      if (!p.id) p.id = raw.id;
+      if (raw.session_id) p.sessionId = raw.session_id;
+      if (raw.invoice_number) p.invoiceNumber = raw.invoice_number;
+      if (raw.bill_number) p.billNumber = raw.bill_number;
+      if (raw.grand_total) p.grandTotal = parseFloat(raw.grand_total);
+      if (raw.status) p.status = raw.status;
+
+      const existing = invMap.get(p.id);
+      if (!existing || JSON.stringify(existing) !== JSON.stringify(p)) {
+        hasChanges = true;
+        invMap.set(p.id, p);
+      }
+    });
+
+    if (hasChanges) {
+      offlineStore.setCollection('invoices', Array.from(invMap.values()));
+      platformEventBus.publish('invoice:issued', { source: 'realtime_sync' });
+      platformEventBus.publish('session:projection:updated', { source: 'realtime_sync' });
+    }
+  }
+
+  /**
+   * Ingests updated payments from Supabase cloud into local memory and fires platform events.
+   */
+  _syncCloudPayments(cloudPayments, tenantId) {
+    const localPayments = offlineStore.getCollection('payments') || [];
+    const payMap = new Map();
+    localPayments.forEach(p => payMap.set(p.id || p.paymentId, p));
+
+    let hasChanges = false;
+    cloudPayments.forEach(raw => {
+      const p = (raw && raw.data) ? { ...raw.data, ...raw } : { ...raw };
+      if (!p.id) p.id = raw.id;
+      if (!p.paymentId) p.paymentId = raw.id;
+      if (raw.session_id) p.sessionId = raw.session_id;
+      if (raw.bill_number) p.billNumber = raw.bill_number;
+      if (raw.invoice_number) p.invoiceNumber = raw.invoice_number;
+      if (raw.amount) p.amount = parseFloat(raw.amount);
+      if (raw.payment_method) p.paymentMethod = raw.payment_method;
+      if (raw.status) p.status = raw.status;
+
+      const existing = payMap.get(p.id);
+      if (!existing || JSON.stringify(existing) !== JSON.stringify(p)) {
+        hasChanges = true;
+        payMap.set(p.id, p);
+      }
+    });
+
+    if (hasChanges) {
+      offlineStore.setCollection('payments', Array.from(payMap.values()));
+      platformEventBus.publish('payment:recorded', { source: 'realtime_sync' });
+      platformEventBus.publish('session:milestone:changed', { source: 'realtime_sync' });
+      platformEventBus.publish('session:projection:updated', { source: 'realtime_sync' });
+    }
+  }
+
   handleIncomingPayload(table, eventType, newRecord, oldRecord = null, isFromBroadcast = false) {
     const normalized = this.normalizeEvent(table, eventType, newRecord, oldRecord);
     this.dispatchEvent(normalized);
 
-    // If this is an orders record, sync it immediately
+    const tId = newRecord ? (newRecord.tenantId || newRecord.tenant_id) : null;
     if (table === 'orders' && newRecord) {
-      this._syncCloudOrders([newRecord], newRecord.tenantId || newRecord.tenant_id);
+      this._syncCloudOrders([newRecord], tId);
+    } else if (table === 'table_sessions' && newRecord) {
+      this._syncCloudTableSessions([newRecord], tId);
+    } else if (table === 'bill_revisions' && newRecord) {
+      this._syncCloudBillRevisions([newRecord], tId);
+    } else if (table === 'invoices' && newRecord) {
+      this._syncCloudInvoices([newRecord], tId);
+    } else if (table === 'payments' && newRecord) {
+      this._syncCloudPayments([newRecord], tId);
     }
 
     if (!isFromBroadcast) {

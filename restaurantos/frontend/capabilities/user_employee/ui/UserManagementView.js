@@ -46,20 +46,32 @@ export class UserManagementView {
   }
 
   getStandardRoles() {
-    const rolesFromStore = this._getCollection('roles');
-    if (Array.isArray(rolesFromStore) && rolesFromStore.length > 0) {
-      return rolesFromStore;
-    }
-    return [
-      { id: 'role-manager', name: 'Operations Manager', workspace: 'manager' },
-      { id: 'role-waiter', name: 'Floor Server / Waiter', workspace: 'waiter' },
-      { id: 'role-chef', name: 'Kitchen Head Chef', workspace: 'kitchen' },
+    const defaultRoles = [
+      { id: 'role-superadmin', name: 'Super Admin', workspace: 'superadmin' },
+      { id: 'role-admin', name: 'Admin', workspace: 'admin' },
+      { id: 'role-manager', name: 'Manager', workspace: 'manager' },
+      { id: 'role-ca', name: 'Chartered Accountant / CA Auditor', workspace: 'ca' },
+      { id: 'role-waiter', name: 'Waiter', workspace: 'waiter' },
+      { id: 'role-chef', name: 'Chef', workspace: 'kitchen' },
       { id: 'role-cashier', name: 'Cashier & Billing', workspace: 'cashier' },
       { id: 'role-inventory-manager', name: 'Inventory Manager', workspace: 'inventory' },
-      { id: 'role-admin', name: 'General Manager / Admin', workspace: 'admin' },
-      { id: 'role-bar', name: 'Bartender', workspace: 'bar' },
-      { id: 'role-superadmin', name: 'System Superadmin', workspace: 'superadmin' }
+      { id: 'role-bar', name: 'Bartender', workspace: 'bar' }
     ];
+
+    const rolesFromStore = this._getCollection('roles') || [];
+    const combinedMap = new Map();
+    defaultRoles.forEach(r => combinedMap.set(r.id, r));
+    rolesFromStore.forEach(r => {
+      if (r && r.id) {
+        combinedMap.set(r.id, {
+          id: r.id,
+          name: r.name || r.id,
+          workspace: r.workspace || (r.id === 'role-ca' ? 'ca' : 'waiter')
+        });
+      }
+    });
+
+    return Array.from(combinedMap.values());
   }
 
   updateContent() {
@@ -244,12 +256,9 @@ export class UserManagementView {
         gw.create('employees', newEmp);
         gw.create('identities', {
           id: newEmp.identityId,
-          employeeId: newEmp.id,
-          name: newEmp.name,
-          pin,
-          pinHash: pin,
-          status: 'ACTIVE',
-          createdAt: new Date().toISOString()
+          tenant_id: 'tenant_h0qc7wf',
+          pin_hash: pin,
+          status: 'ACTIVE'
         });
       } else {
         const emps = offlineStore.getCollection('employees') || [];

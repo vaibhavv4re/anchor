@@ -45,6 +45,9 @@ export class RbacEngine {
       } else if (lower.includes('bar') || lower.includes('bartender')) {
         workspace = 'bar';
         permissions = ['bar.view', 'order.create'];
+      } else if (lower.includes('ca') || lower.includes('account') || lower.includes('compliance') || lower.includes('audit')) {
+        workspace = 'ca';
+        permissions = ['ca.view', 'accounting.view', 'reports.view', 'export.generate'];
       } else if (lower.includes('cashier') || lower.includes('billing')) {
         workspace = 'cashier';
         permissions = ['cashier.view', 'payment.process'];

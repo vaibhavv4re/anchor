@@ -111,6 +111,10 @@ class RecipeModel {
     });
   }
 
+  getAllRecipes(tenantId = null, filters = {}) {
+    return this.getAll(tenantId, filters);
+  }
+
   /**
    * Get single recipe by ID
    * @param {string} id 

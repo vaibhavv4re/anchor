@@ -20,6 +20,7 @@ export class DataGateway {
     this.offlineJournal = config.offlineJournal || null;
     this.isOnline = config.isOnline !== undefined ? config.isOnline : true;
     this.listeners = new Map();
+    this.processedOperations = new Set();
 
     if (config.realtime && typeof config.realtime.subscribe === 'function') {
       config.realtime.subscribe('*', (event) => this.handleRealtimeEvent(event));
@@ -30,15 +31,38 @@ export class DataGateway {
     this.isOnline = !!online;
   }
 
+  isOperationProcessed(operationId) {
+    if (!operationId) return false;
+    return this.processedOperations.has(operationId);
+  }
+
+  markOperationProcessed(operationId) {
+    if (!operationId) return;
+    this.processedOperations.add(operationId);
+  }
+
   handleRealtimeEvent(event) {
     if (!event || !event.collection || !event.record) return;
     const { collection, operation, record } = event;
 
     if (this.localAdapter) {
-      const id = record.id || record.uuid || record.itemCode || record.code || record.categoryCode || record.supplierCode || record.uomCode || record.locationCode || record.poNumber || record.grnNumber || record.transferNo || record.issueNo || record.adjustmentNo || record.countNo || record.tableCode || record.employeeCode || record.tenantId;
+      const id = record.id || record.sessionId || record.revisionId || record.paymentId || record.invoiceNumber || record.uuid || record.itemCode || record.code || record.categoryCode || record.supplierCode || record.uomCode || record.locationCode || record.poNumber || record.grnNumber || record.transferNo || record.issueNo || record.adjustmentNo || record.countNo || record.tableCode || record.employeeCode || record.tenantId;
       if (operation === 'INSERT' || operation === 'UPDATE') {
         const existing = this.localAdapter.getById(collection, id);
         if (existing) {
+          // Version & Timestamp Out-of-Order Guard
+          const recordVersion = parseInt(record.version || record.revisionNumber || record.revision_number) || 0;
+          const existingVersion = parseInt(existing.version || existing.revisionNumber || existing.revision_number) || 0;
+          const recordTime = new Date(record.updatedAt || record.updated_at || record.createdAt || 0).getTime();
+          const existingTime = new Date(existing.updatedAt || existing.updated_at || existing.createdAt || 0).getTime();
+
+          if (recordVersion > 0 && existingVersion > 0 && recordVersion < existingVersion) {
+            return; // Ignore older version
+          }
+          if (recordTime > 0 && existingTime > 0 && recordTime < existingTime) {
+            return; // Ignore older timestamp
+          }
+
           this.localAdapter.update(collection, id, record);
         } else {
           this.localAdapter.create(collection, record);
@@ -57,10 +81,10 @@ export class DataGateway {
 
   getCachedById(collection, id, tenantId = null) {
     const list = this.getCachedCollection(collection, tenantId);
-    return list.find(item => item.id === id || item.uuid === id || item.itemCode === id || item.code === id || item.categoryCode === id || item.supplierCode === id || item.uomCode === id || item.locationCode === id || item.poNumber === id || item.grnNumber === id || item.transferNo === id || item.issueNo === id || item.adjustmentNo === id || item.countNo === id || item.tableCode === id || item.employeeCode === id || item.tenantId === id) || null;
+    return list.find(item => item.id === id || item.sessionId === id || item.revisionId === id || item.paymentId === id || item.invoiceNumber === id || item.uuid === id || item.itemCode === id || item.code === id || item.categoryCode === id || item.supplierCode === id || item.uomCode === id || item.locationCode === id || item.poNumber === id || item.grnNumber === id || item.transferNo === id || item.issueNo === id || item.adjustmentNo === id || item.countNo === id || item.tableCode === id || item.employeeCode === id || item.tenantId === id) || null;
   }
 
-  async hydrateCollections(collections = ['tenants', 'identities', 'employees'], tenantId = null) {
+  async hydrateCollections(collections = ['tenants', 'identities', 'employees', 'table_sessions', 'orders', 'bill_revisions', 'invoices', 'payments', 'session_audit_logs', 'offline_journal'], tenantId = null) {
     const results = {};
     for (const col of collections) {
       if (col !== 'roles') {
