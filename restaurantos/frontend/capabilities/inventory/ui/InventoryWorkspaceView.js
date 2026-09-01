@@ -57,24 +57,39 @@ export class InventoryWorkspaceView {
   }
 
   _inferProductFamilyCode(category) {
-    if (!category) return 'PF-PROD';
-    const storedPf = category.productFamilyCode || category.product_family_code || category.productFamily || category.product_family || category.familyCode || category.family_code || category.family;
-    if (storedPf) return storedPf.toUpperCase().trim();
+    if (!category) return 'FAM-PRODUCE';
+    let storedPf = (typeof category === 'string' ? category : (category.productFamilyCode || category.product_family_code || category.productFamily || category.product_family || category.familyCode || category.family_code || category.family || '')).toUpperCase().trim();
+
+    // Alias Normalization
+    if (storedPf) {
+      if (storedPf === 'PF-MEAT' || storedPf === 'FAM-MEAT') return 'FAM-MEAT';
+      if (storedPf === 'PF-SEA' || storedPf === 'PF-SEAFOOD' || storedPf === 'FAM-SEAFOOD' || storedPf === 'FAM-SEA') return 'FAM-SEAFOOD';
+      if (storedPf === 'PF-PROD' || storedPf === 'PF-PRODUCE' || storedPf === 'FAM-PRODUCE' || storedPf === 'FAM-PROD') return 'FAM-PRODUCE';
+      if (storedPf === 'PF-DAIRY' || storedPf === 'FAM-DAIRY') return 'FAM-DAIRY';
+      if (storedPf === 'PF-SPICE' || storedPf === 'PF-SPICES' || storedPf === 'FAM-SPICE' || storedPf === 'FAM-SPICES') return 'FAM-SPICES';
+      if (storedPf === 'PF-GRAIN' || storedPf === 'PF-GRAINS' || storedPf === 'FAM-GRAIN' || storedPf === 'FAM-GRAINS') return 'FAM-GRAINS';
+      if (storedPf === 'PF-CONDIMENTS' || storedPf === 'FAM-CONDIMENTS' || storedPf === 'FAM-OIL' || storedPf === 'FAM-OILS') return 'FAM-CONDIMENTS';
+      if (storedPf === 'PF-BEV' || storedPf === 'PF-BEVERAGES' || storedPf === 'FAM-BEV' || storedPf === 'FAM-BEVERAGES') return 'FAM-BEVERAGES';
+      if (storedPf === 'PF-BAR' || storedPf === 'PF-LIQUOR' || storedPf === 'FAM-BAR' || storedPf === 'FAM-LIQUOR') return 'FAM-LIQUOR';
+      if (storedPf === 'PF-PACK' || storedPf === 'PF-SUPPLIES' || storedPf === 'FAM-PACK' || storedPf === 'FAM-SUPPLIES') return 'FAM-SUPPLIES';
+      return storedPf;
+    }
 
     const code = (category.categoryCode || category.category_code || category.code || category.id || '').toUpperCase().trim();
     const name = (category.categoryName || category.category_name || category.name || '').toUpperCase().trim();
 
-    if (code.includes('MEAT') || code.includes('CHICKEN') || code.includes('MUTTON') || name.includes('MEAT') || name.includes('POULTRY')) return 'PF-MEAT';
-    if (code.includes('SEA') || code.includes('FISH') || code.includes('PRAWN') || name.includes('SEAFOOD') || name.includes('FISH')) return 'PF-SEA';
-    if (code.includes('VEG') || code.includes('PROD') || code.includes('FRUIT') || name.includes('PRODUCE') || name.includes('VEGETABLE') || name.includes('FRUIT')) return 'PF-PROD';
-    if (code.includes('RICE') || code.includes('GRAIN') || code.includes('STAPLE') || code.includes('DAL') || name.includes('RICE') || name.includes('GRAIN') || name.includes('STAPLE') || name.includes('FLOUR')) return 'PF-GRAIN';
-    if (code.includes('DAIRY') || code.includes('MILK') || name.includes('DAIRY') || name.includes('MILK') || name.includes('FAT') || name.includes('BUTTER')) return 'PF-DAIRY';
-    if (code.includes('SPICE') || code.includes('HERB') || name.includes('SPICE') || name.includes('SEASONING')) return 'PF-SPICE';
-    if (code.includes('BEV') || name.includes('BEVERAGE') || name.includes('SOFT DRINK')) return 'PF-BEV';
-    if (code.includes('BAR') || code.includes('LIQUOR') || name.includes('BAR') || name.includes('SPIRIT') || name.includes('WINE') || name.includes('BEER')) return 'PF-BAR';
-    if (code.includes('PACK') || name.includes('PACKAGING') || name.includes('SUPPLY')) return 'PF-PACK';
+    if (code.includes('MEAT') || code.includes('CHICKEN') || code.includes('MUTTON') || name.includes('MEAT') || name.includes('POULTRY')) return 'FAM-MEAT';
+    if (code.includes('SEA') || code.includes('FISH') || code.includes('PRAWN') || name.includes('SEAFOOD') || name.includes('FISH')) return 'FAM-SEAFOOD';
+    if (code.includes('VEG') || code.includes('PROD') || code.includes('FRUIT') || name.includes('PRODUCE') || name.includes('VEGETABLE') || name.includes('FRUIT')) return 'FAM-PRODUCE';
+    if (code.includes('RICE') || code.includes('GRAIN') || code.includes('STAPLE') || code.includes('DAL') || name.includes('RICE') || name.includes('GRAIN') || name.includes('STAPLE') || name.includes('FLOUR')) return 'FAM-GRAINS';
+    if (code.includes('OIL') || code.includes('CONDIMENT') || name.includes('OIL') || name.includes('CONDIMENT') || name.includes('SAUCE')) return 'FAM-CONDIMENTS';
+    if (code.includes('DAIRY') || code.includes('MILK') || name.includes('DAIRY') || name.includes('MILK') || name.includes('FAT') || name.includes('BUTTER')) return 'FAM-DAIRY';
+    if (code.includes('SPICE') || code.includes('HERB') || name.includes('SPICE') || name.includes('SEASONING')) return 'FAM-SPICES';
+    if (code.includes('BEV') || name.includes('BEVERAGE') || name.includes('SOFT DRINK')) return 'FAM-BEVERAGES';
+    if (code.includes('BAR') || code.includes('LIQUOR') || name.includes('BAR') || name.includes('SPIRIT') || name.includes('WINE') || name.includes('BEER')) return 'FAM-LIQUOR';
+    if (code.includes('PACK') || name.includes('PACKAGING') || name.includes('SUPPLY')) return 'FAM-SUPPLIES';
 
-    return 'PF-PROD';
+    return 'FAM-PRODUCE';
   }
 
   async render(mount, session) {

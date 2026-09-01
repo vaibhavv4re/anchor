@@ -32,15 +32,16 @@ export class CategoryImportController {
    */
   getDefaultProductFamilies() {
     return [
-      { code: 'PF-MEAT', name: 'Meat & Poultry', description: 'Fresh chicken, mutton, beef, pork, and poultry cuts' },
-      { code: 'PF-SEA', name: 'Seafood', description: 'Fresh fish, prawns, crabs, and shellfish' },
-      { code: 'PF-PROD', name: 'Fruits & Vegetables', description: 'Fresh vegetables, greens, herbs, and fruits' },
-      { code: 'PF-DAIRY', name: 'Dairy & Fats', description: 'Milk, butter, ghee, cheese, paneer, and cream' },
-      { code: 'PF-SPICE', name: 'Spices & Seasonings', description: 'Whole spices, ground spices, pastes, and condiments' },
-      { code: 'PF-GRAIN', name: 'Grains & Staples', description: 'Rice, wheat flour, pulses, dals, and grains' },
-      { code: 'PF-BEV', name: 'Beverages & Soft Drinks', description: 'Juices, syrups, carbonated drinks, tea, and coffee' },
-      { code: 'PF-BAR', name: 'Bar Spirits & Liquor', description: 'Spirits, wine, beer, liqueurs, and cocktail mixers' },
-      { code: 'PF-PACK', name: 'Packaging & Supplies', description: 'Takeaway boxes, bags, cutlery, and hygiene supplies' }
+      { code: 'FAM-MEAT', name: 'Meat & Poultry', description: 'Fresh chicken, mutton, beef, pork, and poultry cuts' },
+      { code: 'FAM-SEAFOOD', name: 'Seafood', description: 'Fresh fish, prawns, crabs, and shellfish' },
+      { code: 'FAM-PRODUCE', name: 'Fruits & Vegetables', description: 'Fresh vegetables, greens, herbs, and fruits' },
+      { code: 'FAM-DAIRY', name: 'Dairy & Fats', description: 'Milk, butter, ghee, cheese, paneer, and cream' },
+      { code: 'FAM-SPICES', name: 'Spices & Seasonings', description: 'Whole spices, ground spices, pastes, and seasonings' },
+      { code: 'FAM-GRAINS', name: 'Grains & Staples', description: 'Rice, wheat flour, pulses, dals, and grains' },
+      { code: 'FAM-CONDIMENTS', name: 'Cooking Oils & Condiments', description: 'Oils, sauces, dressings, and condiments' },
+      { code: 'FAM-BEVERAGES', name: 'Beverages & Soft Drinks', description: 'Juices, syrups, carbonated drinks, tea, and coffee' },
+      { code: 'FAM-LIQUOR', name: 'Bar Spirits & Liquor', description: 'Spirits, wine, beer, liqueurs, and cocktail mixers' },
+      { code: 'FAM-SUPPLIES', name: 'Packaging & Supplies', description: 'Takeaway boxes, bags, cutlery, and hygiene supplies' }
     ];
   }
 
