@@ -56,6 +56,27 @@ export class InventoryWorkspaceView {
     return [];
   }
 
+  _inferProductFamilyCode(category) {
+    if (!category) return 'PF-PROD';
+    const storedPf = category.productFamilyCode || category.product_family_code || category.productFamily || category.product_family || category.familyCode || category.family_code || category.family;
+    if (storedPf) return storedPf.toUpperCase().trim();
+
+    const code = (category.categoryCode || category.category_code || category.code || category.id || '').toUpperCase().trim();
+    const name = (category.categoryName || category.category_name || category.name || '').toUpperCase().trim();
+
+    if (code.includes('MEAT') || code.includes('CHICKEN') || code.includes('MUTTON') || name.includes('MEAT') || name.includes('POULTRY')) return 'PF-MEAT';
+    if (code.includes('SEA') || code.includes('FISH') || code.includes('PRAWN') || name.includes('SEAFOOD') || name.includes('FISH')) return 'PF-SEA';
+    if (code.includes('VEG') || code.includes('PROD') || code.includes('FRUIT') || name.includes('PRODUCE') || name.includes('VEGETABLE') || name.includes('FRUIT')) return 'PF-PROD';
+    if (code.includes('RICE') || code.includes('GRAIN') || code.includes('STAPLE') || code.includes('DAL') || name.includes('RICE') || name.includes('GRAIN') || name.includes('STAPLE') || name.includes('FLOUR')) return 'PF-GRAIN';
+    if (code.includes('DAIRY') || code.includes('MILK') || name.includes('DAIRY') || name.includes('MILK') || name.includes('FAT') || name.includes('BUTTER')) return 'PF-DAIRY';
+    if (code.includes('SPICE') || code.includes('HERB') || name.includes('SPICE') || name.includes('SEASONING')) return 'PF-SPICE';
+    if (code.includes('BEV') || name.includes('BEVERAGE') || name.includes('SOFT DRINK')) return 'PF-BEV';
+    if (code.includes('BAR') || code.includes('LIQUOR') || name.includes('BAR') || name.includes('SPIRIT') || name.includes('WINE') || name.includes('BEER')) return 'PF-BAR';
+    if (code.includes('PACK') || name.includes('PACKAGING') || name.includes('SUPPLY')) return 'PF-PACK';
+
+    return 'PF-PROD';
+  }
+
   async render(mount, session) {
     if (!mount) return;
 
@@ -473,7 +494,7 @@ export class InventoryWorkspaceView {
                   ${categories.length ? categories.map(c => {
                     const catCode = c.categoryCode || c.category_code || c.code || c.id;
                     const catName = c.categoryName || c.category_name || c.name || catCode;
-                    const pfCode = c.productFamilyCode || c.product_family_code || 'PF-PROD';
+                    const pfCode = this._inferProductFamilyCode(c);
                     const pfObj = productFamilies.find(pf => (pf.code || pf.product_family_code) === pfCode);
                     const famName = pfObj ? (pfObj.name || pfObj.product_family_name || pfCode) : pfCode;
                     const defUom = c.defaultBaseUom || c.default_base_uom || c.defaultUom || 'KG';
@@ -514,12 +535,23 @@ export class InventoryWorkspaceView {
                 </thead>
                 <tbody>
                   ${productFamilies.map(pf => {
-                    const pfCode = pf.code || pf.product_family_code || pf.id;
+                    const pfCode = (pf.code || pf.product_family_code || pf.id || '').toUpperCase().trim();
                     const pfName = pf.name || pf.product_family_name || pfCode;
                     const desc = pf.description || 'Reference product family';
-                    const famCats = categories.filter(c => (c.productFamilyCode || c.product_family_code) === pfCode);
-                    const famCatCodes = new Set(famCats.map(c => c.categoryCode || c.category_code || c.code));
-                    const famItemCount = items.filter(i => famCatCodes.has(i.categoryCode || i.category_code || i.category)).length;
+                    const famCats = categories.filter(c => this._inferProductFamilyCode(c) === pfCode);
+
+                    const famCatCodes = new Set();
+                    famCats.forEach(c => {
+                      const code = (c.categoryCode || c.category_code || c.code || c.id || '').toUpperCase().trim();
+                      const name = (c.categoryName || c.category_name || c.name || '').toUpperCase().trim();
+                      if (code) famCatCodes.add(code);
+                      if (name) famCatCodes.add(name);
+                    });
+
+                    const famItemCount = items.filter(i => {
+                      const itemCat = (i.categoryCode || i.category_code || i.category || '').toUpperCase().trim();
+                      return itemCat && famCatCodes.has(itemCat);
+                    }).length;
 
                     return `
                       <tr style="border-bottom:1px solid var(--border-subtle);">
