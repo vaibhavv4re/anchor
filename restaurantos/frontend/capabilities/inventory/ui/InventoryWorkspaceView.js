@@ -4347,9 +4347,52 @@ export class InventoryWorkspaceView {
 
       ${diff.NEW.length > 0 ? `
         <div style="margin-bottom:16px;">
-          <div style="font-weight:700; font-size:0.85rem; color:var(--status-success); margin-bottom:6px;">NEW CATEGORIES TO CREATE (${diff.NEW.length})</div>
-          <div style="max-height:100px; overflow-y:auto; font-size:0.8rem; color:var(--text-muted);">
-            ${diff.NEW.map(n => `<span style="display:inline-block; background:var(--bg-surface-2); padding:3px 8px; border-radius:4px; margin:2px 4px 2px 0; font-family:monospace; color:var(--text-main);">${n.categoryCode} ${n.categoryName} (${n.productFamilyCode})</span>`).join('')}
+          <div style="font-weight:700; font-size:0.85rem; color:var(--status-success); margin-bottom:6px;">NEW TAXONOMY RECORDS TO CREATE (${diff.NEW.length})</div>
+          <div style="max-height:140px; overflow-y:auto; font-size:0.8rem; color:var(--text-muted); display:flex; flex-direction:column; gap:4px;">
+            ${diff.NEW.map(n => {
+              const isPf = n.recordType === 'PRODUCT_FAMILY' || (n.code && (n.code.startsWith('FAM-') || n.code.startsWith('PF-')));
+              const code = n.code || n.categoryCode || n.category_code || '';
+              const name = n.name || n.categoryName || n.category_name || '';
+              const parent = n.productFamilyCode || n.product_family_code || '';
+              const badge = isPf ? '📦 PRODUCT FAMILY' : '🏷️ CATEGORY';
+              const label = isPf ? `${badge}: ${code} — ${name}` : `${badge}: ${code} — ${name} (${parent || 'GENERAL'})`;
+              return `<div style="background:var(--bg-surface-2); padding:6px 10px; border-radius:4px; font-family:monospace; color:var(--text-main); font-size:0.8rem;">${label}</div>`;
+            }).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      ${diff.UPDATED.length > 0 ? `
+        <div style="margin-bottom:16px;">
+          <div style="font-weight:700; font-size:0.85rem; color:var(--accent-primary); margin-bottom:8px;">UPDATED TAXONOMY COMPARISON (${diff.UPDATED.length})</div>
+          <div style="max-height:180px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;">
+            ${diff.UPDATED.map(u => {
+              const isPf = u.recordType === 'PRODUCT_FAMILY' || (u.code && (u.code.startsWith('FAM-') || u.code.startsWith('PF-')));
+              const code = u.code || u.categoryCode || u.category_code || '';
+              const name = u.name || u.categoryName || u.category_name || '';
+              const badge = isPf ? '📦 PRODUCT FAMILY' : '🏷️ CATEGORY';
+              return `
+                <div style="background:var(--bg-surface-2); border-left:3px solid var(--accent-primary); padding:10px; border-radius:4px;">
+                  <div style="font-weight:700; font-size:0.85rem; font-family:monospace; color:var(--accent-primary);">${badge}: ${code} — ${name}</div>
+                  <table style="width:100%; font-size:0.78rem; margin-top:6px; border-collapse:collapse;">
+                    <thead>
+                      <tr style="color:var(--text-muted); text-align:left; border-bottom:1px solid var(--border-subtle);">
+                        <th style="padding:4px;">Field</th><th style="padding:4px;">EXISTING</th><th style="padding:4px;">IMPORT</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      ${u.fieldChanges.map(fc => `
+                        <tr>
+                          <td style="padding:4px; font-weight:600;">${fc.field}</td>
+                          <td style="padding:4px; color:var(--text-muted);">${fc.existing}</td>
+                          <td style="padding:4px; color:var(--accent-primary); font-weight:700;">${fc.import} ← CHANGED</td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>
+                </div>
+              `;
+            }).join('')}
           </div>
         </div>
       ` : ''}

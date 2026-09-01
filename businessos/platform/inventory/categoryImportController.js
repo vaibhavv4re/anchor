@@ -245,6 +245,9 @@ export class CategoryImportController {
             recordType: 'PRODUCT_FAMILY',
             code,
             name,
+            categoryCode: code,
+            categoryName: name,
+            productFamilyCode: 'FAMILY',
             description: desc,
             active: rawActive !== '' ? (rawActive.toLowerCase() !== 'false') : true
           });
@@ -254,9 +257,9 @@ export class CategoryImportController {
           if (name && name !== exName) fieldChanges.push({ field: 'Family Name', existing: exName, import: name });
 
           if (fieldChanges.length > 0) {
-            diff.UPDATED.push({ recordType: 'PRODUCT_FAMILY', code, name: name || exName, fieldChanges });
+            diff.UPDATED.push({ recordType: 'PRODUCT_FAMILY', code, categoryCode: code, name: name || exName, categoryName: name || exName, fieldChanges });
           } else {
-            diff.UNCHANGED.push({ recordType: 'PRODUCT_FAMILY', code, name: exName });
+            diff.UNCHANGED.push({ recordType: 'PRODUCT_FAMILY', code, categoryCode: code, name: exName, categoryName: exName });
           }
         }
       } else {
@@ -265,6 +268,8 @@ export class CategoryImportController {
         if (!existing) {
           diff.NEW.push({
             recordType: 'CATEGORY',
+            code,
+            name,
             categoryCode: code,
             categoryName: name,
             productFamilyCode: pfCode,
@@ -273,7 +278,7 @@ export class CategoryImportController {
           });
         } else {
           const exName = existing.categoryName || existing.category_name || existing.name || '';
-          const exPfCode = existing.productFamilyCode || existing.product_family_code || 'PF-PROD';
+          const exPfCode = existing.productFamilyCode || existing.product_family_code || 'FAM-PRODUCE';
           const exUom = existing.defaultBaseUom || existing.default_base_uom || 'KG';
 
           const fieldChanges = [];
