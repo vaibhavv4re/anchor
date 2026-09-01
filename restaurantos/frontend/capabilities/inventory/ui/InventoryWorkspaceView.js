@@ -8,6 +8,7 @@
  */
 
 import { inventoryImportController } from '../../../../../businessos/platform/inventory/inventoryImportController.js';
+import { categoryImportController } from '../../../../../businessos/platform/inventory/categoryImportController.js';
 
 export class InventoryWorkspaceView {
   constructor(deps = {}) {
@@ -401,61 +402,187 @@ export class InventoryWorkspaceView {
         </div>
       `;
     } else if (tabKey === 'inv-categories') {
+      const activeCatSubTab = this.categorySubTab || 'categories';
+      const pfList = categoryImportController._getCollection('product_families', tenantId);
+      const productFamilies = pfList.length > 0 ? pfList : categoryImportController.getDefaultProductFamilies();
+
+      const mappedItemsCount = items.filter(i => i.categoryCode || i.category_code || i.category).length;
+      const unclassifiedCount = items.filter(i => !i.categoryCode && !i.category_code && !i.category).length;
+
       mount.innerHTML = `
         <div class="card animate-fade-in" style="background:var(--bg-surface-1); padding:24px; border-radius:8px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
+          <!-- Header Title & Action Toolbar -->
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:12px;">
             <div>
-              <h3 style="font-size:1.4rem; margin:0;">🏷 Categories & Product Families Master (${categories.length} Categories)</h3>
-              <p style="color:var(--text-muted); font-size:0.85rem; margin-top:2px;">Sourced directly from Supabase PostgreSQL <strong>inventory_categories</strong> table.</p>
+              <h3 style="font-size:1.4rem; margin:0; display:flex; align-items:center; gap:8px;">
+                <span>🏷️</span> Categories & Product Families
+              </h3>
+              <p style="color:var(--text-muted); font-size:0.85rem; margin-top:2px;">
+                Inventory classification and product taxonomy
+              </p>
             </div>
-            <div style="display:flex; gap:10px; flex-wrap:wrap;">
-              <button class="btn-primary nav-inv-btn" data-tab="inv-categories-create" style="padding:8px 16px; font-weight:700; background:var(--accent-primary); border-radius:6px; border:none; cursor:pointer; color:#fff;">
-                + Add Category Screen
+            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+              <button type="button" class="btn-primary" id="btn-add-category-action" style="padding:8px 14px; font-weight:700; background:var(--accent-primary); border-radius:6px; border:none; cursor:pointer; color:#fff;">
+                ${activeCatSubTab === 'families' ? '+ Add Product Family' : '+ Add Category'}
+              </button>
+              <button type="button" class="btn-secondary" id="btn-cat-import" style="padding:8px 14px; font-weight:700; border-radius:6px; cursor:pointer; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);">
+                ↑ Import Taxonomy
+              </button>
+              <button type="button" class="btn-secondary" id="btn-cat-export" style="padding:8px 14px; font-weight:700; border-radius:6px; cursor:pointer; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);">
+                ↓ Export Taxonomy
+              </button>
+              <button type="button" class="btn-secondary" id="btn-cat-template" style="padding:8px 14px; font-weight:700; border-radius:6px; cursor:pointer; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);">
+                ⬇ Template
               </button>
             </div>
           </div>
 
-          <div class="table-responsive">
-            <table class="data-table" style="width:100%; border-collapse:collapse; font-size:0.85rem;">
-              <thead>
-                <tr style="border-bottom:1px solid var(--border-subtle); text-align:left; background:var(--bg-surface-2);">
-                  <th style="padding:10px;">Category Code</th>
-                  <th style="padding:10px;">Category Name</th>
-                  <th style="padding:10px;">Product Family</th>
-                  <th style="padding:10px;">Default Base UOM</th>
-                  <th style="padding:10px;">Mapped Items</th>
-                  <th style="padding:10px;">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${categories.length ? categories.map(c => {
-                  const catCode = c.categoryCode || c.category_code || c.id;
-                  const catName = c.categoryName || c.category_name || (c.data ? c.data.categoryName : catCode);
-                  const famName = c.productFamilyName || c.product_family_name || (c.data ? c.data.productFamilyName : 'General');
-                  const defUom = c.defaultUom || c.default_uom || (c.data ? c.data.defaultUom : 'KG');
-                  const mappedCount = items.filter(i => (i.categoryCode === catCode || i.category_code === catCode)).length;
-                  return `
-                    <tr style="border-bottom:1px solid var(--border-subtle);">
-                      <td style="padding:10px; font-weight:700; font-family:monospace; color:var(--accent-primary);">${catCode}</td>
-                      <td style="padding:10px; font-weight:600;">${catName}</td>
-                      <td style="padding:10px;"><span class="badge badge-info">${famName}</span></td>
-                      <td style="padding:10px;"><span class="badge badge-secondary">${defUom}</span></td>
-                      <td style="padding:10px; font-weight:700; color:var(--status-success);">${mappedCount} items</td>
-                      <td style="padding:10px;"><span class="badge badge-success">ACTIVE</span></td>
-                    </tr>
-                  `;
-                }).join('') : `
-                  <tr>
-                    <td colspan="6" style="padding:24px; text-align:center; color:var(--text-muted);">
-                      No categories found in Supabase. Click <strong>"+ Add Category Screen"</strong> to create a new category.
-                    </td>
-                  </tr>
-                `}
-              </tbody>
-            </table>
+          <!-- Provenance & Metrics KPI Strip -->
+          <div style="background:var(--bg-surface-2); padding:10px 16px; border-radius:6px; font-size:0.82rem; font-weight:600; color:var(--text-muted); margin-bottom:16px; display:flex; gap:16px; flex-wrap:wrap; align-items:center;">
+            <span><strong style="color:var(--accent-primary);">${categories.length}</strong> Categories</span> •
+            <span><strong style="color:var(--status-info);">${productFamilies.length}</strong> Product Families</span> •
+            <span><strong style="color:var(--status-success);">${mappedItemsCount}</strong> Inventory Items Mapped</span> •
+            <span><strong style="color:${unclassifiedCount > 0 ? 'var(--status-warning)' : 'var(--text-muted)'};">${unclassifiedCount}</strong> Unclassified Items</span>
           </div>
+
+          <!-- Sub-Tab Navigation Bar -->
+          <div style="display:flex; gap:8px; border-bottom:1px solid var(--border-subtle); margin-bottom:16px;">
+            <button type="button" id="tab-sub-categories" style="padding:8px 16px; font-weight:700; font-size:0.85rem; border:none; background:none; cursor:pointer; border-bottom:2px solid ${activeCatSubTab === 'categories' ? 'var(--accent-primary)' : 'transparent'}; color:${activeCatSubTab === 'categories' ? 'var(--accent-primary)' : 'var(--text-muted)'};">
+              Categories (${categories.length})
+            </button>
+            <button type="button" id="tab-sub-families" style="padding:8px 16px; font-weight:700; font-size:0.85rem; border:none; background:none; cursor:pointer; border-bottom:2px solid ${activeCatSubTab === 'families' ? 'var(--accent-primary)' : 'transparent'}; color:${activeCatSubTab === 'families' ? 'var(--accent-primary)' : 'var(--text-muted)'};">
+              Product Families (${productFamilies.length})
+            </button>
+          </div>
+
+          <!-- Sub-Tab Content View -->
+          ${activeCatSubTab === 'categories' ? `
+            <div class="table-responsive">
+              <table class="data-table" style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+                <thead>
+                  <tr style="border-bottom:1px solid var(--border-subtle); text-align:left; background:var(--bg-surface-2);">
+                    <th style="padding:10px;">Category Code</th>
+                    <th style="padding:10px;">Category Name</th>
+                    <th style="padding:10px;">Product Family</th>
+                    <th style="padding:10px;">Default Base UOM</th>
+                    <th style="padding:10px;">Mapped Items</th>
+                    <th style="padding:10px;">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${categories.length ? categories.map(c => {
+                    const catCode = c.categoryCode || c.category_code || c.code || c.id;
+                    const catName = c.categoryName || c.category_name || c.name || catCode;
+                    const pfCode = c.productFamilyCode || c.product_family_code || 'PF-PROD';
+                    const pfObj = productFamilies.find(pf => (pf.code || pf.product_family_code) === pfCode);
+                    const famName = pfObj ? (pfObj.name || pfObj.product_family_name || pfCode) : pfCode;
+                    const defUom = c.defaultBaseUom || c.default_base_uom || c.defaultUom || 'KG';
+                    const mappedCount = items.filter(i => (i.categoryCode === catCode || i.category_code === catCode || i.category === catCode)).length;
+
+                    return `
+                      <tr class="row-cat-click" data-cat-code="${catCode}" style="border-bottom:1px solid var(--border-subtle); cursor:pointer;">
+                        <td style="padding:10px; font-weight:700; font-family:monospace; color:var(--accent-primary);">${catCode}</td>
+                        <td style="padding:10px; font-weight:600;">${catName}</td>
+                        <td style="padding:10px;"><span class="badge badge-info">${famName}</span></td>
+                        <td style="padding:10px;"><span class="badge badge-secondary">${defUom}</span></td>
+                        <td style="padding:10px; font-weight:700; color:var(--status-success);">${mappedCount} items</td>
+                        <td style="padding:10px;"><span class="badge badge-success">ACTIVE</span></td>
+                      </tr>
+                    `;
+                  }).join('') : `
+                    <tr>
+                      <td colspan="6" style="padding:24px; text-align:center; color:var(--text-muted);">
+                        No categories found in database. Click <strong>"+ Add Category"</strong> to create your first category.
+                      </td>
+                    </tr>
+                  `}
+                </tbody>
+              </table>
+            </div>
+          ` : `
+            <div class="table-responsive">
+              <table class="data-table" style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+                <thead>
+                  <tr style="border-bottom:1px solid var(--border-subtle); text-align:left; background:var(--bg-surface-2);">
+                    <th style="padding:10px;">Family Code</th>
+                    <th style="padding:10px;">Product Family Name</th>
+                    <th style="padding:10px;">Description</th>
+                    <th style="padding:10px;">Categories Count</th>
+                    <th style="padding:10px;">Mapped Items</th>
+                    <th style="padding:10px;">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${productFamilies.map(pf => {
+                    const pfCode = pf.code || pf.product_family_code || pf.id;
+                    const pfName = pf.name || pf.product_family_name || pfCode;
+                    const desc = pf.description || 'Reference product family';
+                    const famCats = categories.filter(c => (c.productFamilyCode || c.product_family_code) === pfCode);
+                    const famCatCodes = new Set(famCats.map(c => c.categoryCode || c.category_code || c.code));
+                    const famItemCount = items.filter(i => famCatCodes.has(i.categoryCode || i.category_code || i.category)).length;
+
+                    return `
+                      <tr style="border-bottom:1px solid var(--border-subtle);">
+                        <td style="padding:10px; font-weight:700; font-family:monospace; color:var(--accent-primary);">${pfCode}</td>
+                        <td style="padding:10px; font-weight:600;">${pfName}</td>
+                        <td style="padding:10px; color:var(--text-muted); font-size:0.8rem;">${desc}</td>
+                        <td style="padding:10px; font-weight:700; color:var(--status-info);">${famCats.length} categories</td>
+                        <td style="padding:10px; font-weight:700; color:var(--status-success);">${famItemCount} items</td>
+                        <td style="padding:10px;"><span class="badge badge-success">ACTIVE</span></td>
+                      </tr>
+                    `;
+                  }).join('')}
+                </tbody>
+              </table>
+            </div>
+          `}
         </div>
       `;
+
+      // Attach Event Handlers
+      const btnAddCat = mount.querySelector('#btn-add-category-action');
+      if (btnAddCat) {
+        btnAddCat.addEventListener('click', () => {
+          if (activeCatSubTab === 'families') {
+            this.renderAddProductFamilyModal(tenantId, session, mount);
+          } else {
+            this.renderAddCategoryModal(tenantId, session, mount);
+          }
+        });
+      }
+
+      const btnImportCat = mount.querySelector('#btn-cat-import');
+      if (btnImportCat) btnImportCat.addEventListener('click', () => this.openCategoryImportModal(tenantId, session, mount));
+
+      const btnExportCat = mount.querySelector('#btn-cat-export');
+      if (btnExportCat) btnExportCat.addEventListener('click', () => this.handleCategoryExport(tenantId));
+
+      const btnTemplateCat = mount.querySelector('#btn-cat-template');
+      if (btnTemplateCat) btnTemplateCat.addEventListener('click', () => this.handleCategoryTemplateDownload());
+
+      const subCatBtn = mount.querySelector('#tab-sub-categories');
+      if (subCatBtn) {
+        subCatBtn.addEventListener('click', async () => {
+          this.categorySubTab = 'categories';
+          await this.render(mount, session);
+        });
+      }
+
+      const subFamBtn = mount.querySelector('#tab-sub-families');
+      if (subFamBtn) {
+        subFamBtn.addEventListener('click', async () => {
+          this.categorySubTab = 'families';
+          await this.render(mount, session);
+        });
+      }
+
+      const catRows = mount.querySelectorAll('.row-cat-click');
+      catRows.forEach(row => {
+        row.addEventListener('click', () => {
+          const code = row.dataset.catCode;
+          this.openCategoryDetailDrawer(code, tenantId, mount, session);
+        });
+      });
     } else if (tabKey === 'inv-uom') {
       const defaultUomList = uoms.length ? uoms : [
         { uomCode: 'KG', uomName: 'Kilogram', uomFamily: 'WEIGHT', conversionFactor: 1000, isBaseUnit: false },
@@ -3767,5 +3894,507 @@ export class InventoryWorkspaceView {
       }
     }
   }
+
+  handleCategoryExport(tenantId = 'tenant-demo') {
+    const csv = categoryImportController.exportLiveCategoriesCsv(tenantId);
+    this._triggerDownload(csv, `inventory_categories_${tenantId}.csv`);
+  }
+
+  handleCategoryTemplateDownload() {
+    const csv = categoryImportController.generateTemplateCsv();
+    this._triggerDownload(csv, 'inventory_categories_template.csv');
+  }
+
+  renderAddProductFamilyModal(tenantId = 'tenant-demo', session = null, parentMount = null) {
+    const existingOverlay = document.querySelector('#add-pf-modal-overlay');
+    if (existingOverlay) existingOverlay.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'add-pf-modal-overlay';
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(8px);
+      display: flex; justify-content: center; align-items: center; z-index: 9999;
+      animation: fadeIn 0.2s ease-out;
+    `;
+
+    overlay.innerHTML = `
+      <div style="background:var(--bg-surface-1); border:1px solid var(--border-subtle); border-radius:12px; width:90%; max-width:520px; overflow:hidden; box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);">
+        <div style="padding:18px 24px; background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+          <h3 style="margin:0; font-size:1.1rem; color:var(--accent-primary);">📦 CREATE PRODUCT FAMILY</h3>
+          <button type="button" id="btn-close-add-pf" style="background:none; border:none; color:var(--text-muted); font-size:1.4rem; cursor:pointer;">×</button>
+        </div>
+        <div style="padding:24px; display:flex; flex-direction:column; gap:14px; font-size:0.85rem;">
+          <div>
+            <label style="font-weight:700; display:block; margin-bottom:4px;">Product Family Code *</label>
+            <input type="text" id="inp-new-pf-code" placeholder="e.g. PF-MEAT" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main); font-family:monospace;" />
+          </div>
+          <div>
+            <label style="font-weight:700; display:block; margin-bottom:4px;">Product Family Name *</label>
+            <input type="text" id="inp-new-pf-name" placeholder="e.g. Meat & Poultry" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);" />
+          </div>
+          <div>
+            <label style="font-weight:700; display:block; margin-bottom:4px;">Description</label>
+            <textarea id="inp-new-pf-desc" placeholder="e.g. Fresh chicken, mutton, beef, pork, and poultry cuts" style="width:100%; height:70px; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main); resize:none;"></textarea>
+          </div>
+        </div>
+        <div style="padding:16px 24px; background:var(--bg-surface-2); border-top:1px solid var(--border-subtle); display:flex; justify-content:flex-end; gap:10px;">
+          <button type="button" id="btn-cancel-add-pf" class="btn-secondary" style="padding:8px 16px; cursor:pointer;">Cancel</button>
+          <button type="button" id="btn-save-new-pf" class="btn-primary" style="padding:8px 20px; font-weight:700; background:var(--accent-primary); color:#fff; border:none; border-radius:6px; cursor:pointer;">Create Family</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const closeFn = () => overlay.remove();
+    overlay.querySelector('#btn-close-add-pf').addEventListener('click', closeFn);
+    overlay.querySelector('#btn-cancel-add-pf').addEventListener('click', closeFn);
+
+    overlay.querySelector('#btn-save-new-pf').addEventListener('click', async () => {
+      const code = overlay.querySelector('#inp-new-pf-code').value.trim().toUpperCase();
+      const name = overlay.querySelector('#inp-new-pf-name').value.trim();
+      const desc = overlay.querySelector('#inp-new-pf-desc').value.trim();
+
+      if (!code || !name) {
+        alert('Please fill in mandatory Family Code and Family Name.');
+        return;
+      }
+
+      await categoryImportController.commitImport([{
+        record_type: 'PRODUCT_FAMILY',
+        code,
+        name,
+        description: desc,
+        active: 'true'
+      }], tenantId);
+
+      overlay.remove();
+      if (parentMount) await this.render(parentMount, session);
+    });
+  }
+
+  renderAddCategoryModal(tenantId = 'tenant-demo', session = null, parentMount = null) {
+    const existingOverlay = document.querySelector('#add-category-modal-overlay');
+    if (existingOverlay) existingOverlay.remove();
+
+    const pfList = categoryImportController._getCollection('product_families', tenantId);
+    const productFamilies = pfList.length > 0 ? pfList : categoryImportController.getDefaultProductFamilies();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'add-category-modal-overlay';
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(8px);
+      display: flex; justify-content: center; align-items: center; z-index: 9999;
+      animation: fadeIn 0.2s ease-out;
+    `;
+
+    overlay.innerHTML = `
+      <div style="background:var(--bg-surface-1); border:1px solid var(--border-subtle); border-radius:12px; width:90%; max-width:520px; overflow:hidden; box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);">
+        <div style="padding:18px 24px; background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+          <h3 style="margin:0; font-size:1.1rem; color:var(--accent-primary);">🏷️ CREATE INVENTORY CATEGORY</h3>
+          <button type="button" id="btn-close-add-cat" style="background:none; border:none; color:var(--text-muted); font-size:1.4rem; cursor:pointer;">×</button>
+        </div>
+        <div style="padding:24px; display:flex; flex-direction:column; gap:14px; font-size:0.85rem;">
+          <div>
+            <label style="font-weight:700; display:block; margin-bottom:4px;">Category Code *</label>
+            <input type="text" id="inp-new-cat-code" placeholder="e.g. CAT-VEG" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main); font-family:monospace;" />
+          </div>
+          <div>
+            <label style="font-weight:700; display:block; margin-bottom:4px;">Category Name *</label>
+            <input type="text" id="inp-new-cat-name" placeholder="e.g. Fresh Vegetables" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);" />
+          </div>
+          <div>
+            <label style="font-weight:700; display:block; margin-bottom:4px;">Product Family *</label>
+            <select id="sel-new-cat-pf" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);">
+              ${productFamilies.map(pf => `<option value="${pf.code || pf.product_family_code}">${pf.name || pf.product_family_name} (${pf.code || pf.product_family_code})</option>`).join('')}
+            </select>
+          </div>
+          <div>
+            <label style="font-weight:700; display:block; margin-bottom:4px;">Default Base UOM</label>
+            <select id="sel-new-cat-uom" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);">
+              <option value="KG">KG (Kilogram)</option>
+              <option value="LTR">LTR (Litre)</option>
+              <option value="ML">ML (Millilitre)</option>
+              <option value="PCS">PCS (Piece)</option>
+              <option value="G">G (Gram)</option>
+            </select>
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Default base UOM is a suggestion; individual item base UOMs take precedence.</div>
+          </div>
+        </div>
+        <div style="padding:16px 24px; background:var(--bg-surface-2); border-top:1px solid var(--border-subtle); display:flex; justify-content:flex-end; gap:10px;">
+          <button type="button" id="btn-cancel-add-cat" class="btn-secondary" style="padding:8px 16px; cursor:pointer;">Cancel</button>
+          <button type="button" id="btn-save-new-cat" class="btn-primary" style="padding:8px 20px; font-weight:700; background:var(--accent-primary); color:#fff; border:none; border-radius:6px; cursor:pointer;">Create Category</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const closeFn = () => overlay.remove();
+    overlay.querySelector('#btn-close-add-cat').addEventListener('click', closeFn);
+    overlay.querySelector('#btn-cancel-add-cat').addEventListener('click', closeFn);
+
+    overlay.querySelector('#btn-save-new-cat').addEventListener('click', async () => {
+      const code = overlay.querySelector('#inp-new-cat-code').value.trim().toUpperCase();
+      const name = overlay.querySelector('#inp-new-cat-name').value.trim();
+      const pfCode = overlay.querySelector('#sel-new-cat-pf').value;
+      const defaultUom = overlay.querySelector('#sel-new-cat-uom').value;
+
+      if (!code || !name) {
+        alert('Please fill in mandatory Category Code and Category Name.');
+        return;
+      }
+
+      await categoryImportController.commitImport([{
+        category_code: code,
+        category_name: name,
+        product_family_code: pfCode,
+        default_base_uom: defaultUom,
+        active: 'true'
+      }], tenantId);
+
+      overlay.remove();
+      if (parentMount) await this.render(parentMount, session);
+    });
+  }
+
+  openCategoryDetailDrawer(catCode, tenantId = 'tenant-demo', parentMount = null, session = null) {
+    const existingDrawer = document.querySelector('#cat-detail-drawer-overlay');
+    if (existingDrawer) existingDrawer.remove();
+
+    const cats = categoryImportController._getCollection('inventory_categories', tenantId);
+    const cat = cats.find(c => (c.categoryCode || c.category_code || c.code) === catCode) || {
+      categoryCode: catCode,
+      categoryName: catCode,
+      productFamilyCode: 'PF-PROD',
+      defaultBaseUom: 'KG'
+    };
+
+    const items = this._getCollection('inventory', tenantId);
+    const mappedItems = items.filter(i => (i.categoryCode === catCode || i.category_code === catCode || i.category === catCode));
+
+    const overlay = document.createElement('div');
+    overlay.id = 'cat-detail-drawer-overlay';
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(4px);
+      display: flex; justify-content: flex-end; z-index: 9999;
+      animation: fadeIn 0.2s ease-out;
+    `;
+
+    overlay.innerHTML = `
+      <div style="background:var(--bg-surface-1); border-left:1px solid var(--border-subtle); width:420px; height:100vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:-10px 0 25px rgba(0,0,0,0.3);">
+        <div style="padding:20px 24px; background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">CATEGORY DETAILS</div>
+            <h3 style="margin:2px 0 0 0; color:var(--accent-primary); font-size:1.2rem;">${cat.categoryName || cat.category_name}</h3>
+          </div>
+          <button type="button" id="btn-close-cat-drawer" style="background:none; border:none; color:var(--text-muted); font-size:1.4rem; cursor:pointer;">×</button>
+        </div>
+
+        <div style="padding:24px; flex:1; overflow-y:auto; font-size:0.85rem; display:flex; flex-direction:column; gap:16px;">
+          <div>
+            <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">CATEGORY CODE</div>
+            <div style="font-weight:700; font-family:monospace; font-size:1rem; color:var(--text-main); margin-top:2px;">${cat.categoryCode || cat.category_code}</div>
+          </div>
+          <div>
+            <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">PRODUCT FAMILY</div>
+            <div style="font-weight:600; color:var(--status-info); margin-top:2px;">${cat.productFamilyCode || cat.product_family_code || 'PF-PROD'}</div>
+          </div>
+          <div>
+            <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">DEFAULT BASE UOM</div>
+            <div style="font-weight:600; margin-top:2px;"><span class="badge badge-secondary">${cat.defaultBaseUom || cat.default_base_uom || 'KG'}</span></div>
+          </div>
+          <div>
+            <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">STATUS</div>
+            <div style="margin-top:2px;"><span class="badge badge-success">ACTIVE</span></div>
+          </div>
+
+          <hr style="border:none; border-top:1px solid var(--border-subtle); margin:8px 0;" />
+
+          <div>
+            <div style="font-weight:700; color:var(--accent-primary); margin-bottom:8px;">MAPPED INVENTORY ITEMS (${mappedItems.length})</div>
+            ${mappedItems.length ? `
+              <div style="display:flex; flex-direction:column; gap:6px; max-height:240px; overflow-y:auto;">
+                ${mappedItems.map(mi => `
+                  <div style="background:var(--bg-surface-2); padding:8px 12px; border-radius:6px; display:flex; justify-content:space-between; font-size:0.8rem;">
+                    <div>
+                      <strong style="font-family:monospace; color:var(--accent-primary);">${mi.itemCode || mi.item_code}</strong> ${mi.itemName || mi.item_name}
+                    </div>
+                    <span class="badge badge-secondary">${mi.baseUom || mi.base_uom || 'KG'}</span>
+                  </div>
+                `).join('')}
+              </div>
+            ` : `
+              <div style="color:var(--text-muted); font-size:0.8rem; font-style:italic;">No inventory items mapped to this category yet.</div>
+            `}
+          </div>
+
+          ${mappedItems.length > 0 ? `
+            <div style="background:rgba(234, 179, 8, 0.1); border:1px solid var(--status-warning); padding:10px; border-radius:6px; color:var(--status-warning); font-size:0.78rem;">
+              ⚠ Cannot delete category while items are mapped. Deactivate category or reassign items first.
+            </div>
+          ` : ''}
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+    overlay.querySelector('#btn-close-cat-drawer').addEventListener('click', () => overlay.remove());
+  }
+
+  openCategoryImportModal(tenantId = 'tenant-demo', session = null, parentMount = null) {
+    const existingOverlay = document.querySelector('#cat-import-modal-overlay');
+    if (existingOverlay) existingOverlay.remove();
+
+    const existingCats = categoryImportController._getCollection('inventory_categories', tenantId);
+    const existingCount = existingCats.length;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'cat-import-modal-overlay';
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(8px);
+      display: flex; justify-content: center; align-items: center; z-index: 9999;
+      animation: fadeIn 0.2s ease-out;
+    `;
+
+    overlay.innerHTML = `
+      <div style="background:var(--bg-surface-1); border:1px solid var(--border-subtle); border-radius:12px; width:90%; max-width:680px; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);">
+        <div style="padding:20px 24px; background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <h3 style="margin:0; font-size:1.2rem; display:flex; align-items:center; gap:8px;">
+              <span>🏷️</span> IMPORT INVENTORY CATEGORIES
+            </h3>
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+              Incremental & Atomic Category Taxonomy Import
+            </div>
+          </div>
+          <button type="button" id="btn-close-cat-import-modal" style="background:none; border:none; color:var(--text-muted); font-size:1.4rem; cursor:pointer; padding:4px 8px;">×</button>
+        </div>
+
+        <div style="padding:12px 24px; background:var(--bg-surface-1); border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; font-size:0.75rem; font-weight:700;">
+          <span id="step-lbl-cat-1" style="color:var(--accent-primary);">STEP 1: Upload</span> →
+          <span id="step-lbl-cat-2" style="color:var(--text-muted);">STEP 2: Validate</span> →
+          <span id="step-lbl-cat-3" style="color:var(--text-muted);">STEP 3: Diff</span> →
+          <span id="step-lbl-cat-4" style="color:var(--text-muted);">STEP 4: Commit</span> →
+          <span id="step-lbl-cat-5" style="color:var(--text-muted);">STEP 5: Result</span>
+        </div>
+
+        <div id="import-cat-modal-body" style="padding:24px; overflow-y:auto; flex:1;">
+          <div id="import-cat-step-upload">
+            <div id="drop-zone-cat" style="border:2px dashed var(--border-subtle); background:var(--bg-surface-2); padding:36px; text-align:center; border-radius:8px; margin-bottom:16px;">
+              <div style="font-size:2.5rem; margin-bottom:8px;">📄</div>
+              <div style="font-weight:700; font-size:1.05rem;">Drop inventory_categories.csv here</div>
+              <div style="color:var(--text-muted); font-size:0.82rem; margin:8px 0 16px 0;">or choose file from your system</div>
+              <label class="btn-primary" style="padding:8px 22px; font-weight:700; cursor:pointer; display:inline-block; border-radius:6px; background:var(--accent-primary); color:#fff;">
+                Choose File
+                <input type="file" id="inp-cat-csv-file" accept=".csv" style="display:none;" />
+              </label>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.82rem; color:var(--text-muted);">
+              <div>Existing categories: <strong>${existingCount} categories</strong></div>
+              <div style="color:var(--status-info); font-weight:600;">ℹ Incremental import. Existing categories will NOT be deleted.</div>
+            </div>
+          </div>
+
+          <div id="import-cat-step-preview" style="display:none;"></div>
+        </div>
+
+        <div id="import-cat-modal-footer" style="padding:16px 24px; background:var(--bg-surface-2); border-top:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+          <button type="button" id="btn-cancel-cat-import-action" class="btn-secondary" style="padding:8px 16px; cursor:pointer; border-radius:6px;">Cancel</button>
+          <div id="modal-cat-commit-btn-slot"></div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const closeFn = () => overlay.remove();
+    overlay.querySelector('#btn-close-cat-import-modal').addEventListener('click', closeFn);
+    overlay.querySelector('#btn-cancel-cat-import-action').addEventListener('click', closeFn);
+
+    const fileInput = overlay.querySelector('#inp-cat-csv-file');
+    const dropZone = overlay.querySelector('#drop-zone-cat');
+
+    const handleFile = async (file) => {
+      if (!file) return;
+      const text = await file.text();
+      const rows = categoryImportController.parseCsv(text);
+      this._renderCategoryImportPreviewSteps(overlay, rows, tenantId, session, parentMount);
+    };
+
+    if (fileInput) {
+      fileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) handleFile(e.target.files[0]);
+      });
+    }
+
+    if (dropZone) {
+      dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = 'var(--accent-primary)'; });
+      dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = 'var(--border-subtle)'; });
+      dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = 'var(--border-subtle)';
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+      });
+    }
+  }
+
+  _renderCategoryImportPreviewSteps(overlay, rows = [], tenantId = 'tenant-demo', session = null, parentMount = null) {
+    const uploadStep = overlay.querySelector('#import-cat-step-upload');
+    const previewStep = overlay.querySelector('#import-cat-step-preview');
+    const commitSlot = overlay.querySelector('#modal-cat-commit-btn-slot');
+
+    if (uploadStep) uploadStep.style.display = 'none';
+    if (previewStep) previewStep.style.display = 'block';
+
+    overlay.querySelector('#step-lbl-cat-2').style.color = 'var(--accent-primary)';
+    overlay.querySelector('#step-lbl-cat-3').style.color = 'var(--accent-primary)';
+
+    const validation = categoryImportController.validateRows(rows, tenantId);
+    const diff = categoryImportController.generateDiffPreview(rows, tenantId);
+    const hasErrors = diff.ERRORS.length > 0;
+
+    previewStep.innerHTML = `
+      <div style="margin-bottom:16px;">
+        <div style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px;">IMPORT PREVIEW BREAKDOWN</div>
+        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px;">
+          <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; text-align:center; border:1px solid var(--border-subtle);">
+            <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">NEW</div>
+            <div style="font-size:1.4rem; font-weight:700; color:var(--status-success); margin-top:2px;">${diff.NEW.length}</div>
+          </div>
+          <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; text-align:center; border:1px solid var(--border-subtle);">
+            <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">UPDATED</div>
+            <div style="font-size:1.4rem; font-weight:700; color:var(--status-info); margin-top:2px;">${diff.UPDATED.length}</div>
+          </div>
+          <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; text-align:center; border:1px solid var(--border-subtle);">
+            <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">UNCHANGED</div>
+            <div style="font-size:1.4rem; font-weight:700; color:var(--text-muted); margin-top:2px;">${diff.UNCHANGED.length}</div>
+          </div>
+          <div style="background:${hasErrors ? 'rgba(239, 68, 68, 0.15)' : 'var(--bg-surface-2)'}; padding:12px; border-radius:6px; text-align:center; border:${hasErrors ? '1px solid var(--status-danger)' : '1px solid var(--border-subtle)'};">
+            <div style="font-size:0.7rem; color:${hasErrors ? 'var(--status-danger)' : 'var(--text-muted)'}; font-weight:700;">ERRORS</div>
+            <div style="font-size:1.4rem; font-weight:700; color:${hasErrors ? 'var(--status-danger)' : 'var(--text-muted)'}; margin-top:2px;">${diff.ERRORS.length} ${hasErrors ? '🔴' : ''}</div>
+          </div>
+        </div>
+      </div>
+
+      ${hasErrors ? `
+        <div style="background:rgba(239, 68, 68, 0.1); border:1px solid var(--status-danger); padding:14px; border-radius:6px; margin-bottom:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div style="font-weight:700; color:var(--status-danger); font-size:0.88rem;">
+              ⚠ IMPORT BLOCKED — ${diff.ERRORS.length} error(s) must be resolved before committing
+            </div>
+            <button type="button" id="btn-export-cat-errors-csv" class="btn-secondary" style="font-size:0.75rem; padding:4px 10px; cursor:pointer; color:var(--status-danger); border-color:var(--status-danger);">
+              ⬇ Export Error Report
+            </button>
+          </div>
+          <ul style="margin:0; padding-left:20px; font-size:0.8rem; color:var(--status-danger); max-height:120px; overflow-y:auto;">
+            ${diff.ERRORS.map(e => `<li>Row ${e.row} [${e.categoryCode || 'CODE'}]: ${e.message}</li>`).join('')}
+          </ul>
+        </div>
+      ` : ''}
+
+      ${diff.NEW.length > 0 ? `
+        <div style="margin-bottom:16px;">
+          <div style="font-weight:700; font-size:0.85rem; color:var(--status-success); margin-bottom:6px;">NEW CATEGORIES TO CREATE (${diff.NEW.length})</div>
+          <div style="max-height:100px; overflow-y:auto; font-size:0.8rem; color:var(--text-muted);">
+            ${diff.NEW.map(n => `<span style="display:inline-block; background:var(--bg-surface-2); padding:3px 8px; border-radius:4px; margin:2px 4px 2px 0; font-family:monospace; color:var(--text-main);">${n.categoryCode} ${n.categoryName} (${n.productFamilyCode})</span>`).join('')}
+          </div>
+        </div>
+      ` : ''}
+    `;
+
+    if (hasErrors) {
+      commitSlot.innerHTML = `
+        <button type="button" class="btn-secondary" disabled style="padding:8px 18px; font-weight:700; opacity:0.5; cursor:not-allowed; border-radius:6px;">
+          🔒 Commit Import (Blocked)
+        </button>
+      `;
+      const btnExportErr = overlay.querySelector('#btn-export-cat-errors-csv');
+      if (btnExportErr) {
+        btnExportErr.addEventListener('click', () => {
+          const errCsv = categoryImportController.generateErrorReportCsv(diff.ERRORS);
+          this._triggerDownload(errCsv, 'inventory_categories_import_errors.csv');
+        });
+      }
+    } else {
+      overlay.querySelector('#step-lbl-cat-4').style.color = 'var(--accent-primary)';
+      const changeCount = diff.NEW.length + diff.UPDATED.length;
+      commitSlot.innerHTML = `
+        <button type="button" id="btn-commit-cat-import-action" class="btn-primary" style="padding:8px 20px; font-weight:700; background:var(--status-success); border-color:var(--status-success); color:#fff; border-radius:6px; cursor:pointer;">
+          ✓ Commit ${changeCount} Changes
+        </button>
+      `;
+
+      overlay.querySelector('#btn-commit-cat-import-action').addEventListener('click', async () => {
+        const btnCommit = overlay.querySelector('#btn-commit-cat-import-action');
+        btnCommit.disabled = true;
+        btnCommit.textContent = '⏳ Committing...';
+        const res = await categoryImportController.commitImport(rows, tenantId);
+        this._renderCategoryImportResultStep(overlay, res, parentMount, session);
+      });
+    }
+  }
+
+  _renderCategoryImportResultStep(overlay, res = {}, parentMount = null, session = null) {
+    const previewStep = overlay.querySelector('#import-cat-step-preview');
+    const footer = overlay.querySelector('#import-cat-modal-footer');
+
+    overlay.querySelector('#step-lbl-cat-5').style.color = 'var(--status-success)';
+
+    if (footer) footer.style.display = 'none';
+
+    if (previewStep) {
+      previewStep.innerHTML = `
+        <div style="text-align:center; padding:16px 0;">
+          <div style="font-size:3rem; margin-bottom:10px;">✅</div>
+          <h3 style="margin:0; color:var(--status-success); font-size:1.3rem;">✓ CATEGORIES IMPORT COMPLETED</h3>
+          <p style="color:var(--text-muted); font-size:0.85rem; margin-top:4px;">Inventory categories committed atomically to live Supabase storage.</p>
+
+          <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin:20px 0;">
+            <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; border:1px solid var(--border-subtle);">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">CREATED</div>
+              <div style="font-size:1.3rem; font-weight:700; color:var(--status-success); margin-top:2px;">${res.createdCount}</div>
+            </div>
+            <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; border:1px solid var(--border-subtle);">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">UPDATED</div>
+              <div style="font-size:1.3rem; font-weight:700; color:var(--status-info); margin-top:2px;">${res.updatedCount}</div>
+            </div>
+            <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; border:1px solid var(--border-subtle);">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">UNCHANGED</div>
+              <div style="font-size:1.3rem; font-weight:700; color:var(--text-muted); margin-top:2px;">${res.unchangedCount}</div>
+            </div>
+            <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; border:1px solid var(--border-subtle);">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">REJECTED</div>
+              <div style="font-size:1.3rem; font-weight:700; color:var(--text-muted); margin-top:2px;">${res.rejectedCount}</div>
+            </div>
+          </div>
+
+          <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:24px;">
+            Import Audit ID: <strong style="font-family:monospace; color:var(--accent-primary);">${res.importId}</strong>
+          </div>
+
+          <div style="display:flex; justify-content:center; gap:12px;">
+            <button type="button" id="btn-close-cat-modal-finish" class="btn-primary" style="padding:10px 24px; font-weight:700; background:var(--accent-primary); border-radius:6px; border:none; color:#fff; cursor:pointer;">
+              Close & Refresh Categories
+            </button>
+          </div>
+        </div>
+      `;
+
+      previewStep.querySelector('#btn-close-cat-modal-finish').addEventListener('click', async () => {
+        overlay.remove();
+        if (parentMount) {
+          this.activeSubView = 'inv-categories';
+          await this.render(parentMount, session);
+        }
+      });
+    }
+  }
 }
+
 
