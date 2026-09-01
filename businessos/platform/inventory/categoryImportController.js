@@ -46,6 +46,17 @@ export class CategoryImportController {
   }
 
   /**
+   * Returns active Product Families, falling back to defaults if store is unpopulated.
+   */
+  _getExistingProductFamilies(tenantId = 'tenant-demo') {
+    let pfs = this._getCollection('product_families', tenantId);
+    if (!Array.isArray(pfs) || pfs.length === 0) {
+      pfs = this.getDefaultProductFamilies();
+    }
+    return pfs;
+  }
+
+  /**
    * Parses raw CSV text into structured rows.
    * @param {string} csvContent 
    * @returns {Array<Object>} Parsed row objects
@@ -102,18 +113,14 @@ export class CategoryImportController {
     const warnings = [];
     const seenInFileCodes = new Map();
 
-    const existingPfList = this._getCollection('product_families', tenantId);
-    const validPfCodes = new Set(
-      existingPfList.length > 0
-        ? existingPfList.map(pf => (pf.code || pf.product_family_code || pf.id || '').toUpperCase())
-        : this.getDefaultProductFamilies().map(pf => pf.code.toUpperCase())
-    );
+    const existingPfList = this._getExistingProductFamilies(tenantId);
+    const validPfCodes = new Set(existingPfList.map(pf => (pf.code || pf.product_family_code || pf.id || '').toUpperCase()));
 
     // Harvest Product Family codes declared inside the file itself
     rows.forEach(r => {
       const rawType = (r.record_type || r.type || '').trim().toUpperCase();
       const code = (r.code || r.category_code || r.product_family_code || '').trim().toUpperCase();
-      if (rawType === 'PRODUCT_FAMILY' || code.startsWith('PF-')) {
+      if (rawType === 'PRODUCT_FAMILY' || (code.startsWith('FAM-') && !r.product_family_code) || (code.startsWith('PF-') && !r.product_family_code)) {
         if (code) validPfCodes.add(code);
       }
     });
@@ -126,7 +133,7 @@ export class CategoryImportController {
       const pfCode = (row.product_family_code || row.productfamilycode || row.family || '').trim().toUpperCase();
       const defaultUom = (row.default_base_uom || row.defaultuom || row.uom || 'KG').trim();
 
-      const isProductFamily = rawRecordType === 'PRODUCT_FAMILY' || (code.startsWith('PF-') && !pfCode);
+      const isProductFamily = rawRecordType === 'PRODUCT_FAMILY' || (code.startsWith('FAM-') && !pfCode) || (code.startsWith('PF-') && !pfCode);
 
       if (isProductFamily) {
         // PRODUCT FAMILY VALIDATION
@@ -171,7 +178,7 @@ export class CategoryImportController {
           errors.push({ row: rowNum, categoryCode: code, field: 'category_name', message: 'Missing mandatory category_name.' });
         }
         if (!pfCode) {
-          errors.push({ row: rowNum, categoryCode: code, field: 'product_family_code', message: 'Missing mandatory product_family_code (e.g., PF-MEAT, PF-PROD, PF-DAIRY).' });
+          errors.push({ row: rowNum, categoryCode: code, field: 'product_family_code', message: 'Missing mandatory product_family_code (e.g., FAM-MEAT, FAM-PRODUCE, FAM-DAIRY).' });
         } else if (!validPfCodes.has(pfCode)) {
           errors.push({
             row: rowNum,
@@ -209,7 +216,7 @@ export class CategoryImportController {
     const existingCats = this._getCollection('inventory_categories', tenantId);
     const catMap = new Map(existingCats.map(c => [(c.categoryCode || c.category_code || c.code || c.id || '').toUpperCase(), c]));
 
-    const existingPfs = this._getCollection('product_families', tenantId);
+    const existingPfs = this._getExistingProductFamilies(tenantId);
     const pfMap = new Map(existingPfs.map(p => [(p.code || p.product_family_code || p.id || '').toUpperCase(), p]));
 
     const validation = this.validateRows(rows, tenantId);
@@ -235,7 +242,7 @@ export class CategoryImportController {
       const rawActive = (row.active || '').trim();
       const desc = (row.description || '').trim();
 
-      const isProductFamily = rawRecordType === 'PRODUCT_FAMILY' || (code.startsWith('PF-') && !pfCode);
+      const isProductFamily = rawRecordType === 'PRODUCT_FAMILY' || (code.startsWith('FAM-') && !pfCode) || (code.startsWith('PF-') && !pfCode);
 
       if (isProductFamily) {
         diff.familyCount++;
@@ -287,9 +294,9 @@ export class CategoryImportController {
           if (rawUom && rawUom !== exUom) fieldChanges.push({ field: 'Default Base UOM', existing: exUom, import: rawUom });
 
           if (fieldChanges.length > 0) {
-            diff.UPDATED.push({ recordType: 'CATEGORY', categoryCode: code, categoryName: name || exName, fieldChanges });
+            diff.UPDATED.push({ recordType: 'CATEGORY', code, categoryCode: code, categoryName: name || exName, name: name || exName, fieldChanges });
           } else {
-            diff.UNCHANGED.push({ recordType: 'CATEGORY', categoryCode: code, categoryName: exName });
+            diff.UNCHANGED.push({ recordType: 'CATEGORY', code, categoryCode: code, categoryName: exName, name: exName });
           }
         }
       }
@@ -316,7 +323,7 @@ export class CategoryImportController {
     const existingCats = this._getCollection('inventory_categories', tenantId);
     const catMap = new Map(existingCats.map(c => [(c.categoryCode || c.category_code || c.code || c.id || '').toUpperCase(), c]));
 
-    const existingPfs = this._getCollection('product_families', tenantId);
+    const existingPfs = this._getExistingProductFamilies(tenantId);
     const pfMap = new Map(existingPfs.map(p => [(p.code || p.product_family_code || p.id || '').toUpperCase(), p]));
 
     let createdCount = 0;
@@ -331,7 +338,7 @@ export class CategoryImportController {
       const rawActive = (row.active || '').trim();
       const desc = (row.description || '').trim();
 
-      const isProductFamily = rawRecordType === 'PRODUCT_FAMILY' || (code.startsWith('PF-') && !pfCode);
+      const isProductFamily = rawRecordType === 'PRODUCT_FAMILY' || (code.startsWith('FAM-') && !pfCode) || (code.startsWith('PF-') && !pfCode);
 
       if (isProductFamily) {
         const existing = pfMap.get(code);
@@ -353,7 +360,7 @@ export class CategoryImportController {
       } else {
         const existing = catMap.get(code);
         const categoryName = name || (existing ? (existing.categoryName || existing.category_name || existing.name) : '');
-        const productFamilyCode = pfCode || (existing ? (existing.productFamilyCode || existing.product_family_code) : 'PF-PROD');
+        const productFamilyCode = pfCode || (existing ? (existing.productFamilyCode || existing.product_family_code) : 'FAM-PRODUCE');
         const defaultBaseUom = rawUom || (existing ? (existing.defaultBaseUom || existing.default_base_uom) : 'KG');
         const active = rawActive !== '' ? (rawActive.toLowerCase() !== 'false') : (existing ? (existing.active !== false) : true);
 
@@ -426,11 +433,11 @@ export class CategoryImportController {
    */
   generateTemplateCsv() {
     return 'record_type,code,name,product_family_code,default_base_uom,description,active\n' +
-      'PRODUCT_FAMILY,PF-MEAT,"Meat & Poultry",,,"Fresh chicken, mutton, and poultry cuts",true\n' +
-      'PRODUCT_FAMILY,PF-PROD,"Fruits & Vegetables",,,"Fresh produce, herbs, and fruits",true\n' +
-      'CATEGORY,CAT-CHICKEN,"Chicken",PF-MEAT,KG,"Fresh chicken cuts",true\n' +
-      'CATEGORY,CAT-VEG,"Fresh Vegetables",PF-PROD,KG,"Leafy and root vegetables",true\n' +
-      'CATEGORY,CAT-DAIRY,"Butter & Ghee",PF-DAIRY,KG,"Dairy products and fats",true\n';
+      'PRODUCT_FAMILY,FAM-MEAT,"Meat & Poultry",,,"Fresh chicken, mutton, and poultry cuts",true\n' +
+      'PRODUCT_FAMILY,FAM-PRODUCE,"Fruits & Vegetables",,,"Fresh produce, herbs, and fruits",true\n' +
+      'CATEGORY,CAT-CHICKEN,"Chicken",FAM-MEAT,KG,"Fresh chicken cuts",true\n' +
+      'CATEGORY,CAT-VEG,"Fresh Vegetables",FAM-PRODUCE,KG,"Leafy and root vegetables",true\n' +
+      'CATEGORY,CAT-DAIRY,"Butter & Ghee",FAM-DAIRY,KG,"Dairy products and fats",true\n';
   }
 
   /**
@@ -439,9 +446,7 @@ export class CategoryImportController {
    * @returns {string} CSV export text
    */
   exportLiveCategoriesCsv(tenantId = 'tenant-demo') {
-    let pfs = this._getCollection('product_families', tenantId);
-    if (!pfs || pfs.length === 0) pfs = this.getDefaultProductFamilies();
-
+    const pfs = this._getExistingProductFamilies(tenantId);
     const cats = this._getCollection('inventory_categories', tenantId);
 
     let csv = 'record_type,code,name,product_family_code,default_base_uom,description,active\n';
@@ -459,7 +464,7 @@ export class CategoryImportController {
     cats.forEach(c => {
       const code = c.categoryCode || c.category_code || c.code || c.id || '';
       const name = (c.categoryName || c.category_name || c.name || '').replace(/"/g, '""');
-      const pfCode = c.productFamilyCode || c.product_family_code || 'PF-PROD';
+      const pfCode = c.productFamilyCode || c.product_family_code || 'FAM-PRODUCE';
       const uom = c.defaultBaseUom || c.default_base_uom || 'KG';
       const active = c.active !== false;
       csv += `CATEGORY,"${code}","${name}",${pfCode},${uom},"",${active}\n`;
