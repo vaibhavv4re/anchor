@@ -359,6 +359,19 @@ This log records every key architectural, technical, and operational decision ma
 * **Decision:** Phase 5 multi-device synchronization. Realtime WebSockets (Supabase Realtime) subscription for instant cross-device updates (Waiter Tablets, KDS, BDS, Cashier POS) with optimistic versioning conflict resolution and delta-merging.
 * **Status:** Planned (Phase 5)
 
+---
+
+### PD-037: Anchor Data Control & Restaurant Onboarding (Milestone F9)
+* **Decision:** F9 is established as a first-class platform capability defining how a restaurant becomes a valid, fully configured Anchor tenant. Enforces a feature freeze on new major architectural additions and switches priority to real-data bring-up and live simulation.
+  * **3-Tier Reset Semantics:** Formally separates data into System Configuration (Never wiped), Master Data (Selectively wiped in Environment Reset), and Transactional Data (Wipeable in both Environment and Transaction Resets).
+  * **Canonical Import Package Spec (`anchor-import/`):** Standardized 5-folder layout (`01_inventory`, `02_suppliers`, `03_food`, `04_bar`, `05_opening_stock`) with `manifest.json` (`schemaVersion: "1.0"`).
+  * **Dependency Graph:** Permits semi-finished items in Inventory Master before production recipes are loaded to avoid circular dependencies.
+  * **Recipe Revision Preservation:** Recipe updates via re-import create new recipe revisions (`Rev 1` → `Rev 2`) rather than overwriting historical revisions, keeping past orders linked to `Rev 1`.
+  * **Security Audit Integrity:** Audit logs persist `userId`, `role`, `tenantId`, `timestamp`, `importId` — staff PINs are strictly excluded.
+  * **Data Health Gatekeeper:** Evaluates readiness scorecards and controls tenant status (`NOT_CONFIGURED` → `CONFIGURED — NOT READY` → `READY FOR LIVE SERVICE SIMULATION`).
+* **Reason:** Validates RestaurantOS against real food, beverage, semi-finished production, BOM, inventory, billing, P&L, and CA audit trail data before introducing further features.
+* **Status:** Accepted (Implemented in F9)
+
 
 
 

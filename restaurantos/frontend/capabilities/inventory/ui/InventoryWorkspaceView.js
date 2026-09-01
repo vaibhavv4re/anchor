@@ -7,6 +7,8 @@
  * - Sourced 100% live from Supabase PostgreSQL tables via DataGateway.
  */
 
+import { inventoryImportController } from '../../../../../businessos/platform/inventory/inventoryImportController.js';
+
 export class InventoryWorkspaceView {
   constructor(deps = {}) {
     this.dataGateway = deps.dataGateway || (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform ? window.__APP__.platform.dataGateway : null);
@@ -366,23 +368,31 @@ export class InventoryWorkspaceView {
                       <th style="padding:10px;">Ingredient Name</th>
                       <th style="padding:10px;">Category</th>
                       <th style="padding:10px;">Base UOM</th>
-                      <th style="padding:10px;">Item Type</th>
-                      <th style="padding:10px;">Opening Stock</th>
+                      <th style="padding:10px;">Purchase UOM</th>
+                      <th style="padding:10px;">Reorder Level</th>
                       <th style="padding:10px;">Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    ${items.slice(0, 10).map(i => `
-                      <tr style="border-bottom:1px solid var(--border-subtle);">
-                        <td style="padding:10px; font-weight:700; font-family:monospace;">${i.itemCode || i.item_code}</td>
-                        <td style="padding:10px; font-weight:600;">${i.itemName || i.item_name}</td>
-                        <td style="padding:10px;">${i.categoryCode || i.category_code || 'GENERAL'}</td>
-                        <td style="padding:10px;"><span class="badge badge-info">${i.baseUom || i.base_uom || 'KG'}</span></td>
-                        <td style="padding:10px;"><span class="badge badge-secondary">${i.itemType || i.item_type || 'Raw Material'}</span></td>
-                        <td style="padding:10px; font-weight:700; color:var(--status-success);">${i.openingStock || i.opening_stock || 0} ${i.baseUom || i.base_uom || 'KG'}</td>
-                        <td style="padding:10px;"><span class="badge badge-success">ACTIVE</span></td>
-                      </tr>
-                    `).join('')}
+                    ${items.slice(0, 10).map(i => {
+                      const code = i.itemCode || i.item_code || i.sku || i.code || i.id || '';
+                      const name = i.itemName || i.item_name || i.name || '';
+                      const cat = i.categoryCode || i.category_code || i.category || 'GENERAL';
+                      const base = i.baseUom || i.base_uom || i.baseUnit || 'KG';
+                      const purch = i.purchaseUom || i.purchase_uom || i.purchaseUnit || base;
+                      const reorder = Number(i.reorderLevel !== undefined ? i.reorderLevel : (i.reorder_level !== undefined ? i.reorder_level : 0));
+                      return `
+                        <tr style="border-bottom:1px solid var(--border-subtle);">
+                          <td style="padding:10px; font-weight:700; font-family:monospace; color:var(--accent-primary);">${code}</td>
+                          <td style="padding:10px; font-weight:600;">${name}</td>
+                          <td style="padding:10px;">${cat}</td>
+                          <td style="padding:10px;"><span class="badge badge-info">${base}</span></td>
+                          <td style="padding:10px;"><span class="badge badge-secondary">${purch}</span></td>
+                          <td style="padding:10px; font-weight:700; color:var(--status-warning);">${reorder.toLocaleString()} ${base}</td>
+                          <td style="padding:10px;"><span class="badge badge-success">ACTIVE</span></td>
+                        </tr>
+                      `;
+                    }).join('')}
                   </tbody>
                 </table>
               </div>
@@ -1179,9 +1189,20 @@ export class InventoryWorkspaceView {
               <h3 style="font-size:1.4rem; margin:0;">📦 Master Inventory Items Catalog (${items.length} Items)</h3>
               <p style="color:var(--text-muted); font-size:0.85rem; margin-top:2px;">Sourced 100% directly from Supabase PostgreSQL <strong>inventory</strong> table.</p>
             </div>
-            <button class="btn-primary nav-inv-btn" data-tab="inv-master-create" style="padding:10px 18px; font-weight:700; background:var(--accent-primary); border-radius:6px; border:none; cursor:pointer;">
-              + Add Master Inventory Item Screen
-            </button>
+            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+              <button class="btn-primary nav-inv-btn" data-tab="inv-master-create" style="padding:8px 14px; font-weight:700; background:var(--accent-primary); border-radius:6px; border:none; cursor:pointer; color:#fff;">
+                + Add Master Item
+              </button>
+              <button type="button" class="btn-secondary" id="btn-inv-master-import" style="padding:8px 14px; font-weight:700; border-radius:6px; cursor:pointer; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);">
+                ↑ Import
+              </button>
+              <button type="button" class="btn-secondary" id="btn-inv-master-export" style="padding:8px 14px; font-weight:700; border-radius:6px; cursor:pointer; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);">
+                ↓ Export
+              </button>
+              <button type="button" class="btn-secondary" id="btn-inv-master-template" style="padding:8px 14px; font-weight:700; border-radius:6px; cursor:pointer; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);">
+                ⬇ Template
+              </button>
+            </div>
           </div>
 
           <div class="table-responsive">
@@ -1193,29 +1214,55 @@ export class InventoryWorkspaceView {
                   <th style="padding:10px;">Item Type</th>
                   <th style="padding:10px;">Category</th>
                   <th style="padding:10px;">Base UOM</th>
-                  <th style="padding:10px;">Opening Stock</th>
+                  <th style="padding:10px;">Purchase UOM</th>
+                  <th style="padding:10px;">Conversion</th>
                   <th style="padding:10px;">Reorder Level</th>
                   <th style="padding:10px;">Status</th>
                 </tr>
               </thead>
               <tbody>
-                ${items.map(i => `
-                  <tr style="border-bottom:1px solid var(--border-subtle);">
-                    <td style="padding:10px; font-weight:700; font-family:monospace; color:var(--accent-primary);">${i.itemCode || i.item_code}</td>
-                    <td style="padding:10px; font-weight:600;">${i.itemName || i.item_name}</td>
-                    <td style="padding:10px;"><span class="badge badge-info">${i.itemType || i.item_type || 'Raw Material'}</span></td>
-                    <td style="padding:10px;">${i.categoryCode || i.category_code || 'GENERAL'}</td>
-                    <td style="padding:10px;"><span class="badge badge-secondary">${i.baseUom || i.base_uom || 'KG'}</span></td>
-                    <td style="padding:10px; font-weight:700; color:var(--status-success);">${i.openingStock || i.opening_stock || 0} ${i.baseUom || i.base_uom || 'KG'}</td>
-                    <td style="padding:10px; font-weight:700; color:var(--status-warning);">${i.reorderLevel || i.reorder_level || 0}</td>
-                    <td style="padding:10px;"><span class="badge badge-success">LIVE SUPABASE</span></td>
-                  </tr>
-                `).join('')}
+                ${items.map(i => {
+                  const code = i.itemCode || i.item_code || i.sku || i.code || i.id || '';
+                  const name = i.itemName || i.item_name || i.name || '';
+                  const type = i.itemType || i.item_type || i.type || 'RAW_MATERIAL';
+                  const category = i.categoryCode || i.category_code || i.category || 'GENERAL';
+                  const baseUom = i.baseUom || i.base_uom || i.baseUnit || 'KG';
+                  const purchaseUom = i.purchaseUom || i.purchase_uom || i.purchaseUnit || baseUom;
+                  let conv = Number(i.conversionFactor !== undefined ? i.conversionFactor : (i.conversion_factor !== undefined ? i.conversion_factor : 1));
+                  if (baseUom.toUpperCase() === purchaseUom.toUpperCase()) conv = 1;
+
+                  const convText = (baseUom.toUpperCase() === purchaseUom.toUpperCase()) ? '1' : `${conv} ${baseUom}/${purchaseUom}`;
+                  const reorderVal = Number(i.reorderLevel !== undefined ? i.reorderLevel : (i.reorder_level !== undefined ? i.reorder_level : 0));
+                  const reorderText = `${reorderVal.toLocaleString()} ${baseUom}`;
+
+                  return `
+                    <tr style="border-bottom:1px solid var(--border-subtle);">
+                      <td style="padding:10px; font-weight:700; font-family:monospace; color:var(--accent-primary);">${code}</td>
+                      <td style="padding:10px; font-weight:600;">${name}</td>
+                      <td style="padding:10px;"><span class="badge badge-info">${type}</span></td>
+                      <td style="padding:10px;">${category}</td>
+                      <td style="padding:10px;"><span class="badge badge-secondary">${baseUom}</span></td>
+                      <td style="padding:10px;"><span class="badge badge-secondary">${purchaseUom}</span></td>
+                      <td style="padding:10px; font-weight:600; font-size:0.8rem;">${convText}</td>
+                      <td style="padding:10px; font-weight:700; color:var(--status-warning);">${reorderText}</td>
+                      <td style="padding:10px;"><span class="badge badge-success">LIVE SUPABASE</span></td>
+                    </tr>
+                  `;
+                }).join('')}
               </tbody>
             </table>
           </div>
         </div>
       `;
+
+      const btnImport = mount.querySelector('#btn-inv-master-import');
+      if (btnImport) btnImport.addEventListener('click', () => this.openMasterInventoryImportModal(tenantId, session, mount));
+
+      const btnExport = mount.querySelector('#btn-inv-master-export');
+      if (btnExport) btnExport.addEventListener('click', () => this.handleMasterInventoryExport(tenantId));
+
+      const btnTemplate = mount.querySelector('#btn-inv-master-template');
+      if (btnTemplate) btnTemplate.addEventListener('click', () => this.handleMasterInventoryTemplateDownload());
     } else if (tabKey === 'inv-locations' || tabKey === 'locations') {
       mount.innerHTML = `
         <div class="card animate-fade-in" style="background:var(--bg-surface-1); padding:24px; border-radius:8px;">
@@ -3416,4 +3463,309 @@ export class InventoryWorkspaceView {
       });
     });
   }
+
+  handleMasterInventoryExport(tenantId = 'tenant-demo') {
+    const csv = inventoryImportController.exportLiveInventoryCsv(tenantId);
+    this._triggerDownload(csv, `inventory_master_${tenantId}.csv`);
+  }
+
+  handleMasterInventoryTemplateDownload() {
+    const csv = inventoryImportController.generateTemplateCsv();
+    this._triggerDownload(csv, 'inventory_master_template.csv');
+  }
+
+  openMasterInventoryImportModal(tenantId = 'tenant-demo', session = null, parentMount = null) {
+    const existingOverlay = document.querySelector('#master-inv-import-modal-overlay');
+    if (existingOverlay) existingOverlay.remove();
+
+    const existingItems = inventoryImportController._getCollection('inventory_items', tenantId);
+    const existingCount = existingItems.length;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'master-inv-import-modal-overlay';
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(15, 23, 42, 0.75); backdrop-filter: blur(8px);
+      display: flex; justify-content: center; align-items: center; z-index: 9999;
+      animation: fadeIn 0.2s ease-out;
+    `;
+
+    overlay.innerHTML = `
+      <div style="background:var(--bg-surface-1); border:1px solid var(--border-subtle); border-radius:12px; width:90%; max-width:680px; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 25px 50px -12px rgba(0,0,0,0.5);">
+        <!-- Modal Header -->
+        <div style="padding:20px 24px; background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <h3 style="margin:0; font-size:1.2rem; display:flex; align-items:center; gap:8px;">
+              <span>📦</span> IMPORT INVENTORY MASTER
+            </h3>
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+              Canonical Pure Inventory Master Schema Import (Incremental & Atomic)
+            </div>
+          </div>
+          <button type="button" id="btn-close-import-modal" style="background:none; border:none; color:var(--text-muted); font-size:1.4rem; cursor:pointer; padding:4px 8px;">×</button>
+        </div>
+
+        <!-- Pipeline Steps Header -->
+        <div style="padding:12px 24px; background:var(--bg-surface-1); border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; font-size:0.75rem; font-weight:700;">
+          <span id="step-lbl-1" style="color:var(--accent-primary);">STEP 1: Upload</span> →
+          <span id="step-lbl-2" style="color:var(--text-muted);">STEP 2: Validate</span> →
+          <span id="step-lbl-3" style="color:var(--text-muted);">STEP 3: Diff</span> →
+          <span id="step-lbl-4" style="color:var(--text-muted);">STEP 4: Commit</span> →
+          <span id="step-lbl-5" style="color:var(--text-muted);">STEP 5: Result</span>
+        </div>
+
+        <!-- Modal Body Content -->
+        <div id="import-modal-body" style="padding:24px; overflow-y:auto; flex:1;">
+          <!-- STEP 1: UPLOAD ZONE -->
+          <div id="import-step-upload">
+            <div id="drop-zone-inv-master" style="border:2px dashed var(--border-subtle); background:var(--bg-surface-2); padding:36px; text-align:center; border-radius:8px; margin-bottom:16px;">
+              <div style="font-size:2.5rem; margin-bottom:8px;">📄</div>
+              <div style="font-weight:700; font-size:1.05rem;">Drop inventory_master.csv here</div>
+              <div style="color:var(--text-muted); font-size:0.82rem; margin:8px 0 16px 0;">or choose file from your system</div>
+              <label class="btn-primary" style="padding:8px 22px; font-weight:700; cursor:pointer; display:inline-block; border-radius:6px; background:var(--accent-primary); color:#fff;">
+                Choose File
+                <input type="file" id="inp-inv-csv-file" accept=".csv" style="display:none;" />
+              </label>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.82rem; color:var(--text-muted);">
+              <div>Existing inventory: <strong>${existingCount} items</strong></div>
+              <div style="color:var(--status-info); font-weight:600;">ℹ Incremental import. Existing records will NOT be deleted.</div>
+            </div>
+          </div>
+
+          <!-- DYNAMIC STEP 2/3/4 CONTAINER -->
+          <div id="import-step-preview" style="display:none;"></div>
+        </div>
+
+        <!-- Modal Footer Controls -->
+        <div id="import-modal-footer" style="padding:16px 24px; background:var(--bg-surface-2); border-top:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+          <button type="button" id="btn-cancel-modal-action" class="btn-secondary" style="padding:8px 16px; cursor:pointer; border-radius:6px;">Cancel</button>
+          <div id="modal-commit-btn-slot"></div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const btnClose = overlay.querySelector('#btn-close-import-modal');
+    const btnCancel = overlay.querySelector('#btn-cancel-modal-action');
+    const closeFn = () => overlay.remove();
+    if (btnClose) btnClose.addEventListener('click', closeFn);
+    if (btnCancel) btnCancel.addEventListener('click', closeFn);
+
+    const fileInput = overlay.querySelector('#inp-inv-csv-file');
+    const dropZone = overlay.querySelector('#drop-zone-inv-master');
+
+    const handleFile = async (file) => {
+      if (!file) return;
+      const text = await file.text();
+      const rows = inventoryImportController.parseCsv(text);
+      this._renderImportPreviewSteps(overlay, rows, tenantId, session, parentMount);
+    };
+
+    if (fileInput) {
+      fileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) handleFile(e.target.files[0]);
+      });
+    }
+
+    if (dropZone) {
+      dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.style.borderColor = 'var(--accent-primary)'; });
+      dropZone.addEventListener('dragleave', () => { dropZone.style.borderColor = 'var(--border-subtle)'; });
+      dropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        dropZone.style.borderColor = 'var(--border-subtle)';
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+      });
+    }
+  }
+
+  _renderImportPreviewSteps(overlay, rows = [], tenantId = 'tenant-demo', session = null, parentMount = null) {
+    const uploadStep = overlay.querySelector('#import-step-upload');
+    const previewStep = overlay.querySelector('#import-step-preview');
+    const commitSlot = overlay.querySelector('#modal-commit-btn-slot');
+
+    if (uploadStep) uploadStep.style.display = 'none';
+    if (previewStep) previewStep.style.display = 'block';
+
+    overlay.querySelector('#step-lbl-2').style.color = 'var(--accent-primary)';
+    overlay.querySelector('#step-lbl-3').style.color = 'var(--accent-primary)';
+
+    const validation = inventoryImportController.validateRows(rows, tenantId);
+    const diff = inventoryImportController.generateDiffPreview(rows, tenantId);
+
+    const hasErrors = diff.ERRORS.length > 0;
+
+    previewStep.innerHTML = `
+      <div style="margin-bottom:16px;">
+        <div style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px;">IMPORT PREVIEW BREAKDOWN</div>
+        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px;">
+          <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; text-align:center; border:1px solid var(--border-subtle);">
+            <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">NEW</div>
+            <div style="font-size:1.4rem; font-weight:700; color:var(--status-success); margin-top:2px;">${diff.NEW.length}</div>
+          </div>
+          <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; text-align:center; border:1px solid var(--border-subtle);">
+            <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">UPDATED</div>
+            <div style="font-size:1.4rem; font-weight:700; color:var(--status-info); margin-top:2px;">${diff.UPDATED.length}</div>
+          </div>
+          <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; text-align:center; border:1px solid var(--border-subtle);">
+            <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">UNCHANGED</div>
+            <div style="font-size:1.4rem; font-weight:700; color:var(--text-muted); margin-top:2px;">${diff.UNCHANGED.length}</div>
+          </div>
+          <div style="background:${hasErrors ? 'rgba(239, 68, 68, 0.15)' : 'var(--bg-surface-2)'}; padding:12px; border-radius:6px; text-align:center; border:${hasErrors ? '1px solid var(--status-danger)' : '1px solid var(--border-subtle)'};">
+            <div style="font-size:0.7rem; color:${hasErrors ? 'var(--status-danger)' : 'var(--text-muted)'}; font-weight:700;">ERRORS</div>
+            <div style="font-size:1.4rem; font-weight:700; color:${hasErrors ? 'var(--status-danger)' : 'var(--text-muted)'}; margin-top:2px;">${diff.ERRORS.length} ${hasErrors ? '🔴' : ''}</div>
+          </div>
+        </div>
+      </div>
+
+      ${hasErrors ? `
+        <div style="background:rgba(239, 68, 68, 0.1); border:1px solid var(--status-danger); padding:14px; border-radius:6px; margin-bottom:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div style="font-weight:700; color:var(--status-danger); font-size:0.88rem;">
+              ⚠ IMPORT BLOCKED — ${diff.ERRORS.length} error(s) must be resolved before committing
+            </div>
+            <button type="button" id="btn-export-errors-csv" class="btn-secondary" style="font-size:0.75rem; padding:4px 10px; cursor:pointer; color:var(--status-danger); border-color:var(--status-danger);">
+              ⬇ Export Error Report
+            </button>
+          </div>
+          <ul style="margin:0; padding-left:20px; font-size:0.8rem; color:var(--status-danger); max-height:120px; overflow-y:auto;">
+            ${diff.ERRORS.map(e => `<li>Row ${e.row} [${e.itemCode || 'CODE'}]: ${e.message}</li>`).join('')}
+          </ul>
+        </div>
+      ` : ''}
+
+      ${diff.UPDATED.length > 0 ? `
+        <div style="margin-bottom:16px;">
+          <div style="font-weight:700; font-size:0.85rem; color:var(--accent-primary); margin-bottom:8px;">UPDATED ITEM COMPARISON (${diff.UPDATED.length})</div>
+          <div style="max-height:180px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;">
+            ${diff.UPDATED.map(u => `
+              <div style="background:var(--bg-surface-2); border-left:3px solid var(--accent-primary); padding:10px; border-radius:4px;">
+                <div style="font-weight:700; font-size:0.85rem;">${u.itemCode} — ${u.itemName}</div>
+                <table style="width:100%; font-size:0.78rem; margin-top:6px; border-collapse:collapse;">
+                  <thead>
+                    <tr style="color:var(--text-muted); text-align:left; border-bottom:1px solid var(--border-subtle);">
+                      <th style="padding:4px;">Field</th><th style="padding:4px;">EXISTING</th><th style="padding:4px;">IMPORT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${u.fieldChanges.map(fc => `
+                      <tr>
+                        <td style="padding:4px; font-weight:600;">${fc.field}</td>
+                        <td style="padding:4px; color:var(--text-muted);">${fc.existing}</td>
+                        <td style="padding:4px; color:var(--accent-primary); font-weight:700;">${fc.import} ← CHANGED</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      ${diff.NEW.length > 0 ? `
+        <div style="margin-bottom:16px;">
+          <div style="font-weight:700; font-size:0.85rem; color:var(--status-success); margin-bottom:6px;">NEW ITEMS TO CREATE (${diff.NEW.length})</div>
+          <div style="max-height:100px; overflow-y:auto; font-size:0.8rem; color:var(--text-muted);">
+            ${diff.NEW.map(n => `<span style="display:inline-block; background:var(--bg-surface-2); padding:3px 8px; border-radius:4px; margin:2px 4px 2px 0; font-family:monospace; color:var(--text-main);">${n.itemCode} ${n.itemName}</span>`).join('')}
+          </div>
+        </div>
+      ` : ''}
+    `;
+
+    if (hasErrors) {
+      commitSlot.innerHTML = `
+        <button type="button" class="btn-secondary" disabled style="padding:8px 18px; font-weight:700; opacity:0.5; cursor:not-allowed; border-radius:6px;">
+          🔒 Commit Import (Blocked)
+        </button>
+      `;
+      const btnExportErr = overlay.querySelector('#btn-export-errors-csv');
+      if (btnExportErr) {
+        btnExportErr.addEventListener('click', () => {
+          const errCsv = inventoryImportController.generateErrorReportCsv(diff.ERRORS);
+          this._triggerDownload(errCsv, 'inventory_import_errors.csv');
+        });
+      }
+    } else {
+      overlay.querySelector('#step-lbl-4').style.color = 'var(--accent-primary)';
+      const changeCount = diff.NEW.length + diff.UPDATED.length;
+      commitSlot.innerHTML = `
+        <button type="button" id="btn-commit-import-action" class="btn-primary" style="padding:8px 20px; font-weight:700; background:var(--status-success); border-color:var(--status-success); color:#fff; border-radius:6px; cursor:pointer;">
+          ✓ Commit ${changeCount} Changes
+        </button>
+      `;
+
+      const btnCommitAction = overlay.querySelector('#btn-commit-import-action');
+      if (btnCommitAction) {
+        btnCommitAction.addEventListener('click', async () => {
+          btnCommitAction.disabled = true;
+          btnCommitAction.textContent = '⏳ Committing...';
+          const res = await inventoryImportController.commitImport(rows, tenantId);
+          this._renderImportResultStep(overlay, res, parentMount, session);
+        });
+      }
+    }
+  }
+
+  _renderImportResultStep(overlay, res = {}, parentMount = null, session = null) {
+    const previewStep = overlay.querySelector('#import-step-preview');
+    const footer = overlay.querySelector('#import-modal-footer');
+
+    overlay.querySelector('#step-lbl-5').style.color = 'var(--status-success)';
+
+    if (footer) footer.style.display = 'none';
+
+    if (previewStep) {
+      previewStep.innerHTML = `
+        <div style="text-align:center; padding:16px 0;">
+          <div style="font-size:3rem; margin-bottom:10px;">✅</div>
+          <h3 style="margin:0; color:var(--status-success); font-size:1.3rem;">✓ IMPORT COMPLETED</h3>
+          <p style="color:var(--text-muted); font-size:0.85rem; margin-top:4px;">Master inventory items committed atomically to live Supabase storage.</p>
+
+          <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin:20px 0;">
+            <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; border:1px solid var(--border-subtle);">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">CREATED</div>
+              <div style="font-size:1.3rem; font-weight:700; color:var(--status-success); margin-top:2px;">${res.createdCount}</div>
+            </div>
+            <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; border:1px solid var(--border-subtle);">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">UPDATED</div>
+              <div style="font-size:1.3rem; font-weight:700; color:var(--status-info); margin-top:2px;">${res.updatedCount}</div>
+            </div>
+            <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; border:1px solid var(--border-subtle);">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">UNCHANGED</div>
+              <div style="font-size:1.3rem; font-weight:700; color:var(--text-muted); margin-top:2px;">${res.unchangedCount}</div>
+            </div>
+            <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; border:1px solid var(--border-subtle);">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">REJECTED</div>
+              <div style="font-size:1.3rem; font-weight:700; color:var(--text-muted); margin-top:2px;">${res.rejectedCount}</div>
+            </div>
+          </div>
+
+          <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:24px;">
+            Import Audit ID: <strong style="font-family:monospace; color:var(--accent-primary);">${res.importId}</strong>
+          </div>
+
+          <div style="display:flex; justify-content:center; gap:12px;">
+            <button type="button" id="btn-close-modal-finish" class="btn-primary" style="padding:10px 24px; font-weight:700; background:var(--accent-primary); border-radius:6px; border:none; color:#fff; cursor:pointer;">
+              Close & Refresh Catalog
+            </button>
+          </div>
+        </div>
+      `;
+
+      const btnFinish = previewStep.querySelector('#btn-close-modal-finish');
+      if (btnFinish) {
+        btnFinish.addEventListener('click', async () => {
+          overlay.remove();
+          if (parentMount) {
+            this.activeSubView = 'inv-master';
+            await this.render(parentMount, session);
+          }
+        });
+      }
+    }
+  }
 }
+

@@ -5,6 +5,7 @@
 
 import { offlineStore } from '../../../../../businessos/platform/offline_store/offlineStore.js';
 import { platformEventBus, PlatformEventTypes } from '../../../../../businessos/platform/events/platformEvents.js';
+import { DataControlCenterView } from './DataControlCenterView.js';
 
 export class ModularConfigView {
   constructor() {
@@ -32,6 +33,7 @@ export class ModularConfigView {
       <!-- Modular Config Tabs -->
       <div style="display:flex; gap:var(--space-sm); border-bottom:1px solid var(--border-subtle); margin-bottom:var(--space-lg); overflow-x:auto; padding-bottom:4px; -webkit-overflow-scrolling:touch;">
         <button class="config-tab ${this.activeTab === 'business' ? 'active' : ''}" data-tab="business">🏢 Business Profile</button>
+        <button class="config-tab ${this.activeTab === 'data_control' ? 'active' : ''}" data-tab="data_control">⚙️ Data & Setup Control</button>
         <button class="config-tab ${this.activeTab === 'hardware' ? 'active' : ''}" data-tab="hardware">🖨️ Hardware & Printers</button>
         <button class="config-tab ${this.activeTab === 'payments' ? 'active' : ''}" data-tab="payments">💳 Payments & Taxes</button>
         <button class="config-tab ${this.activeTab === 'printing' ? 'active' : ''}" data-tab="printing">📄 Ticket Printing</button>
@@ -82,6 +84,11 @@ export class ModularConfigView {
           <button class="btn-primary" id="btn-save-biz" style="align-self:flex-start;">Save Business Profile</button>
         </div>
       `;
+    }
+
+    if (this.activeTab === 'data_control') {
+      const dataControl = new DataControlCenterView();
+      return dataControl.render().outerHTML;
     }
 
     if (this.activeTab === 'system') {

@@ -47,6 +47,7 @@ class KitchenMenuModel {
    * @returns {Array<Object>}
    */
   getAll(tenantId = null, filters = {}) {
+    this.deduplicateMenuItems();
     const rawList = offlineStore.getCollection('kitchen_menu_items', tenantId) || [];
     const showArchived = filters.showArchived || false;
 

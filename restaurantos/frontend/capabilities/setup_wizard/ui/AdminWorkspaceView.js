@@ -1,6 +1,7 @@
 import { UserManagementView } from '../../user_employee/ui/UserManagementView.js';
 import { DeviceConfigView } from '../../device_management/ui/DeviceConfigView.js';
 import { ModularConfigView } from '../../configuration/ui/ModularConfigView.js';
+import { DataControlCenterView } from '../../configuration/ui/DataControlCenterView.js';
 import { AttendanceView } from '../../attendance/ui/AttendanceView.js';
 
 /**
@@ -103,6 +104,7 @@ export class AdminWorkspaceView {
                 </button>
                 ${this.configGroupOpen ? `
                   <div class="flex-col gap-xs" style="padding-left:12px; margin-top:6px; display:flex; flex-direction:column; gap:4px; border-left:2px solid var(--border-subtle);">
+                    <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'config-data-control' ? 'active' : ''}" data-v="config-data-control" style="text-align:left; font-size:0.85rem; padding:6px 10px; border-radius:4px; cursor:pointer; color:var(--status-success); font-weight:700;">• Data & Setup Control</button>
                     <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'card1-full' ? 'active' : ''}" data-v="card1-full" style="text-align:left; font-size:0.85rem; padding:6px 10px; border-radius:4px; cursor:pointer;">• Business Profile</button>
                     <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'config-areas' ? 'active' : ''}" data-v="config-areas" style="text-align:left; font-size:0.85rem; padding:6px 10px; border-radius:4px; cursor:pointer;">• Dining Areas</button>
                     <button class="btn-secondary nav-admin-btn ${this.activeSubView === 'config-tables' ? 'active' : ''}" data-v="config-tables" style="text-align:left; font-size:0.85rem; padding:6px 10px; border-radius:4px; cursor:pointer;">• Tables</button>
@@ -179,6 +181,20 @@ export class AdminWorkspaceView {
             </button>
           </div>
 
+          <!-- DATA CONTROL CENTER HERO CTA BANNER -->
+          <div class="card animate-fade-in" style="background:linear-gradient(135deg, rgba(59,130,246,0.15) 0%, rgba(16,185,129,0.15) 100%); border:1px solid rgba(59,130,246,0.3); padding:24px; border-radius:12px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:16px;">
+            <div>
+              <div style="font-size:0.75rem; font-weight:700; color:var(--accent-primary); text-transform:uppercase; letter-spacing:1px;">SUPER ADMIN & TENANT DATA CONTROL</div>
+              <h3 style="font-size:1.5rem; font-weight:800; margin:4px 0 6px 0; color:var(--text-main);">🚀 Universal Data Control Center & Setup Plane</h3>
+              <p style="color:var(--text-muted); font-size:0.9rem; margin:0;">
+                Guided 12-screen file-driven onboarding, diff previews, recipe revision handling, and Go-Live certification.
+              </p>
+            </div>
+            <button class="btn-primary btn-goto-card" id="btn-open-data-control-cta" data-v="config-data-control" style="padding:12px 24px; font-weight:800; font-size:1rem; background:linear-gradient(135deg, #10b981 0%, #059669 100%); border:none; box-shadow:0 4px 12px rgba(16,185,129,0.3); cursor:pointer;">
+              ⚡ Launch Data Control Center →
+            </button>
+          </div>
+
           <!-- Restaurant Operational Status Banner -->
           <div class="card" style="background:var(--bg-surface-2); padding:20px; border-left:4px solid var(--status-success); border-radius:8px;">
             <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">RESTAURANT OPERATIONAL STATUS</div>
@@ -240,6 +256,7 @@ export class AdminWorkspaceView {
             <div class="card" style="background:var(--bg-surface-1); padding:20px; border:1px solid var(--border-subtle); border-radius:8px;">
               <h4 style="font-size:1rem; margin-top:0; margin-bottom:14px;">Quick Action Shortcuts</h4>
               <div class="flex-col gap-xs" style="display:flex; flex-direction:column; gap:8px;">
+                <button class="btn-secondary btn-goto-card" data-v="config-data-control" style="text-align:left; padding:10px 12px; font-size:0.85rem; border-radius:6px; cursor:pointer; color:var(--status-success); font-weight:700;">⚙️ Data & Setup Control</button>
                 <button class="btn-secondary btn-goto-card" data-v="card1-full" style="text-align:left; padding:10px 12px; font-size:0.85rem; border-radius:6px; cursor:pointer;">⚙ Edit Business Identity</button>
                 <button class="btn-secondary btn-goto-card" data-v="config-areas" style="text-align:left; padding:10px 12px; font-size:0.85rem; border-radius:6px; cursor:pointer;">🏛 Manage Dining Areas</button>
                 <button class="btn-secondary btn-goto-card" data-v="config-tables" style="text-align:left; padding:10px 12px; font-size:0.85rem; border-radius:6px; cursor:pointer;">🍽 Manage Dining Assets</button>
@@ -250,6 +267,9 @@ export class AdminWorkspaceView {
           </div>
         </div>
       `;
+    } else if (this.activeSubView === 'config-data-control') {
+      const view = new DataControlCenterView(opts);
+      mount.appendChild(view.render());
     } else if (this.activeSubView === 'card1-full') {
       this.renderBusinessProfile9Tabs(mount, session);
     } else if (this.activeSubView === 'config-areas') {

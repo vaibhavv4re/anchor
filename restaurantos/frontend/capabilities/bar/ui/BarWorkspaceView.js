@@ -21,6 +21,8 @@ import { productionBatchModel } from '../../../../../businessos/platform/kitchen
 import { inventoryItemModel } from '../../../../../businessos/platform/inventory/inventoryItemModel.js';
 import { inventoryProjectionService } from '../../../../../businessos/platform/inventory/inventoryProjectionService.js';
 import { BarMenuImporter, ANCHOR_HARBOUR_64_MENU_ITEMS } from '../../../../../businessos/platform/kitchen/barMenuImporter.js';
+import { barConsumptionModel } from '../../../../../businessos/platform/kitchen/barConsumptionModel.js';
+import { modifierGroupModel } from '../../../../../businessos/platform/kitchen/modifierGroupModel.js';
 import { platformEventBus } from '../../../../../businessos/platform/events/platformEvents.js';
 import { BarDisplaySystemView } from './BarDisplaySystemView.js';
 
@@ -510,37 +512,87 @@ export class BarWorkspaceView {
     `;
   }
 
-  // --- TAB 3: 📖 RECIPE STUDIO LANDING COCKPIT (F8.3.1) ---
+  // --- TAB 3: 📖 RECIPE STUDIO LANDING COCKPIT (F8.3.1 & F8.3-C) ---
   renderRecipeStudioTab(drinkItems = [], recipes = []) {
-    let publishedCount = 0;
-    let draftCount = 0;
-    let missingBomCount = 0;
+    let pourUnitConfiguredCount = 0;
+    let cocktailsPublishedCount = 0;
+    let actionRequiredCount = 0;
+
+    // Deduplicate drink items by itemName and merge their variants to prevent duplicate item names
+    const mergedDrinkItemsMap = new Map();
+    drinkItems.forEach(item => {
+      const nameKey = (item.itemName || item.name || '').trim().toLowerCase();
+      if (!nameKey) return;
+
+      if (!mergedDrinkItemsMap.has(nameKey)) {
+        mergedDrinkItemsMap.set(nameKey, {
+          id: item.id,
+          itemName: item.itemName || item.name,
+          category: item.category || 'BAR',
+          price: item.price || item.sellingPrice || 0,
+          variants: Array.isArray(item.variants) ? [...item.variants] : []
+        });
+      } else {
+        const existing = mergedDrinkItemsMap.get(nameKey);
+        const newVars = Array.isArray(item.variants) ? item.variants : [];
+        newVars.forEach(nv => {
+          if (!existing.variants.some(v => v.id === nv.id || v.name === nv.name)) {
+            existing.variants.push(nv);
+          }
+        });
+      }
+    });
+
+    const uniqueDrinkItems = Array.from(mergedDrinkItemsMap.values());
 
     // Expand drink items & variants into catalog rows
     const catalogRows = [];
-    drinkItems.forEach(item => {
+    uniqueDrinkItems.forEach(item => {
       const variants = Array.isArray(item.variants) && item.variants.length > 0 ? item.variants : [
         { id: `${item.id}_reg`, name: 'Regular', sellingPrice: item.price || item.sellingPrice || 0 }
       ];
 
+      const suggestedType = BarMenuImporter.classifySuggestedConsumptionType(item.category, item.itemName || item.name);
+
       variants.forEach(v => {
-        // Match active recipe
+        // Match dedicated consumption definition (POUR / UNIT / RECIPE / COMPOSITE)
+        const def = barConsumptionModel.getDefinitionForVariant(item.id, v.id);
         const activeRecipe = recipes.find(r => r.menuItemId === item.id && (r.variantId === v.id || r.variantName === v.name));
-        
-        let statusTag = '🟠 MISSING';
-        if (activeRecipe) {
-          if (activeRecipe.status === 'PUBLISHED' || activeRecipe.status === 'APPROVED') {
-            statusTag = '🟢 PUBLISHED';
-            publishedCount++;
-          } else if (activeRecipe.status === 'SUBMITTED') {
-            statusTag = '🟡 SUBMITTED';
-            draftCount++;
-          } else {
-            statusTag = '🟡 DRAFT';
-            draftCount++;
+
+        let statusTag = '⚠️ RECIPE MISSING';
+        let badgeClass = 'badge-danger';
+        let modelType = def ? def.consumptionType : suggestedType;
+
+        if (def) {
+          if (def.consumptionType === 'POUR') {
+            statusTag = '🥃 POUR CONFIGURED';
+            badgeClass = 'badge-success';
+            pourUnitConfiguredCount++;
+          } else if (def.consumptionType === 'UNIT') {
+            statusTag = '🍺 UNIT CONFIGURED';
+            badgeClass = 'badge-success';
+            pourUnitConfiguredCount++;
+          } else if (def.consumptionType === 'COMPOSITE') {
+            statusTag = '➕ COMPOSITE READY';
+            badgeClass = 'badge-success';
+            pourUnitConfiguredCount++;
           }
+        } else if (activeRecipe && (activeRecipe.status === 'PUBLISHED' || activeRecipe.status === 'APPROVED')) {
+          statusTag = `🍹 RECIPE READY (Rev ${activeRecipe.revision || 1})`;
+          badgeClass = 'badge-success';
+          cocktailsPublishedCount++;
+        } else if (suggestedType === 'POUR') {
+          statusTag = '🥃 POUR (Quick Setup)';
+          badgeClass = 'badge-warning';
+          actionRequiredCount++;
+        } else if (suggestedType === 'UNIT') {
+          statusTag = '🍺 UNIT (Quick Setup)';
+          badgeClass = 'badge-warning';
+          actionRequiredCount++;
         } else {
-          missingBomCount++;
+          statusTag = '⚠️ RECIPE MISSING';
+          badgeClass = 'badge-danger';
+          actionRequiredCount++;
         }
 
         catalogRows.push({
@@ -551,7 +603,11 @@ export class BarWorkspaceView {
           variantName: v.name,
           price: v.sellingPrice || item.sellingPrice || 0,
           recipe: activeRecipe,
-          statusTag
+          definition: def,
+          suggestedType,
+          modelType,
+          statusTag,
+          badgeClass
         });
       });
     });
@@ -576,16 +632,16 @@ export class BarWorkspaceView {
             <div style="font-size:1.8rem; font-weight:800; color:#3b82f6; margin-top:2px;">${catalogRows.length}</div>
           </div>
           <div class="card" style="padding:16px; background:var(--bg-surface-1); border-left:4px solid #10b981; border-radius:8px;">
-            <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">🟢 PUBLISHED RECIPES</div>
-            <div style="font-size:1.8rem; font-weight:800; color:#10b981; margin-top:2px;">${publishedCount}</div>
+            <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">🥃 POUR &amp; UNIT CONFIGURED</div>
+            <div style="font-size:1.8rem; font-weight:800; color:#10b981; margin-top:2px;">${pourUnitConfiguredCount}</div>
+          </div>
+          <div class="card" style="padding:16px; background:var(--bg-surface-1); border-left:4px solid #6366f1; border-radius:8px;">
+            <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">🍹 COCKTAILS PUBLISHED</div>
+            <div style="font-size:1.8rem; font-weight:800; color:#6366f1; margin-top:2px;">${cocktailsPublishedCount}</div>
           </div>
           <div class="card" style="padding:16px; background:var(--bg-surface-1); border-left:4px solid #f59e0b; border-radius:8px;">
-            <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">🟡 DRAFT / SUBMITTED</div>
-            <div style="font-size:1.8rem; font-weight:800; color:#f59e0b; margin-top:2px;">${draftCount}</div>
-          </div>
-          <div class="card" style="padding:16px; background:var(--bg-surface-1); border-left:4px solid #ef4444; border-radius:8px;">
-            <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">🟠 MISSING BOMS</div>
-            <div style="font-size:1.8rem; font-weight:800; color:#ef4444; margin-top:2px;">${missingBomCount}</div>
+            <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">⚠️ ACTION REQUIRED</div>
+            <div style="font-size:1.8rem; font-weight:800; color:#f59e0b; margin-top:2px;">${actionRequiredCount}</div>
           </div>
         </div>
 
@@ -597,53 +653,54 @@ export class BarWorkspaceView {
                 <th style="padding:12px 16px;">DRINK ITEM</th>
                 <th style="padding:12px 16px;">CATEGORY</th>
                 <th style="padding:12px 16px;">SERVING VARIANT</th>
-                <th style="padding:12px 16px;">ATTACHED RECIPE &amp; REVISION</th>
+                <th style="padding:12px 16px;">CONSUMPTION SPEC</th>
                 <th style="padding:12px 16px;">ESTIMATED COST</th>
-                <th style="padding:12px 16px;">BOM STATUS</th>
+                <th style="padding:12px 16px;">READINESS STATUS</th>
                 <th style="padding:12px 16px; text-align:right;">ACTION</th>
               </tr>
             </thead>
             <tbody>
               ${catalogRows.length > 0 ? catalogRows.map(row => `
                 <tr style="border-bottom:1px solid var(--border-subtle);">
-                  <td style="padding:12px 16px; font-weight:800; color:var(--accent-primary);">${row.itemName}</td>
+                  <td style="padding:12px 16px; font-weight:800; color:var(--accent-primary);">
+                    ${row.itemName} <span style="font-size:0.8rem; color:var(--text-muted); font-weight:700; margin-left:4px;">(${row.variantName})</span>
+                  </td>
                   <td style="padding:12px 16px; font-weight:700; color:var(--text-muted);">${row.category}</td>
-                  <td style="padding:12px 16px; font-weight:800;">${row.variantName}</td>
+                  <td style="padding:12px 16px; font-weight:800;">
+                    <span style="padding:3px 8px; background:var(--bg-surface-2); border-radius:4px; font-size:0.8rem; font-weight:800; color:var(--accent-primary);">${row.variantName}</span>
+                  </td>
                   <td style="padding:12px 16px;">
-                    ${row.recipe ? `
+                    ${row.definition ? `
                       <span style="font-weight:700; color:var(--text-primary);">
-                        ${row.recipe.recipeName || row.itemName} (Rev ${row.recipe.revision || row.recipe.revisionNumber || 1})
+                        ${row.definition.inventoryItemName || row.itemName} (${row.definition.quantity} ${row.definition.uom})
                       </span>
-                    ` : `<span style="color:var(--text-muted);">— None attached —</span>`}
+                    ` : row.recipe ? `
+                      <span style="font-weight:700; color:var(--text-primary);">
+                        ${row.recipe.recipeName || row.itemName} (Rev ${row.recipe.revision || 1})
+                      </span>
+                    ` : `<span style="color:var(--text-muted);">— Unconfigured —</span>`}
                   </td>
                   <td style="padding:12px 16px; font-weight:800; color:#10b981;">
                     ${row.recipe ? `₹${parseFloat(row.recipe.costPerPortion || row.recipe.totalCost || 0).toFixed(2)}` : '—'}
                   </td>
                   <td style="padding:12px 16px;">
-                    <span class="badge ${row.statusTag.includes('PUBLISHED') ? 'badge-success' : row.statusTag.includes('SUBMITTED') || row.statusTag.includes('DRAFT') ? 'badge-warning' : 'badge-danger'}" style="font-weight:800;">
+                    <span class="badge ${row.badgeClass}" style="font-weight:800;">
                       ${row.statusTag}
                     </span>
                   </td>
                   <td style="padding:12px 16px; text-align:right;">
-                    <button class="btn-secondary btn-open-recipe-editor" data-menu-item-id="${row.menuItemId}" data-variant-id="${row.variantId}" data-variant-name="${row.variantName}" data-item-name="${row.itemName}" data-recipe-id="${row.recipe ? row.recipe.id : ''}" style="padding:6px 12px; font-size:0.8rem; font-weight:800; border-color:var(--accent-primary); color:var(--accent-primary);">
-                      ${row.recipe ? '🧪 Edit Recipe' : '+ Create Recipe'}
+                    <button class="btn-secondary btn-quick-configure-consumption" data-menu-item-id="${row.menuItemId}" data-variant-id="${row.variantId}" data-variant-name="${row.variantName}" data-item-name="${row.itemName}" data-suggested-type="${row.suggestedType}" style="padding:6px 12px; font-size:0.8rem; font-weight:800; border-color:var(--accent-primary); color:var(--accent-primary);">
+                      ⚙️ Quick Setup
                     </button>
-                    ${row.recipe && row.recipe.status === 'DRAFT' ? `
-                      <button class="btn-secondary btn-submit-recipe-page" data-recipe-id="${row.recipe.id}" style="padding:6px 12px; font-size:0.8rem; font-weight:800; border-color:#f59e0b; color:#f59e0b; margin-left:6px;">
-                        📤 Submit
-                      </button>
-                    ` : ''}
-                    ${row.recipe && row.recipe.status === 'SUBMITTED' ? `
-                      <button class="btn-primary btn-publish-recipe-page" data-recipe-id="${row.recipe.id}" style="padding:6px 12px; font-size:0.8rem; font-weight:900; background:linear-gradient(90deg,#10b981,#059669); color:#fff; border:none; border-radius:6px; margin-left:6px;">
-                        ✅ Approve &amp; Publish
-                      </button>
-                    ` : ''}
+                    <button class="btn-secondary btn-open-recipe-editor" data-menu-item-id="${row.menuItemId}" data-variant-id="${row.variantId}" data-variant-name="${row.variantName}" data-item-name="${row.itemName}" data-recipe-id="${row.recipe ? row.recipe.id : ''}" style="padding:6px 12px; font-size:0.8rem; font-weight:800; margin-left:6px;">
+                      ${row.recipe ? '🧪 Edit Cocktail Recipe' : '+ Recipe BOM'}
+                    </button>
                   </td>
                 </tr>
               `).join('') : `
                 <tr>
-                  <td colspan="7" style="padding:30px; text-align:center; color:var(--text-muted);">
-                    No drink items found in menu. Add drink items in Menu Management first.
+                  <td colspan="7" style="padding:32px; text-align:center; color:var(--text-muted);">
+                    No drink items found. Import menu items from Tab 2 (Menu &amp; 86 Control).
                   </td>
                 </tr>
               `}
@@ -1344,7 +1401,155 @@ export class BarWorkspaceView {
     `;
   }
 
+  // --- 1-TAP QUICK SETUP CONSUMPTION MODAL (F8.3-C) ---
+  renderQuickConsumptionSetupModal(menuItemId, variantId, variantName, itemName, suggestedType) {
+    const modalEl = document.createElement('div');
+    modalEl.className = 'modal-backdrop animate-fade-in';
+    modalEl.style.cssText = 'position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.7); display:flex; align-items:center; justify-content:center; z-index:9999; backdrop-filter:blur(4px);';
+
+    const masterItems = inventoryItemModel.getAllItems() || [];
+
+    modalEl.innerHTML = `
+      <div class="modal-card" style="background:var(--bg-surface-1); width:100%; max-width:620px; border-radius:12px; padding:24px; box-shadow:0 20px 40px rgba(0,0,0,0.5); border:1px solid var(--border-subtle); display:flex; flex-direction:column; gap:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-subtle); padding-bottom:12px;">
+          <div>
+            <h3 style="margin:0; font-size:1.15rem; font-weight:800;">⚙️ 1-Tap Bar Consumption Setup</h3>
+            <div style="font-size:0.8rem; color:var(--text-muted); font-weight:700;">Item: ${itemName} (${variantName})</div>
+          </div>
+          <button id="btn-close-quick-setup-modal" style="background:transparent; border:none; color:var(--text-muted); font-size:1.4rem; cursor:pointer; font-weight:800;">✕</button>
+        </div>
+
+        <div style="display:flex; flex-direction:column; gap:12px;">
+          <label style="font-size:0.82rem; font-weight:800; color:var(--text-muted); text-transform:uppercase;">Select Consumption Model:</label>
+          <div style="display:grid; grid-template-columns:repeat(2, 1fr); gap:10px;">
+            <button class="btn-model-choice ${suggestedType === 'POUR' ? 'active' : ''}" data-model="POUR" style="padding:12px; border-radius:8px; border:2px solid ${suggestedType === 'POUR' ? 'var(--accent-primary)' : 'var(--border-subtle)'}; background:var(--bg-surface-2); text-align:left; cursor:pointer;">
+              <div style="font-size:1.1rem; font-weight:800;">🥃 POUR</div>
+              <div style="font-size:0.75rem; color:var(--text-muted);">Single spirit pour (30ml, 60ml, 90ml)</div>
+            </button>
+            <button class="btn-model-choice ${suggestedType === 'UNIT' ? 'active' : ''}" data-model="UNIT" style="padding:12px; border-radius:8px; border:2px solid ${suggestedType === 'UNIT' ? 'var(--accent-primary)' : 'var(--border-subtle)'}; background:var(--bg-surface-2); text-align:left; cursor:pointer;">
+              <div style="font-size:1.1rem; font-weight:800;">🍺 UNIT</div>
+              <div style="font-size:0.75rem; color:var(--text-muted);">Sealed bottle or can (1 Bottle / Can)</div>
+            </button>
+          </div>
+        </div>
+
+        <!-- DYNAMIC CONFIG FORM -->
+        <div id="quick-setup-form-body" style="background:var(--bg-surface-2); padding:16px; border-radius:8px; border:1px solid var(--border-subtle); display:flex; flex-direction:column; gap:12px;">
+          <div>
+            <label style="font-size:0.8rem; font-weight:700; display:block; margin-bottom:6px;">Bound Inventory Master Item</label>
+            <select id="sel-quick-master-item" style="width:100%; padding:10px; border-radius:6px; background:var(--bg-surface-1); border:1px solid var(--border-subtle); font-weight:700; color:var(--text-primary);">
+              <option value="">-- Select Master Inventory Item --</option>
+              ${masterItems.map(i => `<option value="${i.id}">${i.name} (${i.sku || i.itemCode}) — WAC ₹${i.currentUnitCost || 0}/${i.baseUnit}</option>`).join('')}
+            </select>
+          </div>
+
+          <div style="display:flex; gap:12px;">
+            <div style="flex:1;">
+              <label style="font-size:0.8rem; font-weight:700; display:block; margin-bottom:6px;">Quantity / Pour Size</label>
+              <input type="number" id="inp-quick-qty" value="${suggestedType === 'UNIT' ? 1 : 60}" style="width:100%; padding:10px; border-radius:6px; background:var(--bg-surface-1); border:1px solid var(--border-subtle); font-weight:800;">
+            </div>
+            <div style="flex:1;">
+              <label style="font-size:0.8rem; font-weight:700; display:block; margin-bottom:6px;">Unit of Measure</label>
+              <input type="text" id="inp-quick-uom" value="${suggestedType === 'UNIT' ? 'BOTTLE' : 'ML'}" style="width:100%; padding:10px; border-radius:6px; background:var(--bg-surface-1); border:1px solid var(--border-subtle); font-weight:800;">
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:10px; border-top:1px solid var(--border-subtle); padding-top:12px;">
+          <button id="btn-cancel-quick-modal" class="btn-secondary" style="padding:10px 18px; font-weight:700;">Cancel</button>
+          <button id="btn-save-quick-modal" class="btn-primary" style="padding:10px 24px; font-weight:800; background:linear-gradient(90deg, #10b981, #059669); border:none; color:#fff; border-radius:6px; cursor:pointer;">
+            💾 Save Consumption Spec
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(modalEl);
+
+    const closeBtn = modalEl.querySelector('#btn-close-quick-setup-modal');
+    const cancelBtn = modalEl.querySelector('#btn-cancel-quick-modal');
+    const saveBtn = modalEl.querySelector('#btn-save-quick-modal');
+    const selMaster = modalEl.querySelector('#sel-quick-master-item');
+    const inpQty = modalEl.querySelector('#inp-quick-qty');
+    const inpUom = modalEl.querySelector('#inp-quick-uom');
+
+    let selectedModel = suggestedType === 'UNIT' ? 'UNIT' : 'POUR';
+
+    modalEl.querySelectorAll('.btn-model-choice').forEach(b => {
+      b.addEventListener('click', () => {
+        modalEl.querySelectorAll('.btn-model-choice').forEach(x => {
+          x.style.borderColor = 'var(--border-subtle)';
+        });
+        b.style.borderColor = 'var(--accent-primary)';
+        selectedModel = b.dataset.model;
+        if (selectedModel === 'UNIT') {
+          inpQty.value = 1;
+          inpUom.value = 'BOTTLE';
+        } else {
+          inpQty.value = 60;
+          inpUom.value = 'ML';
+        }
+      });
+    });
+
+    const closeModal = () => {
+      if (document.body.contains(modalEl)) {
+        document.body.removeChild(modalEl);
+      }
+    };
+
+    [closeBtn, cancelBtn].forEach(btn => btn && btn.addEventListener('click', closeModal));
+
+    saveBtn.addEventListener('click', () => {
+      const inventoryItemId = selMaster.value;
+      if (!inventoryItemId) {
+        alert('❌ Please select a Master Inventory Item.');
+        return;
+      }
+
+      const qty = parseFloat(inpQty.value) || 1;
+      const uom = inpUom.value.trim().toUpperCase() || 'ML';
+
+      if (selectedModel === 'UNIT') {
+        barConsumptionModel.setUnitDefinition({
+          menuItemId,
+          variantId,
+          variantName,
+          inventoryItemId,
+          quantity: qty,
+          uom
+        });
+      } else {
+        barConsumptionModel.setPourDefinition({
+          menuItemId,
+          variantId,
+          variantName,
+          inventoryItemId,
+          quantity: qty,
+          uom
+        });
+      }
+
+      closeModal();
+      this.updateContent();
+    });
+  }
+
   bindEvents() {
+    // 1-Tap Quick Setup Consumption Modal (F8.3-C)
+    this.container.querySelectorAll('.btn-quick-configure-consumption').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const menuItemId = btn.dataset.menuItemId;
+        const variantId = btn.dataset.variantId;
+        const variantName = btn.dataset.variantName;
+        const itemName = btn.dataset.itemName;
+        const suggestedType = btn.dataset.suggestedType || 'POUR';
+
+        this.renderQuickConsumptionSetupModal(menuItemId, variantId, variantName, itemName, suggestedType);
+      });
+    });
+
     // Open Dedicated Recipe Editor View (Tab 3)
     this.container.querySelectorAll('.btn-open-recipe-editor').forEach(btn => {
       btn.addEventListener('click', (e) => {

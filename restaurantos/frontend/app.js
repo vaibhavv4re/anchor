@@ -180,7 +180,7 @@ export class ApplicationShell {
       platformEventBus: this.platformEventBus
     };
 
-    if (session.workspace === 'superadmin') {
+    if (session.workspace === 'superadmin' || session.roleId === 'role-superadmin') {
       const superAdminWs = new SuperAdminWorkspaceView(opts);
       await superAdminWs.render(rootMount, session);
     } else if (session.workspace === 'admin') {

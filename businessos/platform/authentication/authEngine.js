@@ -63,14 +63,16 @@ export class AuthEngine {
       String(t.patchObj?.admin_pin) === sPin
     ));
 
-    if (matchedTenant || sPin === '999999') {
+    if (sPin === '888888') {
+      // 1. System Superadmin PIN (Top Priority)
+      employeeName = 'System Superadmin';
+      roleId = 'role-superadmin';
+      tenantId = 'system';
+    } else if (matchedTenant || sPin === '999999') {
+      // 2. Tenant Admin PIN
       tenantId = matchedTenant ? (matchedTenant.tenantId || matchedTenant.tenant_id || tenantId) : tenantId;
       employeeName = matchedTenant ? (matchedTenant.adminName || matchedTenant.admin_name || 'General Manager') : 'General Manager';
       roleId = 'role-admin';
-    } else if (sPin === '888888') {
-      // 2. System Superadmin PIN
-      employeeName = 'System Superadmin';
-      roleId = 'role-superadmin';
     } else {
       // 3. Employee PIN / Identity lookup
       let allEmps = [];
@@ -134,9 +136,11 @@ export class AuthEngine {
     }
 
     // Role-based workspace resolution: role_id authority takes primary precedence
-    let workspace = 'admin';
+    let workspace = roleId === 'role-superadmin' ? 'superadmin' : 'admin';
     if (role && role.workspace) {
       workspace = role.workspace;
+    } else if (roleId === 'role-superadmin') {
+      workspace = 'superadmin';
     } else if (emp && (emp.workspaceDefault || emp.workspace_default)) {
       workspace = emp.workspaceDefault || emp.workspace_default;
     }

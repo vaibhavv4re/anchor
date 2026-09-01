@@ -64,6 +64,16 @@ export class PinPadView {
       </div>
 
       <div id="pin-error" style="color:var(--status-danger); font-size:0.875rem; height:20px; text-align:center; margin-top:8px;"></div>
+
+      <div style="margin-top:16px; padding-top:12px; border-top:1px solid var(--border-subtle); text-align:center; font-size:0.75rem; color:var(--text-muted);">
+        <div style="font-weight:700; color:var(--text-main); margin-bottom:6px;">🔑 Quick Demo Credentials</div>
+        <div style="display:flex; justify-content:center; gap:8px; flex-wrap:wrap; font-family:monospace;">
+          <span style="background:var(--bg-surface-2); padding:2px 6px; border-radius:4px;">888888 (Super Admin)</span>
+          <span style="background:var(--bg-surface-2); padding:2px 6px; border-radius:4px;">999999 (Tenant Admin)</span>
+          <span style="background:var(--bg-surface-2); padding:2px 6px; border-radius:4px;">000000 (Owner)</span>
+          <span style="background:var(--bg-surface-2); padding:2px 6px; border-radius:4px;">444444 (Bar)</span>
+        </div>
+      </div>
     `;
 
     this.bindEvents();

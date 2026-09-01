@@ -21,14 +21,16 @@ class OfflineStore {
       return this.memoryCache.get(collection);
     }
     try {
-      const raw = localStorage.getItem(this.prefix + collection);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        this.memoryCache.set(collection, parsed);
-        return parsed;
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem(this.prefix + collection);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          this.memoryCache.set(collection, parsed);
+          return parsed;
+        }
       }
     } catch (e) {
-      console.warn(`[OfflineStore] Storage read failed for ${collection}, using memory cache`, e);
+      // Memory cache is the primary fallback
     }
     return null;
   }
@@ -42,14 +44,18 @@ class OfflineStore {
   setCollection(collection, data) {
     this.memoryCache.set(collection, data);
     try {
-      localStorage.setItem(this.prefix + collection, JSON.stringify(data));
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(this.prefix + collection, JSON.stringify(data));
+      }
     } catch (e) {
       if (e && (e.name === 'QuotaExceededError' || e.code === 22 || e.number === -2147024882 || String(e).includes('quota'))) {
         this._purgeStaleLogs();
         try {
-          localStorage.setItem(this.prefix + collection, JSON.stringify(data));
+          if (typeof localStorage !== 'undefined') {
+            localStorage.setItem(this.prefix + collection, JSON.stringify(data));
+          }
         } catch (retryErr) {
-          // Memory cache handles the data smoothly; suppress unhandled quota flood
+          // Memory cache handles the data smoothly
         }
       }
     }

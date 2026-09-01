@@ -112,6 +112,56 @@ export const ANCHOR_HARBOUR_64_MENU_ITEMS = [
 
 export class BarMenuImporter {
   /**
+   * Non-authoritative classification suggestion for menu item consumption type
+   * @param {string} categoryName 
+   * @param {string} itemName 
+   * @returns {'POUR' | 'UNIT' | 'RECIPE'}
+   */
+  static classifySuggestedConsumptionType(categoryName = '', itemName = '') {
+    const catLower = (categoryName || '').toLowerCase();
+    const nameLower = (itemName || '').toLowerCase();
+
+    // Explicit bottle/can units (e.g. "Kingfisher 650ml", "Budweiser Bottle", "Coke Can")
+    if (
+      nameLower.includes('bottle') ||
+      nameLower.includes('can') ||
+      catLower.includes('beer') ||
+      catLower.includes('breezer')
+    ) {
+      return 'UNIT';
+    }
+
+    // Cocktails & Mocktails (Multi-ingredient recipes)
+    if (
+      catLower.includes('cocktail') ||
+      catLower.includes('mocktail') ||
+      catLower.includes('shooter') ||
+      nameLower.includes('mojito') ||
+      nameLower.includes('margarita') ||
+      nameLower.includes('martini')
+    ) {
+      return 'RECIPE';
+    }
+
+    // Spirit pours (Scotch, Whisky, Gin, Vodka, Tequila, Rum, Brandy, Wine)
+    if (
+      catLower.includes('whisky') ||
+      catLower.includes('scotch') ||
+      catLower.includes('bourbon') ||
+      catLower.includes('brandy') ||
+      catLower.includes('gin') ||
+      catLower.includes('tequila') ||
+      catLower.includes('vodka') ||
+      catLower.includes('rum') ||
+      catLower.includes('wine')
+    ) {
+      return 'POUR';
+    }
+
+    return 'POUR'; // default suggestion
+  }
+
+  /**
    * Parse Sheet Matrix (Array of Arrays) into Array of Row Objects with Header Detection
    * @param {Array<Array<any>>} rawMatrix 
    * @returns {Array<Object>}
@@ -373,6 +423,7 @@ export class BarMenuImporter {
 
       const itemName = itemNameRawClean(itemNameVal);
       const normKey = `${currentCategory.toLowerCase()}_${itemName.toLowerCase()}`;
+      const suggestedType = BarMenuImporter.classifySuggestedConsumptionType(currentCategory, itemName);
 
       // Extract variants from price/serving columns in this row
       const newVariants = [];
@@ -480,7 +531,9 @@ export class BarMenuImporter {
         productionType,
         price: basePrice,
         variants: newVariants,
-        setupStatus,
+        setupStatus: suggestedType === 'RECIPE' ? '🟡 BOM_REQUIRED' : '🟢 READY',
+        suggestedConsumptionType: suggestedType,
+        userConfirmedType: suggestedType,
         isExisting,
         tenantId
       };
