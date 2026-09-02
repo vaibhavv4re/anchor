@@ -13,6 +13,7 @@ import { supplierImportController } from '../../../../../businessos/platform/inv
 import { supplierCatalogueController } from '../../../../../businessos/platform/inventory/supplierCatalogueController.js';
 import { inventoryItemModel } from '../../../../../businessos/platform/inventory/inventoryItemModel.js';
 import { offlineStore } from '../../../../../businessos/platform/offline_store/offlineStore.js';
+import { CategoryRepository } from '../../../../../businessos/platform/repositories/categoryRepository.js';
 
 export class InventoryWorkspaceView {
   constructor(deps = {}) {
@@ -66,6 +67,43 @@ export class InventoryWorkspaceView {
       console.warn(`[InventoryWorkspaceView] Error fetching collection "${name}":`, e);
     }
     return offlineStore.getCollection(name, tenantId) || offlineStore.getCollection(name) || [];
+  }
+
+  _getUnifiedCategories(tenantId) {
+    let catList = this._getCollection('inventory_categories', tenantId) || [];
+    if (!Array.isArray(catList) || catList.length === 0) {
+      const repo = new CategoryRepository({ offlineStore });
+      catList = repo.getDefaultCategories(tenantId);
+    }
+
+    const items = this._getCollection('inventory', tenantId) || [];
+    const existingCodeMap = new Map();
+
+    catList.forEach(c => {
+      const code = (c.categoryCode || c.category_code || c.code || c.id || '').toUpperCase().trim();
+      if (code) existingCodeMap.set(code, c);
+    });
+
+    items.forEach(item => {
+      const cCode = (item.categoryCode || item.category_code || item.category || '').trim().toUpperCase();
+      if (cCode && !existingCodeMap.has(cCode)) {
+        const humanName = cCode.replace(/^CAT-/, '').replace(/[-_]/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+        const newCat = {
+          id: `cat-discovered-${cCode.toLowerCase()}`,
+          tenantId,
+          categoryCode: cCode,
+          category_code: cCode,
+          categoryName: humanName,
+          category_name: humanName,
+          productFamilyCode: this._inferProductFamilyCode(cCode),
+          status: 'ACTIVE'
+        };
+        existingCodeMap.set(cCode, newCat);
+        catList.push(newCat);
+      }
+    });
+
+    return catList;
   }
 
   _inferProductFamilyCode(category) {
@@ -125,7 +163,7 @@ export class InventoryWorkspaceView {
       const locations = this._getCollection('storage_locations', tenantId);
       const requests = this._getCollection('inventory_requests', tenantId);
       const balances = this._getCollection('stock_balances', tenantId);
-      const categories = this._getCollection('inventory_categories', tenantId);
+      const categories = this._getUnifiedCategories(tenantId);
       const uoms = this._getCollection('inventory_uoms', tenantId);
       const history = this._getCollection('import_history', tenantId);
       const grns = this._getCollection('goods_receipt_notes', tenantId);
@@ -2987,8 +3025,10 @@ export class InventoryWorkspaceView {
               </select>
             </div>
             <div>
-              <label style="display:block; font-size:0.85rem; margin-bottom:6px; font-weight:600;">Category Code</label>
-              <input type="text" id="inp-cat-code" placeholder="e.g. CAT-RICE" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle); text-transform:uppercase;">
+              <label style="display:block; font-size:0.85rem; margin-bottom:6px; font-weight:600;">Category *</label>
+              <select id="inp-cat-code" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-2); color:var(--text-main);">
+                ${categories.map(c => `<option value="${c.categoryCode || c.category_code}">${c.categoryName || c.category_name} (${c.categoryCode || c.category_code})</option>`).join('')}
+              </select>
             </div>
           </div>
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
@@ -6285,6 +6325,8 @@ export class InventoryWorkspaceView {
     const conv = item.conversionFactor || item.conversion_factor || 1;
     const reorderLevel = item.reorderLevel !== undefined ? item.reorderLevel : (item.reorder_level || 10);
 
+    const categories = this._getUnifiedCategories(tenantId);
+
     const overlay = document.createElement('div');
     overlay.id = 'edit-master-item-modal-overlay';
     overlay.style.cssText = `
@@ -6325,8 +6367,15 @@ export class InventoryWorkspaceView {
               </select>
             </div>
             <div>
-              <label style="font-weight:700; display:block; margin-bottom:4px;">Category Code *</label>
-              <input type="text" id="inp-edit-item-cat" value="${category}" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main); text-transform:uppercase;" />
+              <label style="font-weight:700; display:block; margin-bottom:4px;">Category *</label>
+              <select id="inp-edit-item-cat" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);">
+                ${categories.map(c => {
+                  const cCode = c.categoryCode || c.category_code;
+                  const cName = c.categoryName || c.category_name;
+                  const isSel = cCode.toUpperCase() === category.toUpperCase();
+                  return `<option value="${cCode}" ${isSel ? 'selected' : ''}>${cName} (${cCode})</option>`;
+                }).join('')}
+              </select>
             </div>
           </div>
 

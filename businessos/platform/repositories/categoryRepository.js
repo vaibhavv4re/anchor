@@ -220,4 +220,8 @@ export class CategoryRepository {
 
     return defaultList;
   }
+
+  getDefaultCategories(tenantId = 'ros-tenant-master') {
+    return this.initDefaultCategories(tenantId);
+  }
 }
