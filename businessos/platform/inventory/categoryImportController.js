@@ -403,14 +403,14 @@ export class CategoryImportController {
 
     const updatedPfList = Array.from(pfMap.values());
     store.setCollection('product_families', updatedPfList);
-    if (this.dataGateway && typeof this.dataGateway.setCollection === 'function') {
-      await this.dataGateway.setCollection('product_families', updatedPfList);
-    }
 
     const updatedCatList = Array.from(catMap.values());
     store.setCollection('inventory_categories', updatedCatList);
-    if (this.dataGateway && typeof this.dataGateway.setCollection === 'function') {
-      await this.dataGateway.setCollection('inventory_categories', updatedCatList);
+
+    const gw = this._getDataGateway();
+    if (gw && typeof gw.setCollection === 'function') {
+      await gw.setCollection('product_families', updatedPfList);
+      await gw.setCollection('inventory_categories', updatedCatList);
     }
 
     return {

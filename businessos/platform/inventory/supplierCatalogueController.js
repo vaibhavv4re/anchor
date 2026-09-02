@@ -117,13 +117,13 @@ export class SupplierCatalogueController {
 
     rows.forEach(row => {
       const rowNum = row._rowNum;
-      const supplierCode = (row.supplier_code || row.suppliercode || row.supplier_id || '').trim().toUpperCase();
-      const itemCode = (row.item_code || row.itemcode || row.item_id || '').trim().toUpperCase();
-      const purchaseUom = (row.purchase_uom || row.purchaseuom || row.uom || '').trim().toUpperCase();
-      const rawPackQty = (row.pack_quantity || row.packquantity || row.pack_qty || '').trim();
-      const packUom = (row.pack_uom || row.packuom || '').trim().toUpperCase();
-      const rawPrice = (row.unit_price || row.unitprice || row.price || row.catalogue_price || '').trim();
-      const rawGst = (row.gst_rate || row.gstrate || row.gst || '').trim();
+      const supplierCode = String(row.supplier_code || row.suppliercode || row.supplier_id || '').trim().toUpperCase();
+      const itemCode = String(row.item_code || row.itemcode || row.item_id || '').trim().toUpperCase();
+      const purchaseUom = String(row.purchase_uom || row.purchaseuom || row.uom || '').trim().toUpperCase();
+      const rawPackQty = String(row.pack_quantity !== undefined ? row.pack_quantity : (row.packquantity !== undefined ? row.packquantity : (row.pack_qty !== undefined ? row.pack_qty : ''))).trim();
+      const packUom = String(row.pack_uom || row.packuom || '').trim().toUpperCase();
+      const rawPrice = String(row.unit_price !== undefined ? row.unit_price : (row.unitprice !== undefined ? row.unitprice : (row.price !== undefined ? row.price : (row.catalogue_price !== undefined ? row.catalogue_price : '')))).trim();
+      const rawGst = String(row.gst_rate !== undefined ? row.gst_rate : (row.gstrate !== undefined ? row.gstrate : (row.gst !== undefined ? row.gst : ''))).trim();
 
       const compositeKey = `${supplierCode}::${itemCode}`;
 
@@ -233,20 +233,20 @@ export class SupplierCatalogueController {
     rows.forEach(row => {
       if (errorRows.has(row._rowNum)) return;
 
-      const supplierCode = (row.supplier_code || row.suppliercode || row.supplier_id || '').trim().toUpperCase();
-      const itemCode = (row.item_code || row.itemcode || row.item_id || '').trim().toUpperCase();
-      const sku = (row.supplier_sku || row.suppliersku || row.sku || itemCode).trim();
-      const name = (row.supplier_item_name || row.supplieritemname || row.name || '').trim();
-      const purchaseUom = (row.purchase_uom || row.purchaseuom || row.uom || '').trim().toUpperCase();
+      const supplierCode = String(row.supplier_code || row.suppliercode || row.supplier_id || '').trim().toUpperCase();
+      const itemCode = String(row.item_code || row.itemcode || row.item_id || '').trim().toUpperCase();
+      const sku = String(row.supplier_sku || row.suppliersku || row.sku || itemCode).trim();
+      const name = String(row.supplier_item_name || row.supplieritemname || row.name || '').trim();
+      const purchaseUom = String(row.purchase_uom || row.purchaseuom || row.uom || '').trim().toUpperCase();
       const packQty = parseFloat(row.pack_quantity || row.packquantity || row.pack_qty) || 1;
-      const packUom = (row.pack_uom || row.packuom || 'KG').trim().toUpperCase();
-      const price = parseFloat(row.unit_price || row.unitprice || row.price || row.catalogue_price) || 0;
-      const rawGst = (row.gst_rate || row.gstrate || row.gst || '').trim();
+      const packUom = String(row.pack_uom || row.packuom || 'KG').trim().toUpperCase();
+      const price = parseFloat(row.unit_price !== undefined ? row.unit_price : (row.unitprice !== undefined ? row.unitprice : (row.price !== undefined ? row.price : (row.catalogue_price || 0)))) || 0;
+      const rawGst = String(row.gst_rate !== undefined ? row.gst_rate : (row.gstrate !== undefined ? row.gstrate : (row.gst !== undefined ? row.gst : ''))).trim();
       const gstRate = rawGst !== '' ? parseFloat(rawGst) : null;
       const moq = parseInt(row.moq, 10) || 1;
       const leadTimeDays = parseInt(row.lead_time_days || row.leadtime, 10) || 2;
-      const preferred = (row.preferred || '').trim() !== '' ? ((row.preferred || '').toLowerCase() !== 'false') : true;
-      const active = (row.active || '').trim() !== '' ? ((row.active || '').toLowerCase() !== 'false') : true;
+      const preferred = String(row.preferred !== undefined ? row.preferred : '').trim() !== '' ? (String(row.preferred).toLowerCase() !== 'false') : true;
+      const active = String(row.active !== undefined ? row.active : '').trim() !== '' ? (String(row.active).toLowerCase() !== 'false') : true;
 
       const compositeKey = `${supplierCode}::${itemCode}`;
       const existing = existingMap.get(compositeKey);
@@ -334,20 +334,20 @@ export class SupplierCatalogueController {
     let updatedCount = 0;
 
     rows.forEach(row => {
-      const supplierCode = (row.supplier_code || row.suppliercode || row.supplier_id || '').trim().toUpperCase();
-      const itemCode = (row.item_code || row.itemcode || row.item_id || '').trim().toUpperCase();
-      const sku = (row.supplier_sku || row.suppliersku || row.sku || itemCode).trim();
-      const name = (row.supplier_item_name || row.supplieritemname || row.name || '').trim();
-      const purchaseUom = (row.purchase_uom || row.purchaseuom || row.uom || '').trim().toUpperCase();
+      const supplierCode = String(row.supplier_code || row.suppliercode || row.supplier_id || '').trim().toUpperCase();
+      const itemCode = String(row.item_code || row.itemcode || row.item_id || '').trim().toUpperCase();
+      const sku = String(row.supplier_sku || row.suppliersku || row.sku || itemCode).trim();
+      const name = String(row.supplier_item_name || row.supplieritemname || row.name || '').trim();
+      const purchaseUom = String(row.purchase_uom || row.purchaseuom || row.uom || '').trim().toUpperCase();
       const packQty = parseFloat(row.pack_quantity || row.packquantity || row.pack_qty) || 1;
-      const packUom = (row.pack_uom || row.packuom || 'KG').trim().toUpperCase();
-      const price = parseFloat(row.unit_price || row.unitprice || row.price || row.catalogue_price) || 0;
-      const rawGst = (row.gst_rate || row.gstrate || row.gst || '').trim();
+      const packUom = String(row.pack_uom || row.packuom || 'KG').trim().toUpperCase();
+      const price = parseFloat(row.unit_price !== undefined ? row.unit_price : (row.unitprice !== undefined ? row.unitprice : (row.price !== undefined ? row.price : (row.catalogue_price || 0)))) || 0;
+      const rawGst = String(row.gst_rate !== undefined ? row.gst_rate : (row.gstrate !== undefined ? row.gstrate : (row.gst !== undefined ? row.gst : ''))).trim();
       const gstRate = rawGst !== '' ? parseFloat(rawGst) : null;
       const moq = parseInt(row.moq, 10) || 1;
       const leadTimeDays = parseInt(row.lead_time_days || row.leadtime, 10) || 2;
-      const preferred = (row.preferred || '').trim() !== '' ? ((row.preferred || '').toLowerCase() !== 'false') : true;
-      const active = (row.active || '').trim() !== '' ? ((row.active || '').toLowerCase() !== 'false') : true;
+      const preferred = String(row.preferred !== undefined ? row.preferred : '').trim() !== '' ? (String(row.preferred).toLowerCase() !== 'false') : true;
+      const active = String(row.active !== undefined ? row.active : '').trim() !== '' ? (String(row.active).toLowerCase() !== 'false') : true;
 
       const compositeKey = `${supplierCode}::${itemCode}`;
       const existing = catalogueMap.get(compositeKey);
@@ -425,8 +425,9 @@ export class SupplierCatalogueController {
     const store = this.offlineStore || offlineStore;
     store.setCollection('supplier_catalogue', updatedList);
 
-    if (this.dataGateway && typeof this.dataGateway.setCollection === 'function') {
-      await this.dataGateway.setCollection('supplier_catalogue', updatedList);
+    const gw = this._getDataGateway();
+    if (gw && typeof gw.setCollection === 'function') {
+      await gw.setCollection('supplier_catalogue', updatedList);
     }
 
     return {

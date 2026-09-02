@@ -327,8 +327,9 @@ export class SupplierImportController {
     const store = this.offlineStore || offlineStore;
     store.setCollection('suppliers', updatedList);
 
-    if (this.dataGateway && typeof this.dataGateway.setCollection === 'function') {
-      await this.dataGateway.setCollection('suppliers', updatedList);
+    const gw = this._getDataGateway();
+    if (gw && typeof gw.setCollection === 'function') {
+      await gw.setCollection('suppliers', updatedList);
     }
 
     return {

@@ -121,13 +121,7 @@ export class DataGateway {
           await this.cloudAdapter.setCollection(collection, data);
         } else if (Array.isArray(data)) {
           for (const item of data) {
-            const id = item.id || item.uuid || item.itemCode || item.item_code;
-            const existing = await this.cloudAdapter.getById(collection, id);
-            if (existing) {
-              await this.cloudAdapter.update(collection, id, item);
-            } else {
-              await this.cloudAdapter.create(collection, item);
-            }
+            await this.cloudAdapter.create(collection, item);
           }
         }
       } catch (e) {
