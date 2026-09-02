@@ -1792,10 +1792,27 @@ export class InventoryWorkspaceView {
         const filtered = activeCatalogue.filter(c => {
           const supCode = c.supplierCode || c.supplier_code;
           const itemCode = c.itemCode || c.item_code;
-          const itemObj = items.find(i => (i.itemCode || i.item_code) === itemCode) || {};
+          const itemObj = items.find(i => (i.itemCode || i.item_code || '').toUpperCase() === (itemCode || '').toUpperCase()) || {};
 
           if (supVal !== 'ALL' && supCode !== supVal) return false;
-          if (catVal !== 'ALL' && (itemObj.categoryCode || itemObj.category_code) !== catVal) return false;
+
+          if (catVal !== 'ALL') {
+            const itemCatCode = (itemObj.categoryCode || itemObj.category_code || itemObj.category || '').toUpperCase().trim();
+            const itemCatName = (itemObj.categoryName || itemObj.category_name || '').toUpperCase().trim();
+            const filterCatCode = catVal.toUpperCase().trim();
+
+            const matchCode = itemCatCode === filterCatCode;
+            const matchName = itemCatName && itemCatName.includes(filterCatCode.replace('CAT-', ''));
+
+            // Smart category cohesion: e.g. CAT-CHICKEN matches CAT-MEAT / CAT-POULTRY or items containing Chicken
+            const matchChickenAlias = (filterCatCode.includes('CHICKEN') && (itemCatCode.includes('MEAT') || itemCatCode.includes('POULTRY') || (itemObj.itemName || c.supplierItemName || '').toUpperCase().includes('CHICKEN')));
+            const matchMeatAlias = (filterCatCode.includes('MEAT') && (itemCatCode.includes('CHICKEN') || itemCatCode.includes('POULTRY') || (itemObj.itemName || c.supplierItemName || '').toUpperCase().includes('CHICKEN')));
+            const matchFishAlias = (filterCatCode.includes('FISH') && (itemCatCode.includes('SEAFOOD') || (itemObj.itemName || c.supplierItemName || '').toUpperCase().includes('FISH')));
+            const matchMuttonAlias = (filterCatCode.includes('MUTTON') && (itemCatCode.includes('MEAT') || (itemObj.itemName || c.supplierItemName || '').toUpperCase().includes('MUTTON')));
+
+            if (!matchCode && !matchName && !matchChickenAlias && !matchMeatAlias && !matchFishAlias && !matchMuttonAlias) return false;
+          }
+
           if (searchVal) {
             const matchSup = supCode.toLowerCase().includes(searchVal);
             const matchItem = itemCode.toLowerCase().includes(searchVal) || (itemObj.itemName || '').toLowerCase().includes(searchVal);
