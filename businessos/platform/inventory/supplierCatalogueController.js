@@ -28,12 +28,18 @@ export class SupplierCatalogueController {
     const gw = this._getDataGateway();
     if (gw && typeof gw.getCachedCollection === 'function') {
       list = gw.getCachedCollection(collectionName, tenantId);
-    } else if (gw && typeof gw.getCollection === 'function') {
-      list = gw.getCollection(collectionName, tenantId);
+      if (!Array.isArray(list) || list.length === 0) {
+        const altName = collectionName === 'supplier_catalogue' ? 'supplier_catalog' : 'supplier_catalogue';
+        list = gw.getCachedCollection(altName, tenantId);
+      }
     }
     if (!Array.isArray(list) || list.length === 0) {
       const store = this.offlineStore || offlineStore;
       list = store.getCollection(collectionName) || [];
+      if (!Array.isArray(list) || list.length === 0) {
+        const altName = collectionName === 'supplier_catalogue' ? 'supplier_catalog' : 'supplier_catalogue';
+        list = store.getCollection(altName) || [];
+      }
     }
     if (!tenantId) return list;
     return list.filter(i => !i.tenantId || i.tenantId === tenantId || i.tenant_id === tenantId);

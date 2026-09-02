@@ -7,16 +7,24 @@ export class SupabaseDataAdapter {
     this.client = client;
   }
 
+  _resolveTable(collection) {
+    if (collection === 'supplier_catalogue') return 'supplier_catalog';
+    if (collection === 'inventory_items') return 'inventory';
+    if (collection === 'categories') return 'inventory_categories';
+    return collection;
+  }
+
   async getCollection(collection, tenantId = null) {
+    const targetTable = this._resolveTable(collection);
     const virtualCollections = [
       'roles', 'sessions', 'table_runtime_states',
       'stock_transactions', 'stock_requisitions', 'menu_catalog',
       'production_batches', 'devices', 'system_config'
     ];
-    if (!this.client || virtualCollections.includes(collection)) return [];
+    if (!this.client || virtualCollections.includes(targetTable)) return [];
     
     try {
-      const res = await this.client.fetchTableData(collection);
+      const res = await this.client.fetchTableData(targetTable);
       if (!res || !res.success || !Array.isArray(res.data)) return [];
       
       let list = res.data.map(row => {
@@ -157,35 +165,38 @@ export class SupabaseDataAdapter {
   }
 
   async create(collection, record) {
-    if (!this.client || collection === 'roles' || collection === 'sessions') return record;
+    const targetTable = this._resolveTable(collection);
+    if (!this.client || targetTable === 'roles' || targetTable === 'sessions') return record;
     try {
-      const res = await this.client.createRecord(collection, record);
+      const res = await this.client.createRecord(targetTable, record);
       return res.success ? (res.data || record) : record;
     } catch (e) {
-      console.warn(`[SupabaseDataAdapter] Cloud create Record for ${collection} caught:`, e.message);
+      console.warn(`[SupabaseDataAdapter] Cloud create Record for ${targetTable} caught:`, e.message);
       return record;
     }
   }
 
   async update(collection, id, patch) {
-    if (!this.client || collection === 'roles' || collection === 'sessions') return patch;
+    const targetTable = this._resolveTable(collection);
+    if (!this.client || targetTable === 'roles' || targetTable === 'sessions') return patch;
     try {
-      const res = await this.client.updateRecord(collection, id, patch);
+      const res = await this.client.updateRecord(targetTable, id, patch);
       return res.success ? (res.data || patch) : patch;
     } catch (e) {
-      console.warn(`[SupabaseDataAdapter] Cloud update Record for ${collection} caught:`, e.message);
+      console.warn(`[SupabaseDataAdapter] Cloud update Record for ${targetTable} caught:`, e.message);
       return patch;
     }
   }
 
   async delete(collection, id) {
-    if (!this.client || collection === 'roles' || collection === 'sessions') return true;
+    const targetTable = this._resolveTable(collection);
+    if (!this.client || targetTable === 'roles' || targetTable === 'sessions') return true;
     try {
-      const filter = collection === 'tenants' ? `tenant_id=eq.${id}` : `id=eq.${id}`;
-      const res = await this.client.deleteRecords(collection, filter);
+      const filter = targetTable === 'tenants' ? `tenant_id=eq.${id}` : `id=eq.${id}`;
+      const res = await this.client.deleteRecords(targetTable, filter);
       return res.success;
     } catch (e) {
-      console.warn(`[SupabaseDataAdapter] Cloud delete Record for ${collection} caught:`, e.message);
+      console.warn(`[SupabaseDataAdapter] Cloud delete Record for ${targetTable} caught:`, e.message);
       return true;
     }
   }

@@ -231,21 +231,18 @@ export function formatRecordForTable(entityName, job) {
   }
 
   if (entityName === 'supplier_catalog' || entityName === 'supplier_catalogue') {
+    const priceVal = parseFloat(p.unitPrice !== undefined ? p.unitPrice : (p.unit_price || p.currentPrice || p.current_price || 0)) || 0;
     return {
       id: p.id || ('scat-' + Math.random().toString(36).substring(2, 7)),
       tenant_id: job.tenantId || p.tenantId || p.tenant_id || '',
       supplier_code: p.supplierCode || p.supplier_code || '',
       item_code: p.itemCode || p.item_code || '',
       supplier_sku: p.supplierSku || p.supplier_sku || '',
-      supplier_item_name: p.supplierItemName || p.supplier_item_name || '',
       purchase_uom: p.purchaseUom || p.purchase_uom || 'KG',
-      pack_quantity: parseFloat(p.packQuantity || p.pack_quantity) || 1,
-      pack_uom: p.packUom || p.pack_uom || 'KG',
-      unit_price: parseFloat(p.unitPrice !== undefined ? p.unitPrice : (p.unit_price || p.currentPrice || p.current_price || 0)),
-      gst_rate: parseFloat(p.gstRate !== undefined ? p.gstRate : (p.gst_rate || 0)),
-      moq: parseFloat(p.moq) || 1,
-      lead_time_days: parseInt(p.leadTimeDays || p.lead_time_days) || 1,
-      preferred: p.preferred !== undefined ? !!p.preferred : false,
+      current_price: priceVal,
+      last_purchase_price: parseFloat(p.lastPurchasePrice || p.last_purchase_price || priceVal) || priceVal,
+      last_purchase_at: p.lastPurchaseAt || p.last_purchase_at || null,
+      average_purchase_price: parseFloat(p.averagePurchasePrice || p.average_purchase_price || priceVal) || priceVal,
       status: p.status || 'ACTIVE',
       data: p
     };

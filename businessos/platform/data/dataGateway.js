@@ -114,6 +114,8 @@ export class DataGateway {
   async setCollection(collection, data = []) {
     if (this.localAdapter && typeof this.localAdapter.setCollection === 'function') {
       this.localAdapter.setCollection(collection, data);
+      if (collection === 'supplier_catalogue') this.localAdapter.setCollection('supplier_catalog', data);
+      if (collection === 'supplier_catalog') this.localAdapter.setCollection('supplier_catalogue', data);
     }
     if (this.isOnline && this.cloudAdapter && collection !== 'roles') {
       try {
