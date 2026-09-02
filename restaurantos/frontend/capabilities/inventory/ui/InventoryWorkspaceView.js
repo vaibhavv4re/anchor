@@ -51,18 +51,15 @@ export class InventoryWorkspaceView {
   _getCollection(name, tenantId) {
     try {
       const gw = this._getDataGateway();
-      let list = [];
       if (gw && typeof gw.getCachedCollection === 'function') {
-        list = gw.getCachedCollection(name, tenantId);
-      }
-      const offlineList = offlineStore.getCollection(name, tenantId) || offlineStore.getCollection(name) || [];
-      if (Array.isArray(offlineList) && offlineList.length > (Array.isArray(list) ? list.length : 0)) {
-        list = offlineList;
-        if (gw && typeof gw.setCollection === 'function') {
-          gw.setCollection(name, offlineList);
+        const targetName = name === 'supplier_catalogue' ? 'supplier_catalog' : name;
+        const cloudList = gw.getCachedCollection(targetName, tenantId);
+        if (Array.isArray(cloudList)) {
+          offlineStore.setCollection(name, cloudList);
+          if (name === 'supplier_catalogue') offlineStore.setCollection('supplier_catalog', cloudList);
+          return cloudList;
         }
       }
-      if (Array.isArray(list) && list.length > 0) return list;
     } catch (e) {
       console.warn(`[InventoryWorkspaceView] Error fetching collection "${name}":`, e);
     }
@@ -1654,8 +1651,8 @@ export class InventoryWorkspaceView {
         });
       });
     } else if (tabKey === 'inv-supplier-catalogue' || tabKey === 'inv-catalogue') {
-      const catalogueList = supplierCatalogueController._getCollection('supplier_catalogue', tenantId);
-      const activeCatalogue = catalogueList.length ? catalogueList : supplierCatalogueController.getDefaultCatalogue();
+      const catalogueList = this._getCollection('supplier_catalogue', tenantId);
+      const activeCatalogue = Array.isArray(catalogueList) ? catalogueList : [];
 
       const uniqueSuppliersCount = new Set(activeCatalogue.map(c => c.supplierCode || c.supplier_code)).size;
       const uniqueItemsCount = new Set(activeCatalogue.map(c => c.itemCode || c.item_code)).size;
