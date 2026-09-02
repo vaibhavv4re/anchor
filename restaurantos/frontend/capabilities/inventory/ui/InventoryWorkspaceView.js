@@ -155,6 +155,13 @@ export class InventoryWorkspaceView {
       const isSupabase = gw && gw.cloudAdapter && typeof gw.cloudAdapter.getCollection === 'function';
       const tenantId = session ? session.tenantId : 'tenant_h0qc7wf';
 
+      if (gw && typeof gw.getCollection === 'function') {
+        await gw.getCollection('supplier_catalog', tenantId);
+        await gw.getCollection('inventory', tenantId);
+        await gw.getCollection('suppliers', tenantId);
+        await gw.getCollection('inventory_categories', tenantId);
+      }
+
       const items = this._getCollection('inventory', tenantId);
       const suppliers = this._getCollection('suppliers', tenantId);
       const locations = this._getCollection('storage_locations', tenantId);
