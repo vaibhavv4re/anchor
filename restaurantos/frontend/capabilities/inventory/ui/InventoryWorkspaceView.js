@@ -12,6 +12,7 @@ import { categoryImportController } from '../../../../../businessos/platform/inv
 import { supplierImportController } from '../../../../../businessos/platform/inventory/supplierImportController.js';
 import { supplierCatalogueController } from '../../../../../businessos/platform/inventory/supplierCatalogueController.js';
 import { inventoryItemModel } from '../../../../../businessos/platform/inventory/inventoryItemModel.js';
+import { offlineStore } from '../../../../../businessos/platform/offline_store/offlineStore.js';
 
 export class InventoryWorkspaceView {
   constructor(deps = {}) {
