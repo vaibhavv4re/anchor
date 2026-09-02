@@ -3432,6 +3432,7 @@ export class InventoryWorkspaceView {
 
   renderCreatePoFormScreen(mount, tenantId, items, suppliers, locations, session) {
     const catalogueList = supplierCatalogueController._getCollection('supplier_catalogue', tenantId);
+    const categories = this._getUnifiedCategories(tenantId);
 
     const defaultDeliveryDate = new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0];
 
