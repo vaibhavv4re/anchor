@@ -517,11 +517,20 @@ class InventoryItemModel {
     return newItem;
   }
 
+  _getDataGateway() {
+    if (this.dataGateway) return this.dataGateway;
+    if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.dataGateway) {
+      return window.__APP__.platform.dataGateway;
+    }
+    return null;
+  }
+
   /**
    * Controlled Update for Inventory Master Item.
-   * Enforces immutable itemCode policy and logs field-level audit changeHistory.
+   * Enforces immutable itemCode policy, logs field-level audit changeHistory,
+   * and syncs directly to Supabase Cloud storage via DataGateway.
    */
-  updateItem(itemCode, updates = {}, userContext = 'Inventory Manager', tenantId = null) {
+  async updateItem(itemCode, updates = {}, userContext = 'Inventory Manager', tenantId = null) {
     const targetTenantId = this._getTenantId(tenantId);
     let store = offlineStore.getCollection('inventory') || [];
     if (!Array.isArray(store) || store.length === 0) {
@@ -582,8 +591,9 @@ class InventoryItemModel {
     offlineStore.setCollection('inventory', store);
     offlineStore.setCollection('inventory_items', store);
 
-    if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.dataGateway) {
-      window.__APP__.platform.dataGateway.update('inventory', existing.id || itemCode, updatedRecord);
+    const gw = this._getDataGateway();
+    if (gw && typeof gw.update === 'function') {
+      await gw.update('inventory', existing.id || itemCode, updatedRecord);
     }
 
     return updatedRecord;

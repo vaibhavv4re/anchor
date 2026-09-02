@@ -6262,7 +6262,7 @@ export class InventoryWorkspaceView {
         : `Deactivate master item "${name}" (${code})?\n\nInactive items remain in historical transaction ledgers for reporting but cannot be selected in new POs, recipes, or stock transactions.`;
 
       if (confirm(confirmMsg)) {
-        inventoryItemModel.updateItem(code, { active: newActiveState }, (session && session.userName) || 'Inventory Manager', tenantId);
+        await inventoryItemModel.updateItem(code, { active: newActiveState }, (session && session.userName) || 'Inventory Manager', tenantId);
         overlay.remove();
         if (parentMount) await this.render(parentMount, session);
       }
@@ -6409,7 +6409,7 @@ export class InventoryWorkspaceView {
         reorder_level: newReorder
       };
 
-      inventoryItemModel.updateItem(code, updates, (session && session.userName) || 'Inventory Manager', tenantId);
+      await inventoryItemModel.updateItem(code, updates, (session && session.userName) || 'Inventory Manager', tenantId);
 
       overlay.remove();
       if (parentMount) await this.render(parentMount, session);
