@@ -4218,15 +4218,6 @@ export class InventoryWorkspaceView {
       });
     }
   }
-    if (btnReceive) {
-      btnReceive.addEventListener('click', () => {
-        closeDrawer();
-        this.activeSubView = 'inv-grn-create';
-        this.targetPoForGrn = po.id;
-        this.render(mount, session);
-      });
-    }
-  }
 
   // --- 8C. REDESIGNED GOODS RECEIVING STUDIO (GRN) ---
 
