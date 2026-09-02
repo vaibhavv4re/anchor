@@ -4091,7 +4091,9 @@ export class InventoryWorkspaceView {
       return;
     }
 
-    const drawerMount = mount.querySelector('#po-detail-drawer-mount') || mount;
+    const existingOverlay = document.querySelector('#po-detail-drawer-overlay');
+    if (existingOverlay) existingOverlay.remove();
+
     const lines = po.lines || [];
 
     let statusBadgeClass = 'badge-info';
@@ -4100,104 +4102,122 @@ export class InventoryWorkspaceView {
     else if (po.status === 'PARTIALLY_RECEIVED') statusBadgeClass = 'badge-warning';
     else if (po.status === 'FULLY_RECEIVED') statusBadgeClass = 'badge-success';
 
-    drawerMount.innerHTML = `
-      <div style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; justify-content:flex-end; z-index:9999;">
-        <div class="card animate-fade-in" style="background:var(--bg-surface-1); border-left:1px solid var(--border-subtle); width:100%; max-width:720px; height:100vh; display:flex; flex-direction:column; box-shadow:-8px 0 32px rgba(0,0,0,0.5);">
-          <!-- Header -->
-          <div style="padding:20px; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface-2);">
-            <div>
-              <div style="display:flex; align-items:center; gap:10px;">
-                <h3 style="margin:0; font-size:1.4rem; color:var(--text-main); font-family:monospace;">${po.poNumber || po.po_number || po.id}</h3>
-                <span class="badge ${statusBadgeClass}" style="font-size:0.8rem; font-weight:700;">${po.status}</span>
-              </div>
-              <div style="font-size:0.85rem; color:var(--accent-primary); font-weight:700; margin-top:4px;">
-                ${po.supplierName || po.supplier_name} (${po.supplierCode || po.supplier_code})
-              </div>
-            </div>
-            <button type="button" id="btn-close-po-drawer" style="background:none; border:none; font-size:1.6rem; color:var(--text-muted); cursor:pointer;">✕</button>
-          </div>
+    const overlay = document.createElement('div');
+    overlay.id = 'po-detail-drawer-overlay';
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(4px);
+      display: flex; justify-content: flex-end; z-index: 99999;
+      animation: fadeIn 0.2s ease-out;
+    `;
 
-          <!-- PO Metadata Grid -->
-          <div style="padding:16px 20px; background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; font-size:0.85rem;">
-            <div>
-              <span style="color:var(--text-muted); display:block; font-size:0.75rem;">Destination Store</span>
-              <strong style="color:var(--text-main);">${po.destinationLocationCode || po.destination_location_code}</strong>
+    overlay.innerHTML = `
+      <div style="background:var(--bg-surface-1); border-left:1px solid var(--border-subtle); width:100%; max-width:680px; height:100vh; display:flex; flex-direction:column; box-shadow:-8px 0 32px rgba(0,0,0,0.5);">
+        <!-- Header -->
+        <div style="padding:20px 24px; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface-2);">
+          <div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <h3 style="margin:0; font-size:1.4rem; color:var(--text-main); font-family:monospace;">${po.poNumber || po.po_number || po.id}</h3>
+              <span class="badge ${statusBadgeClass}" style="font-size:0.8rem; font-weight:700;">${po.status}</span>
             </div>
-            <div>
-              <span style="color:var(--text-muted); display:block; font-size:0.75rem;">Expected Delivery</span>
-              <strong style="color:var(--text-main);">${po.expectedDeliveryDate || 'N/A'}</strong>
-            </div>
-            <div>
-              <span style="color:var(--text-muted); display:block; font-size:0.75rem;">Payment Terms</span>
-              <strong style="color:var(--text-main);">${po.paymentTerms || 'Supplier Default'}</strong>
+            <div style="font-size:0.85rem; color:var(--accent-primary); font-weight:700; margin-top:4px;">
+              ${po.supplierName || po.supplier_name} (${po.supplierCode || po.supplier_code})
             </div>
           </div>
+          <button type="button" id="btn-close-po-drawer" style="background:none; border:none; font-size:1.6rem; color:var(--text-muted); cursor:pointer; padding:4px 8px;">✕</button>
+        </div>
 
-          <!-- Lines Breakdown Table -->
-          <div style="padding:20px; flex:1; overflow-y:auto;">
-            <h4 style="margin-top:0; margin-bottom:12px; font-size:1rem; color:var(--text-main);">ORDERED LINES & RECEIVING PROGRESS</h4>
-            <table class="data-table" style="width:100%; border-collapse:collapse; font-size:0.85rem;">
-              <thead>
-                <tr style="border-bottom:1px solid var(--border-subtle); text-align:left; background:var(--bg-surface-2);">
-                  <th style="padding:8px;">Item</th>
-                  <th style="padding:8px; text-align:center;">Ordered</th>
-                  <th style="padding:8px; text-align:center;">Received</th>
-                  <th style="padding:8px; text-align:center;">Remaining</th>
-                  <th style="padding:8px; text-align:right;">PO Price</th>
-                  <th style="padding:8px; text-align:right;">Total</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${lines.map(line => {
-                  const lineTotal = (line.orderedQty || line.quantity || 0) * (line.poUnitPrice || line.catalogueUnitPrice || 0);
-                  const isDone = (line.remainingQty || 0) <= 0;
-                  return `
-                    <tr style="border-bottom:1px solid var(--border-subtle); ${isDone ? 'opacity:0.6;' : ''}">
-                      <td style="padding:10px;">
-                        <div style="font-weight:700; color:var(--text-main);">${line.itemName || line.itemCode}</div>
-                        <div style="font-size:0.75rem; font-family:monospace; color:var(--accent-primary);">${line.itemCode}</div>
-                      </td>
-                      <td style="padding:10px; text-align:center; font-weight:700;">${line.orderedQty || line.quantity} ${line.uom || 'KG'}</td>
-                      <td style="padding:10px; text-align:center; color:var(--status-success); font-weight:700;">${line.previouslyReceivedQty || 0}</td>
-                      <td style="padding:10px; text-align:center; color:${isDone ? 'var(--text-muted)' : 'var(--status-warning)'}; font-weight:700;">${line.remainingQty !== undefined ? line.remainingQty : (line.orderedQty || line.quantity)}</td>
-                      <td style="padding:10px; text-align:right; font-family:monospace;">₹${(line.poUnitPrice || line.catalogueUnitPrice || 0).toFixed(2)}</td>
-                      <td style="padding:10px; text-align:right; font-weight:700; font-family:monospace;">₹${lineTotal.toFixed(2)}</td>
-                    </tr>
-                  `;
-                }).join('')}
-              </tbody>
-            </table>
+        <!-- PO Metadata Grid -->
+        <div style="padding:16px 24px; background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); display:grid; grid-template-columns:1fr 1fr 1fr; gap:16px; font-size:0.85rem;">
+          <div>
+            <span style="color:var(--text-muted); display:block; font-size:0.75rem;">Destination Store</span>
+            <strong style="color:var(--text-main);">${po.destinationLocationCode || po.destination_location_code}</strong>
           </div>
+          <div>
+            <span style="color:var(--text-muted); display:block; font-size:0.75rem;">Expected Delivery</span>
+            <strong style="color:var(--text-main);">${po.expectedDeliveryDate || 'N/A'}</strong>
+          </div>
+          <div>
+            <span style="color:var(--text-muted); display:block; font-size:0.75rem;">Payment Terms</span>
+            <strong style="color:var(--text-main);">${po.paymentTerms || 'Supplier Default'}</strong>
+          </div>
+        </div>
 
-          <!-- Footer Actions -->
-          <div style="padding:16px 20px; border-top:1px solid var(--border-subtle); background:var(--bg-surface-2); display:flex; justify-content:space-between; align-items:center;">
-            <div>
-              <span style="font-size:0.8rem; color:var(--text-muted);">Grand Total:</span>
-              <span style="font-size:1.4rem; font-weight:800; color:var(--status-success); margin-left:6px;">₹${(po.grandTotal || po.grand_total || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
-            </div>
-            <div style="display:flex; gap:12px;">
-              <button type="button" id="btn-close-po-drawer-btn" class="btn-secondary" style="padding:8px 16px; border-radius:6px; cursor:pointer;">Close</button>
-              ${po.status === 'APPROVED' ? `
-                <button type="button" id="btn-drawer-receive-goods" class="btn-primary" style="padding:8px 18px; font-weight:700; background:var(--status-success); border:none; border-radius:6px; color:#fff; cursor:pointer;">
-                  📦 Receive Goods
-                </button>
-              ` : ''}
-              ${po.status === 'PARTIALLY_RECEIVED' ? `
-                <button type="button" id="btn-drawer-receive-goods" class="btn-primary" style="padding:8px 18px; font-weight:700; background:var(--status-warning); border:none; border-radius:6px; color:#fff; cursor:pointer;">
-                  📦 Receive Remaining
-                </button>
-              ` : ''}
-            </div>
+        <!-- Lines Breakdown Table -->
+        <div style="padding:20px 24px; flex:1; overflow-y:auto;">
+          <h4 style="margin-top:0; margin-bottom:12px; font-size:1rem; color:var(--text-main);">ORDERED LINES & RECEIVING PROGRESS</h4>
+          <table class="data-table" style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border-subtle); text-align:left; background:var(--bg-surface-2);">
+                <th style="padding:8px;">Item</th>
+                <th style="padding:8px; text-align:center;">Ordered</th>
+                <th style="padding:8px; text-align:center;">Received</th>
+                <th style="padding:8px; text-align:center;">Remaining</th>
+                <th style="padding:8px; text-align:right;">PO Price</th>
+                <th style="padding:8px; text-align:right;">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${lines.map(line => {
+                const lineTotal = (line.orderedQty || line.quantity || 0) * (line.poUnitPrice || line.catalogueUnitPrice || 0);
+                const isDone = (line.remainingQty || 0) <= 0;
+                return `
+                  <tr style="border-bottom:1px solid var(--border-subtle); ${isDone ? 'opacity:0.6;' : ''}">
+                    <td style="padding:10px;">
+                      <div style="font-weight:700; color:var(--text-main);">${line.itemName || line.itemCode}</div>
+                      <div style="font-size:0.75rem; font-family:monospace; color:var(--accent-primary);">${line.itemCode}</div>
+                    </td>
+                    <td style="padding:10px; text-align:center; font-weight:700;">${line.orderedQty || line.quantity} ${line.uom || 'KG'}</td>
+                    <td style="padding:10px; text-align:center; color:var(--status-success); font-weight:700;">${line.previouslyReceivedQty || 0}</td>
+                    <td style="padding:10px; text-align:center; color:${isDone ? 'var(--text-muted)' : 'var(--status-warning)'}; font-weight:700;">${line.remainingQty !== undefined ? line.remainingQty : (line.orderedQty || line.quantity)}</td>
+                    <td style="padding:10px; text-align:right; font-family:monospace;">₹${(line.poUnitPrice || line.catalogueUnitPrice || 0).toFixed(2)}</td>
+                    <td style="padding:10px; text-align:right; font-weight:700; font-family:monospace;">₹${lineTotal.toFixed(2)}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- Footer Actions -->
+        <div style="padding:16px 24px; border-top:1px solid var(--border-subtle); background:var(--bg-surface-2); display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <span style="font-size:0.8rem; color:var(--text-muted);">Grand Total:</span>
+            <span style="font-size:1.4rem; font-weight:800; color:var(--status-success); margin-left:6px;">₹${(po.grandTotal || po.grand_total || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+          </div>
+          <div style="display:flex; gap:12px;">
+            <button type="button" id="btn-close-po-drawer-btn" class="btn-secondary" style="padding:8px 16px; border-radius:6px; cursor:pointer;">Close</button>
+            ${po.status === 'APPROVED' ? `
+              <button type="button" id="btn-drawer-receive-goods" class="btn-primary" style="padding:8px 18px; font-weight:700; background:var(--status-success); border:none; border-radius:6px; color:#fff; cursor:pointer;">
+                📦 Receive Goods
+              </button>
+            ` : ''}
+            ${po.status === 'PARTIALLY_RECEIVED' ? `
+              <button type="button" id="btn-drawer-receive-goods" class="btn-primary" style="padding:8px 18px; font-weight:700; background:var(--status-warning); border:none; border-radius:6px; color:#fff; cursor:pointer;">
+                📦 Receive Remaining
+              </button>
+            ` : ''}
           </div>
         </div>
       </div>
     `;
 
-    const closeDrawer = () => { drawerMount.innerHTML = ''; };
-    drawerMount.querySelector('#btn-close-po-drawer').addEventListener('click', closeDrawer);
-    drawerMount.querySelector('#btn-close-po-drawer-btn').addEventListener('click', closeDrawer);
+    document.body.appendChild(overlay);
 
-    const btnReceive = drawerMount.querySelector('#btn-drawer-receive-goods');
+    const closeDrawer = () => { overlay.remove(); };
+    overlay.querySelector('#btn-close-po-drawer').addEventListener('click', closeDrawer);
+    overlay.querySelector('#btn-close-po-drawer-btn').addEventListener('click', closeDrawer);
+
+    const btnReceive = overlay.querySelector('#btn-drawer-receive-goods');
+    if (btnReceive) {
+      btnReceive.addEventListener('click', () => {
+        closeDrawer();
+        this.activeSubView = 'inv-grn-create';
+        this.targetPoForGrn = po.id;
+        this.render(mount, session);
+      });
+    }
+  }
     if (btnReceive) {
       btnReceive.addEventListener('click', () => {
         closeDrawer();
