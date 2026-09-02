@@ -49,14 +49,22 @@ export class InventoryWorkspaceView {
   _getCollection(name, tenantId) {
     try {
       const gw = this._getDataGateway();
+      let list = [];
       if (gw && typeof gw.getCachedCollection === 'function') {
-        const list = gw.getCachedCollection(name, tenantId);
-        if (Array.isArray(list)) return list;
+        list = gw.getCachedCollection(name, tenantId);
       }
+      const offlineList = offlineStore.getCollection(name, tenantId) || offlineStore.getCollection(name) || [];
+      if (Array.isArray(offlineList) && offlineList.length > (Array.isArray(list) ? list.length : 0)) {
+        list = offlineList;
+        if (gw && typeof gw.setCollection === 'function') {
+          gw.setCollection(name, offlineList);
+        }
+      }
+      if (Array.isArray(list) && list.length > 0) return list;
     } catch (e) {
       console.warn(`[InventoryWorkspaceView] Error fetching collection "${name}":`, e);
     }
-    return [];
+    return offlineStore.getCollection(name, tenantId) || offlineStore.getCollection(name) || [];
   }
 
   _inferProductFamilyCode(category) {

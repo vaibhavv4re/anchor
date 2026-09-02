@@ -14,10 +14,21 @@ export class InventoryImportController {
     this.offlineStore = deps.offlineStore || offlineStore;
   }
 
+  _getDataGateway() {
+    if (this.dataGateway) return this.dataGateway;
+    if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.dataGateway) {
+      return window.__APP__.platform.dataGateway;
+    }
+    return null;
+  }
+
   _getCollection(collectionName, tenantId) {
     let list = [];
-    if (this.dataGateway && typeof this.dataGateway.getCollection === 'function') {
-      list = this.dataGateway.getCollection(collectionName, tenantId);
+    const gw = this._getDataGateway();
+    if (gw && typeof gw.getCachedCollection === 'function') {
+      list = gw.getCachedCollection(collectionName, tenantId);
+    } else if (gw && typeof gw.getCollection === 'function') {
+      list = gw.getCollection(collectionName, tenantId);
     }
     if (!Array.isArray(list) || list.length === 0) {
       const store = this.offlineStore || offlineStore;
@@ -92,14 +103,14 @@ export class InventoryImportController {
 
     rows.forEach(row => {
       const rowNum = row._rowNum;
-      const itemCode = (row.item_code || row.itemcode || row.code || '').trim().toUpperCase();
-      const itemName = (row.item_name || row.itemname || row.name || '').trim();
-      const itemType = (row.item_type || row.itemtype || row.type || '').trim();
-      const rawCategory = (row.category || row.category_code || '').trim();
-      const rawBaseUom = (row.base_uom || row.baseuom || row.baseunit || '').trim();
-      const rawPurchaseUom = (row.purchase_uom || row.purchaseuom || row.purchaseunit || '').trim();
-      const rawConvFactor = (row.conversion_factor || row.conversionfactor || '').trim();
-      const rawReorderLevel = (row.reorder_level || row.reorderlevel || '').trim();
+      const itemCode = String(row.item_code || row.itemcode || row.code || '').trim().toUpperCase();
+      const itemName = String(row.item_name || row.itemname || row.name || '').trim();
+      const itemType = String(row.item_type || row.itemtype || row.type || '').trim();
+      const rawCategory = String(row.category || row.category_code || '').trim();
+      const rawBaseUom = String(row.base_uom || row.baseuom || row.baseunit || '').trim();
+      const rawPurchaseUom = String(row.purchase_uom || row.purchaseuom || row.purchaseunit || '').trim();
+      const rawConvFactor = String(row.conversion_factor || row.conversionfactor || '').trim();
+      const rawReorderLevel = String(row.reorder_level || row.reorderlevel || '').trim();
 
       const existing = existingCodeMap.get(itemCode);
 
@@ -240,14 +251,14 @@ export class InventoryImportController {
     rows.forEach(row => {
       if (errorRows.has(row._rowNum)) return;
 
-      const itemCode = (row.item_code || row.itemcode || row.code || '').trim().toUpperCase();
-      const rawName = (row.item_name || row.itemname || row.name || '').trim();
-      const rawType = (row.item_type || row.itemtype || row.type || '').trim();
-      const rawCat = (row.category || row.category_code || '').trim();
-      const rawBaseUom = (row.base_uom || row.baseuom || row.baseunit || '').trim();
-      const rawPurchUom = (row.purchase_uom || row.purchaseuom || row.purchaseunit || '').trim();
-      const rawConvFactor = (row.conversion_factor || row.conversionfactor || '').trim();
-      const rawReorderLevel = (row.reorder_level || row.reorderlevel || '').trim();
+      const itemCode = String(row.item_code || row.itemcode || row.code || '').trim().toUpperCase();
+      const rawName = String(row.item_name || row.itemname || row.name || '').trim();
+      const rawType = String(row.item_type || row.itemtype || row.type || '').trim();
+      const rawCat = String(row.category || row.category_code || '').trim();
+      const rawBaseUom = String(row.base_uom || row.baseuom || row.baseunit || '').trim();
+      const rawPurchUom = String(row.purchase_uom || row.purchaseuom || row.purchaseunit || '').trim();
+      const rawConvFactor = row.conversion_factor !== undefined ? String(row.conversion_factor).trim() : (row.conversionfactor !== undefined ? String(row.conversionfactor).trim() : '');
+      const rawReorderLevel = row.reorder_level !== undefined ? String(row.reorder_level).trim() : (row.reorderlevel !== undefined ? String(row.reorderlevel).trim() : '');
 
       const existing = existingMap.get(itemCode);
 
@@ -342,15 +353,15 @@ export class InventoryImportController {
     let updatedCount = 0;
 
     rows.forEach(row => {
-      const itemCode = (row.item_code || row.itemcode || row.code || '').trim().toUpperCase();
-      const rawName = (row.item_name || row.itemname || row.name || '').trim();
-      const rawType = (row.item_type || row.itemtype || row.type || '').trim();
-      const rawCat = (row.category || row.category_code || '').trim();
-      const rawBaseUom = (row.base_uom || row.baseuom || row.baseunit || '').trim();
-      const rawPurchUom = (row.purchase_uom || row.purchaseuom || row.purchaseunit || '').trim();
-      const rawConvFactor = (row.conversion_factor || row.conversionfactor || '').trim();
-      const rawReorderLevel = (row.reorder_level || row.reorderlevel || '').trim();
-      const rawActive = (row.active || '').trim();
+      const itemCode = String(row.item_code || row.itemcode || row.code || '').trim().toUpperCase();
+      const rawName = String(row.item_name || row.itemname || row.name || '').trim();
+      const rawType = String(row.item_type || row.itemtype || row.type || '').trim();
+      const rawCat = String(row.category || row.category_code || '').trim();
+      const rawBaseUom = String(row.base_uom || row.baseuom || row.baseunit || '').trim();
+      const rawPurchUom = String(row.purchase_uom || row.purchaseuom || row.purchaseunit || '').trim();
+      const rawConvFactor = row.conversion_factor !== undefined ? String(row.conversion_factor).trim() : (row.conversionfactor !== undefined ? String(row.conversionfactor).trim() : '');
+      const rawReorderLevel = row.reorder_level !== undefined ? String(row.reorder_level).trim() : (row.reorderlevel !== undefined ? String(row.reorderlevel).trim() : '');
+      const rawActive = String(row.active !== undefined ? row.active : '').trim();
 
       const existing = itemMap.get(itemCode);
 
@@ -409,9 +420,10 @@ export class InventoryImportController {
     store.setCollection('inventory', updatedList);
     store.setCollection('inventory_items', updatedList);
 
-    if (this.dataGateway && typeof this.dataGateway.setCollection === 'function') {
-      await this.dataGateway.setCollection('inventory', updatedList);
-      await this.dataGateway.setCollection('inventory_items', updatedList);
+    const gw = this._getDataGateway();
+    if (gw && typeof gw.setCollection === 'function') {
+      await gw.setCollection('inventory', updatedList);
+      await gw.setCollection('inventory_items', updatedList);
     }
 
     return {

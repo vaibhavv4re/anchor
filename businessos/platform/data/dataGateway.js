@@ -111,6 +111,32 @@ export class DataGateway {
     return this.getCachedCollection(collection, tenantId);
   }
 
+  async setCollection(collection, data = []) {
+    if (this.localAdapter && typeof this.localAdapter.setCollection === 'function') {
+      this.localAdapter.setCollection(collection, data);
+    }
+    if (this.isOnline && this.cloudAdapter && collection !== 'roles') {
+      try {
+        if (typeof this.cloudAdapter.setCollection === 'function') {
+          await this.cloudAdapter.setCollection(collection, data);
+        } else if (Array.isArray(data)) {
+          for (const item of data) {
+            const id = item.id || item.uuid || item.itemCode || item.item_code;
+            const existing = await this.cloudAdapter.getById(collection, id);
+            if (existing) {
+              await this.cloudAdapter.update(collection, id, item);
+            } else {
+              await this.cloudAdapter.create(collection, item);
+            }
+          }
+        }
+      } catch (e) {
+        console.warn(`[DataGateway] Cloud setCollection sync warning for "${collection}":`, e.message);
+      }
+    }
+    return data;
+  }
+
   async getById(collection, id, tenantId = null) {
     if (this.isOnline && this.cloudAdapter && collection !== 'roles') {
       try {

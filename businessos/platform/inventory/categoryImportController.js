@@ -14,10 +14,21 @@ export class CategoryImportController {
     this.offlineStore = deps.offlineStore || offlineStore;
   }
 
+  _getDataGateway() {
+    if (this.dataGateway) return this.dataGateway;
+    if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.dataGateway) {
+      return window.__APP__.platform.dataGateway;
+    }
+    return null;
+  }
+
   _getCollection(collectionName, tenantId) {
     let list = [];
-    if (this.dataGateway && typeof this.dataGateway.getCollection === 'function') {
-      list = this.dataGateway.getCollection(collectionName, tenantId);
+    const gw = this._getDataGateway();
+    if (gw && typeof gw.getCachedCollection === 'function') {
+      list = gw.getCachedCollection(collectionName, tenantId);
+    } else if (gw && typeof gw.getCollection === 'function') {
+      list = gw.getCollection(collectionName, tenantId);
     }
     if (!Array.isArray(list) || list.length === 0) {
       const store = this.offlineStore || offlineStore;
