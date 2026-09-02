@@ -9,6 +9,8 @@
 
 import { inventoryImportController } from '../../../../../businessos/platform/inventory/inventoryImportController.js';
 import { categoryImportController } from '../../../../../businessos/platform/inventory/categoryImportController.js';
+import { supplierImportController } from '../../../../../businessos/platform/inventory/supplierImportController.js';
+import { supplierCatalogueController } from '../../../../../businessos/platform/inventory/supplierCatalogueController.js';
 
 export class InventoryWorkspaceView {
   constructor(deps = {}) {
@@ -233,7 +235,8 @@ export class InventoryWorkspaceView {
               <button class="btn-secondary nav-inv-btn ${activeTab === 'inv-locations' || activeTab === 'locations' || activeTab === 'inv-locations-create' || activeTab === 'inv-locations-import' ? 'active' : ''}" data-tab="inv-locations" style="text-align:left; font-size:0.85rem; padding:8px 10px; border-radius:4px; cursor:pointer;">🏬 Storage Locations (${locations.length})</button>
               <button class="btn-secondary nav-inv-btn ${activeTab === 'inv-suppliers' || activeTab === 'suppliers' || activeTab === 'inv-suppliers-create' || activeTab === 'inv-suppliers-import' ? 'active' : ''}" data-tab="inv-suppliers" style="text-align:left; font-size:0.85rem; padding:8px 10px; border-radius:4px; cursor:pointer;">🏢 Suppliers Master (${suppliers.length})</button>
 
-              <div style="font-size:0.65rem; color:var(--text-muted); font-weight:700; text-transform:uppercase; margin:12px 0 2px 4px;">OPERATIONS</div>
+              <div style="font-size:0.65rem; color:var(--text-muted); font-weight:700; text-transform:uppercase; margin:12px 0 2px 4px;">STOCK OPERATIONS</div>
+              <button class="btn-secondary nav-inv-btn ${activeTab === 'inv-opening-stock' ? 'active' : ''}" data-tab="inv-opening-stock" style="text-align:left; font-size:0.85rem; padding:8px 10px; border-radius:4px; cursor:pointer;">⚡ Opening Stock</button>
               <button class="btn-secondary nav-inv-btn ${activeTab === 'inv-live-stock' || activeTab === 'inv-live-balances' ? 'active' : ''}" data-tab="inv-live-stock" style="text-align:left; font-size:0.85rem; padding:8px 10px; border-radius:4px; cursor:pointer;">📦 Live Store Balances</button>
               <button class="btn-secondary" style="text-align:left; font-size:0.85rem; padding:8px 10px; border-radius:4px; opacity:0.4; cursor:not-allowed;" title="Disabled by user directive" disabled>📤 Stock Issues (Disabled)</button>
               <button class="btn-secondary nav-inv-btn ${activeTab === 'inv-transfers' || activeTab === 'inv-transfers-create' ? 'active' : ''}" data-tab="inv-transfers" style="text-align:left; font-size:0.85rem; padding:8px 10px; border-radius:4px; cursor:pointer;">🔄 Stock Transfers (${stockTransfers.length})</button>
@@ -242,9 +245,10 @@ export class InventoryWorkspaceView {
               <button class="btn-secondary nav-inv-btn ${activeTab === 'inv-alerts' ? 'active' : ''}" data-tab="inv-alerts" style="text-align:left; font-size:0.85rem; padding:8px 10px; border-radius:4px; cursor:pointer;">⚠️ Low Stock Alerts ${lowStockItems.length > 0 ? `<span class="badge badge-danger" style="font-size:0.7rem; padding:1px 5px; margin-left:3px;">${lowStockItems.length}</span>` : ''}</button>
 
               <div style="font-size:0.65rem; color:var(--text-muted); font-weight:700; text-transform:uppercase; margin:12px 0 2px 4px;">PROCUREMENT</div>
+              <button class="btn-secondary nav-inv-btn ${activeTab === 'inv-supplier-catalogue' || activeTab === 'inv-catalogue' ? 'active' : ''}" data-tab="inv-supplier-catalogue" style="text-align:left; font-size:0.85rem; padding:8px 10px; border-radius:4px; cursor:pointer;">📦 Supplier Catalogue</button>
               <button class="btn-secondary nav-inv-btn ${activeTab === 'inv-po' || activeTab === 'inv-po-create' ? 'active' : ''}" data-tab="inv-po" style="text-align:left; font-size:0.85rem; padding:8px 10px; border-radius:4px; cursor:pointer;">📄 Purchase Orders (${pos.length})</button>
               <button class="btn-secondary nav-inv-btn ${activeTab === 'inv-grn' || activeTab === 'inv-grn-create' ? 'active' : ''}" data-tab="inv-grn" style="text-align:left; font-size:0.85rem; padding:8px 10px; border-radius:4px; cursor:pointer;">🚚 Goods Receiving Studio (${grns.length})</button>
-              <button class="btn-secondary nav-inv-btn ${activeTab === 'inv-suppliers' || activeTab === 'suppliers' ? 'active' : ''}" data-tab="inv-suppliers" style="text-align:left; font-size:0.85rem; padding:8px 10px; border-radius:4px; cursor:pointer;">🏢 Suppliers Directory (${suppliers.length})</button>
+              <button class="btn-secondary nav-inv-btn ${activeTab === 'inv-suppliers' || activeTab === 'suppliers' || activeTab === 'inv-suppliers-create' || activeTab === 'inv-suppliers-import' ? 'active' : ''}" data-tab="inv-suppliers" style="text-align:left; font-size:0.85rem; padding:8px 10px; border-radius:4px; cursor:pointer;">🏢 Suppliers Directory (${suppliers.length})</button>
               <button class="btn-secondary nav-inv-btn ${activeTab === 'inv-requests' ? 'active' : ''}" data-tab="inv-requests" style="text-align:left; font-size:0.85rem; padding:8px 10px; border-radius:4px; cursor:pointer;">📋 Purchase Requisitions ${requests.filter(r => r.status === 'PENDING').length > 0 ? `<span class="badge badge-warning" style="font-size:0.7rem; padding:1px 5px; margin-left:3px;">${requests.filter(r => r.status === 'PENDING').length}</span>` : ''}</button>
             </aside>
 
@@ -275,6 +279,11 @@ export class InventoryWorkspaceView {
 
     if (tabKey === 'inv-transfers-create') {
       this.renderStockTransferFormScreen(mount, tenantId, items, locations, balances, session);
+      return;
+    }
+
+    if (tabKey === 'inv-opening-stock') {
+      this.renderOpeningStockFormScreen(mount, tenantId, items, locations, session);
       return;
     }
 
@@ -1491,60 +1500,311 @@ export class InventoryWorkspaceView {
       const btnExportLoc = mount.querySelector('#btn-export-loc-csv');
       if (btnExportLoc) btnExportLoc.addEventListener('click', () => this.exportLocationsCSV(locations));
     } else if (tabKey === 'inv-suppliers' || tabKey === 'suppliers') {
+      const activeSuppliers = suppliers.length ? suppliers : supplierImportController.getDefaultSuppliers();
+      const inactiveCount = activeSuppliers.filter(s => s.active === false).length;
+      const taxVerifiedCount = activeSuppliers.filter(s => (s.gstin || s.gst_number) && (s.gstin || s.gst_number).length === 15).length;
+      const taxVerifiedPct = activeSuppliers.length ? Math.round((taxVerifiedCount / activeSuppliers.length) * 100) : 100;
+
       mount.innerHTML = `
         <div class="card animate-fade-in" style="background:var(--bg-surface-1); padding:24px; border-radius:8px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
             <div>
-              <h3 style="font-size:1.4rem; margin:0;">🏢 Suppliers Master (${suppliers.length} Vendors)</h3>
-              <p style="color:var(--text-muted); font-size:0.85rem; margin-top:2px;">Sourced directly from Supabase PostgreSQL <strong>suppliers</strong> table.</p>
+              <h3 style="font-size:1.4rem; margin:0; color:var(--text-main);">🏢 Suppliers Master (${activeSuppliers.length} Suppliers)</h3>
+              <p style="color:var(--text-muted); font-size:0.85rem; margin-top:2px;">Supplier directory • Procurement partners</p>
             </div>
-            <div style="display:flex; gap:10px; flex-wrap:wrap;">
-              <button class="btn-secondary" id="btn-dl-sup-tmpl" style="padding:8px 14px; font-size:0.82rem; font-weight:600; cursor:pointer;">
-                📄 Sample CSV Template
+            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+              <button type="button" class="btn-primary" id="btn-add-supplier-action" style="padding:8px 16px; font-weight:700; background:var(--accent-primary); border-radius:6px; border:none; cursor:pointer; color:#fff;">
+                + Add Supplier
               </button>
-              <button class="btn-secondary nav-inv-btn" data-tab="inv-suppliers-import" style="padding:8px 14px; font-size:0.82rem; font-weight:600; cursor:pointer;">
-                ⚡ Bulk Import CSV Screen
+              <button type="button" class="btn-secondary" id="btn-sup-import" style="padding:8px 14px; font-weight:700; border-radius:6px; cursor:pointer; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);">
+                ↑ Import
               </button>
-              <button class="btn-secondary" id="btn-export-sup-csv" style="padding:8px 14px; font-size:0.82rem; font-weight:600; cursor:pointer;">
-                📤 Export CSV
+              <button type="button" class="btn-secondary" id="btn-sup-export" style="padding:8px 14px; font-weight:700; border-radius:6px; cursor:pointer; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);">
+                ↓ Export
               </button>
-              <button class="btn-primary nav-inv-btn" data-tab="inv-suppliers-create" style="padding:8px 16px; font-weight:700; background:var(--accent-primary); border-radius:6px; border:none; cursor:pointer; color:#fff;">
-                + Add Vendor / Supplier Screen
+              <button type="button" class="btn-secondary" id="btn-sup-template" style="padding:8px 14px; font-weight:700; border-radius:6px; cursor:pointer; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);">
+                ⬇ Template
               </button>
             </div>
           </div>
+
+          <!-- Provenance Strip -->
+          <div style="background:var(--bg-surface-2); padding:10px 16px; border-radius:6px; border:1px solid var(--border-subtle); margin-bottom:16px; font-size:0.8rem; color:var(--text-muted); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <div>
+              <strong style="color:var(--text-main);">${activeSuppliers.length} Active Suppliers</strong> • 
+              <span>${inactiveCount} Inactive</span> • 
+              <span style="color:var(--status-success); font-weight:700;">${taxVerifiedPct}% GSTIN Captured/Validated</span>
+            </div>
+            <div style="font-size:0.75rem; color:var(--accent-primary);">
+              💡 Click any supplier row to view contact drawer & catalogue mapping
+            </div>
+          </div>
+
           <div class="table-responsive">
             <table class="data-table" style="width:100%; border-collapse:collapse; font-size:0.85rem;">
               <thead>
                 <tr style="border-bottom:1px solid var(--border-subtle); text-align:left; background:var(--bg-surface-2);">
                   <th style="padding:10px;">Supplier Code</th>
-                  <th style="padding:10px;">Vendor Name</th>
+                  <th style="padding:10px;">Supplier Name</th>
                   <th style="padding:10px;">Primary Contact</th>
                   <th style="padding:10px;">Phone</th>
                   <th style="padding:10px;">GSTIN</th>
+                  <th style="padding:10px;">Status</th>
                 </tr>
               </thead>
               <tbody>
-                ${suppliers.map(s => `
-                  <tr style="border-bottom:1px solid var(--border-subtle);">
-                    <td style="padding:10px; font-weight:700; font-family:monospace; color:var(--accent-primary);">${s.supplierCode || s.supplier_code || s.id}</td>
-                    <td style="padding:10px; font-weight:600;">${s.supplierName || s.supplier_name}</td>
-                    <td style="padding:10px;">${s.primaryContact || s.primary_contact || 'N/A'}</td>
-                    <td style="padding:10px;">${s.phone || 'N/A'}</td>
-                    <td style="padding:10px; font-family:monospace;">${s.gstin || 'N/A'}</td>
-                  </tr>
-                `).join('')}
+                ${activeSuppliers.map(s => {
+                  const code = s.supplierCode || s.supplier_code || s.code || s.id;
+                  const name = s.supplierName || s.supplier_name || s.name || '';
+                  const contact = s.contactPerson || s.contact_person || s.contact || 'N/A';
+                  const phone = s.phone || s.contact_number || 'N/A';
+                  const gstin = s.gstin || s.gst_number || 'N/A';
+                  const active = s.active !== false;
+
+                  return `
+                    <tr class="row-sup-click" data-sup-code="${code}" style="border-bottom:1px solid var(--border-subtle); cursor:pointer;">
+                      <td style="padding:10px; font-weight:700; font-family:monospace; color:var(--accent-primary);">${code}</td>
+                      <td style="padding:10px; font-weight:600;">${name}</td>
+                      <td style="padding:10px;">${contact}</td>
+                      <td style="padding:10px;">${phone}</td>
+                      <td style="padding:10px; font-family:monospace;">${gstin}</td>
+                      <td style="padding:10px;"><span class="badge ${active ? 'badge-success' : 'badge-secondary'}">${active ? 'ACTIVE' : 'INACTIVE'}</span></td>
+                    </tr>
+                  `;
+                }).join('')}
               </tbody>
             </table>
           </div>
         </div>
       `;
 
-      const btnTmplSup = mount.querySelector('#btn-dl-sup-tmpl');
-      if (btnTmplSup) btnTmplSup.addEventListener('click', () => this.downloadSupplierTemplate());
+      const btnAddSup = mount.querySelector('#btn-add-supplier-action');
+      if (btnAddSup) btnAddSup.addEventListener('click', () => this.renderAddSupplierModal(tenantId, session, mount));
 
-      const btnExportSup = mount.querySelector('#btn-export-sup-csv');
-      if (btnExportSup) btnExportSup.addEventListener('click', () => this.exportSuppliersCSV(suppliers));
+      const btnImportSup = mount.querySelector('#btn-sup-import');
+      if (btnImportSup) btnImportSup.addEventListener('click', () => this.openSupplierImportModal(tenantId, session, mount));
+
+      const btnExportSup = mount.querySelector('#btn-sup-export');
+      if (btnExportSup) btnExportSup.addEventListener('click', () => this.handleSupplierExport(tenantId));
+
+      const btnTemplateSup = mount.querySelector('#btn-sup-template');
+      if (btnTemplateSup) btnTemplateSup.addEventListener('click', () => this.handleSupplierTemplateDownload());
+
+      const supRows = mount.querySelectorAll('.row-sup-click');
+      supRows.forEach(row => {
+        row.addEventListener('click', () => {
+          const code = row.dataset.supCode;
+          this.openSupplierDetailDrawer(code, tenantId, mount, session);
+        });
+      });
+    } else if (tabKey === 'inv-supplier-catalogue' || tabKey === 'inv-catalogue') {
+      const catalogueList = supplierCatalogueController._getCollection('supplier_catalogue', tenantId);
+      const activeCatalogue = catalogueList.length ? catalogueList : supplierCatalogueController.getDefaultCatalogue();
+
+      const uniqueSuppliersCount = new Set(activeCatalogue.map(c => c.supplierCode || c.supplier_code)).size;
+      const uniqueItemsCount = new Set(activeCatalogue.map(c => c.itemCode || c.item_code)).size;
+      const avgLeadTime = activeCatalogue.length
+        ? (activeCatalogue.reduce((sum, c) => sum + (parseInt(c.leadTimeDays || c.lead_time_days || 2, 10)), 0) / activeCatalogue.length).toFixed(1)
+        : 2;
+
+      mount.innerHTML = `
+        <div class="card animate-fade-in" style="background:var(--bg-surface-1); padding:24px; border-radius:8px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
+            <div>
+              <h3 style="font-size:1.4rem; margin:0; color:var(--text-main);">📦 Supplier Catalogue (${activeCatalogue.length} Mappings)</h3>
+              <p style="color:var(--text-muted); font-size:0.85rem; margin-top:2px;">Commercial mapping between suppliers and Anchor inventory items</p>
+            </div>
+            <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
+              <button type="button" class="btn-primary" id="btn-add-cat-item-action" style="padding:8px 16px; font-weight:700; background:var(--accent-primary); border-radius:6px; border:none; cursor:pointer; color:#fff;">
+                + Add Catalogue Item
+              </button>
+              <button type="button" class="btn-secondary" id="btn-sup-cat-import" style="padding:8px 14px; font-weight:700; border-radius:6px; cursor:pointer; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);">
+                ↑ Import
+              </button>
+              <button type="button" class="btn-secondary" id="btn-sup-cat-export" style="padding:8px 14px; font-weight:700; border-radius:6px; cursor:pointer; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);">
+                ↓ Export
+              </button>
+              <button type="button" class="btn-secondary" id="btn-sup-cat-template" style="padding:8px 14px; font-weight:700; border-radius:6px; cursor:pointer; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);">
+                ⬇ Template
+              </button>
+            </div>
+          </div>
+
+          <!-- Provenance Strip -->
+          <div style="background:var(--bg-surface-2); padding:10px 16px; border-radius:6px; border:1px solid var(--border-subtle); margin-bottom:16px; font-size:0.8rem; color:var(--text-muted); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <div>
+              <strong style="color:var(--text-main);">${activeCatalogue.length} Active Mappings</strong> • 
+              <span>${uniqueSuppliersCount} Suppliers Mapped</span> • 
+              <span>${uniqueItemsCount} Items Covered</span> • 
+              <span style="color:var(--status-info); font-weight:700;">${avgLeadTime} Days Avg Lead Time</span>
+            </div>
+            <div style="font-size:0.75rem; color:var(--accent-primary);">
+              💡 Click any catalogue row to view price intelligence & history
+            </div>
+          </div>
+
+          <!-- Filters Bar -->
+          <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; margin-bottom:16px; display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+            <select id="sel-cat-filter-supplier" style="padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-1); color:var(--text-main);">
+              <option value="ALL">All Suppliers</option>
+              ${suppliers.map(s => `<option value="${s.supplierCode || s.supplier_code}">${s.supplierName || s.supplier_name} (${s.supplierCode || s.supplier_code})</option>`).join('')}
+            </select>
+
+            <select id="sel-cat-filter-category" style="padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-1); color:var(--text-main);">
+              <option value="ALL">All Categories</option>
+              ${categories.map(c => `<option value="${c.categoryCode || c.category_code}">${c.categoryName || c.category_name} (${c.categoryCode || c.category_code})</option>`).join('')}
+            </select>
+
+            <input type="text" id="inp-cat-search" placeholder="🔍 Search supplier items, SKUs, inventory items..." style="flex:1; min-width:200px; padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-1); color:var(--text-main);" />
+          </div>
+
+          <div class="table-responsive">
+            <table class="data-table" style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+              <thead>
+                <tr style="border-bottom:1px solid var(--border-subtle); text-align:left; background:var(--bg-surface-2);">
+                  <th style="padding:10px;">Supplier</th>
+                  <th style="padding:10px;">Anchor Inventory Item</th>
+                  <th style="padding:10px;">Supplier SKU</th>
+                  <th style="padding:10px;">Pack & UOM</th>
+                  <th style="padding:10px;">Catalogue Unit Price</th>
+                  <th style="padding:10px;">GST %</th>
+                  <th style="padding:10px;">MOQ</th>
+                  <th style="padding:10px;">Preferred</th>
+                  <th style="padding:10px;">Status</th>
+                </tr>
+              </thead>
+              <tbody id="sup-cat-tbody">
+                ${activeCatalogue.map(c => {
+                  const supCode = c.supplierCode || c.supplier_code;
+                  const itemCode = c.itemCode || c.item_code;
+                  const supObj = suppliers.find(s => (s.supplierCode || s.supplier_code) === supCode) || {};
+                  const itemObj = items.find(i => (i.itemCode || i.item_code) === itemCode) || {};
+                  const price = parseFloat(c.unitPrice !== undefined ? c.unitPrice : (c.unit_price || 0));
+                  const gst = c.gstRate !== undefined && c.gstRate !== null ? `${c.gstRate}%` : (c.gst_rate !== undefined && c.gst_rate !== null ? `${c.gst_rate}%` : '<span style="color:var(--text-muted); font-size:0.75rem;">Unassigned</span>');
+                  const packQty = c.packQuantity || c.pack_quantity || 1;
+                  const packUom = c.packUom || c.pack_uom || 'KG';
+                  const uom = c.purchaseUom || c.purchase_uom || 'BAG';
+                  const pref = c.preferred !== false;
+                  const active = c.active !== false;
+
+                  return `
+                    <tr class="row-cat-item-click" data-sup-code="${supCode}" data-item-code="${itemCode}" style="border-bottom:1px solid var(--border-subtle); cursor:pointer;">
+                      <td style="padding:10px; font-weight:700;"><span class="badge badge-info">${supCode}</span> ${supObj.supplierName || supObj.supplier_name || ''}</td>
+                      <td style="padding:10px; font-weight:600;"><span style="font-family:monospace; color:var(--accent-primary); font-weight:700;">${itemCode}</span> ${itemObj.itemName || itemObj.item_name || c.supplierItemName || ''}</td>
+                      <td style="padding:10px; font-family:monospace; color:var(--text-muted);">${c.supplierSku || c.supplier_sku || itemCode}</td>
+                      <td style="padding:10px;"><span class="badge badge-secondary">${uom} (${packQty} ${packUom})</span></td>
+                      <td style="padding:10px; font-weight:700; color:var(--status-success);">₹${price.toLocaleString('en-IN')} / ${uom}</td>
+                      <td style="padding:10px;">${gst}</td>
+                      <td style="padding:10px;">${c.moq || 1} ${uom}</td>
+                      <td style="padding:10px;">${pref ? '<span class="badge badge-success">⭐ PREFERRED</span>' : '<span style="color:var(--text-muted); font-size:0.75rem;">Approved</span>'}</td>
+                      <td style="padding:10px;"><span class="badge ${active ? 'badge-success' : 'badge-secondary'}">${active ? 'ACTIVE' : 'INACTIVE'}</span></td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      `;
+
+      const btnAddCatItem = mount.querySelector('#btn-add-cat-item-action');
+      if (btnAddCatItem) btnAddCatItem.addEventListener('click', () => this.renderAddSupplierCatalogueModal(tenantId, session, mount));
+
+      const btnImportCat = mount.querySelector('#btn-sup-cat-import');
+      if (btnImportCat) btnImportCat.addEventListener('click', () => this.openSupplierCatalogueImportModal(tenantId, session, mount));
+
+      const btnExportCat = mount.querySelector('#btn-sup-cat-export');
+      if (btnExportCat) btnExportCat.addEventListener('click', () => this.handleSupplierCatalogueExport(tenantId));
+
+      const btnTemplateCat = mount.querySelector('#btn-sup-cat-template');
+      if (btnTemplateCat) btnTemplateCat.addEventListener('click', () => this.handleSupplierCatalogueTemplateDownload());
+
+      const selSup = mount.querySelector('#sel-cat-filter-supplier');
+      const selCat = mount.querySelector('#sel-cat-filter-category');
+      const inpSearch = mount.querySelector('#inp-cat-search');
+      const tbody = mount.querySelector('#sup-cat-tbody');
+
+      const filterRows = () => {
+        const supVal = selSup ? selSup.value : 'ALL';
+        const catVal = selCat ? selCat.value : 'ALL';
+        const searchVal = (inpSearch ? inpSearch.value : '').toLowerCase().trim();
+
+        const filtered = activeCatalogue.filter(c => {
+          const supCode = c.supplierCode || c.supplier_code;
+          const itemCode = c.itemCode || c.item_code;
+          const itemObj = items.find(i => (i.itemCode || i.item_code) === itemCode) || {};
+
+          if (supVal !== 'ALL' && supCode !== supVal) return false;
+          if (catVal !== 'ALL' && (itemObj.categoryCode || itemObj.category_code) !== catVal) return false;
+          if (searchVal) {
+            const matchSup = supCode.toLowerCase().includes(searchVal);
+            const matchItem = itemCode.toLowerCase().includes(searchVal) || (itemObj.itemName || '').toLowerCase().includes(searchVal);
+            const matchSku = (c.supplierSku || '').toLowerCase().includes(searchVal) || (c.supplierItemName || '').toLowerCase().includes(searchVal);
+            if (!matchSup && !matchItem && !matchSku) return false;
+          }
+          return true;
+        });
+
+        if (tbody) {
+          if (filtered.length > 0) {
+            tbody.innerHTML = filtered.map(c => {
+              const supCode = c.supplierCode || c.supplier_code;
+              const itemCode = c.itemCode || c.item_code;
+              const supObj = suppliers.find(s => (s.supplierCode || s.supplier_code) === supCode) || {};
+              const itemObj = items.find(i => (i.itemCode || i.item_code) === itemCode) || {};
+              const price = parseFloat(c.unitPrice !== undefined ? c.unitPrice : (c.unit_price || 0));
+              const gst = c.gstRate !== undefined && c.gstRate !== null ? `${c.gstRate}%` : (c.gst_rate !== undefined && c.gst_rate !== null ? `${c.gst_rate}%` : '<span style="color:var(--text-muted); font-size:0.75rem;">Unassigned</span>');
+              const packQty = c.packQuantity || c.pack_quantity || 1;
+              const packUom = c.packUom || c.pack_uom || 'KG';
+              const uom = c.purchaseUom || c.purchase_uom || 'BAG';
+              const pref = c.preferred !== false;
+              const active = c.active !== false;
+
+              return `
+                <tr class="row-cat-item-click" data-sup-code="${supCode}" data-item-code="${itemCode}" style="border-bottom:1px solid var(--border-subtle); cursor:pointer;">
+                  <td style="padding:10px; font-weight:700;"><span class="badge badge-info">${supCode}</span> ${supObj.supplierName || supObj.supplier_name || ''}</td>
+                  <td style="padding:10px; font-weight:600;"><span style="font-family:monospace; color:var(--accent-primary); font-weight:700;">${itemCode}</span> ${itemObj.itemName || itemObj.item_name || c.supplierItemName || ''}</td>
+                  <td style="padding:10px; font-family:monospace; color:var(--text-muted);">${c.supplierSku || c.supplier_sku || itemCode}</td>
+                  <td style="padding:10px;"><span class="badge badge-secondary">${uom} (${packQty} ${packUom})</span></td>
+                  <td style="padding:10px; font-weight:700; color:var(--status-success);">₹${price.toLocaleString('en-IN')} / ${uom}</td>
+                  <td style="padding:10px;">${gst}</td>
+                  <td style="padding:10px;">${c.moq || 1} ${uom}</td>
+                  <td style="padding:10px;">${pref ? '<span class="badge badge-success">⭐ PREFERRED</span>' : '<span style="color:var(--text-muted); font-size:0.75rem;">Approved</span>'}</td>
+                  <td style="padding:10px;"><span class="badge ${active ? 'badge-success' : 'badge-secondary'}">${active ? 'ACTIVE' : 'INACTIVE'}</span></td>
+                </tr>
+              `;
+            }).join('');
+
+            tbody.querySelectorAll('.row-cat-item-click').forEach(row => {
+              row.addEventListener('click', () => {
+                const sCode = row.dataset.supCode;
+                const iCode = row.dataset.itemCode;
+                this.openSupplierCatalogueDetailDrawer(sCode, iCode, tenantId, mount, session);
+              });
+            });
+          } else {
+            tbody.innerHTML = `
+              <tr>
+                <td colspan="9" style="padding:24px; text-align:center; color:var(--text-muted);">
+                  No supplier catalogue mappings match the selected filters.
+                </td>
+              </tr>
+            `;
+          }
+        }
+      };
+
+      if (selSup) selSup.addEventListener('change', filterRows);
+      if (selCat) selCat.addEventListener('change', filterRows);
+      if (inpSearch) inpSearch.addEventListener('input', filterRows);
+
+      mount.querySelectorAll('.row-cat-item-click').forEach(row => {
+        row.addEventListener('click', () => {
+          const sCode = row.dataset.supCode;
+          const iCode = row.dataset.itemCode;
+          this.openSupplierCatalogueDetailDrawer(sCode, iCode, tenantId, mount, session);
+        });
+      });
     } else if (tabKey === 'inv-grn') {
       mount.innerHTML = `
         <div class="card animate-fade-in" style="background:var(--bg-surface-1); padding:24px; border-radius:8px;">
@@ -2726,8 +2986,8 @@ export class InventoryWorkspaceView {
               </select>
             </div>
             <div>
-              <label style="display:block; font-size:0.85rem; margin-bottom:6px; font-weight:600;">Opening Stock</label>
-              <input type="number" id="inp-opening-stock" value="10" min="0" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle);">
+              <label style="display:block; font-size:0.85rem; margin-bottom:6px; font-weight:600;">Reorder Level</label>
+              <input type="number" id="inp-reorder-level" value="10" min="0" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle);">
             </div>
           </div>
           <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; border-top:1px solid var(--border-subtle); padding-top:16px;">
@@ -2767,10 +3027,10 @@ export class InventoryWorkspaceView {
         category_code: categoryCode,
         baseUom,
         base_uom: baseUom,
-        openingStock,
-        opening_stock: openingStock,
-        reorderLevel: 10,
-        reorder_level: 10,
+        openingStock: 0,
+        opening_stock: 0,
+        reorderLevel: parseFloat(mount.querySelector('#inp-reorder-level')?.value) || 10,
+        reorder_level: parseFloat(mount.querySelector('#inp-reorder-level')?.value) || 10,
         status: 'ACTIVE'
       };
 
@@ -3092,6 +3352,8 @@ export class InventoryWorkspaceView {
   // --- 8. FULL-SCREEN FORM: CREATE PO ---
 
   renderCreatePoFormScreen(mount, tenantId, items, suppliers, locations, session) {
+    const catalogueList = supplierCatalogueController._getCollection('supplier_catalogue', tenantId);
+
     mount.innerHTML = `
       <div class="card animate-fade-in" style="background:var(--bg-surface-1); padding:24px; border-radius:8px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid var(--border-subtle); padding-bottom:14px;">
@@ -3102,27 +3364,32 @@ export class InventoryWorkspaceView {
         </div>
 
         <h3 style="margin-top:0; color:var(--accent-primary); font-size:1.5rem;">📋 Create Purchase Order</h3>
-        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:20px;">Issue a formal purchase order to a vendor in Supabase.</p>
+        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:20px;">
+          Issue a formal purchase order. Item list is automatically filtered by the selected Supplier's Catalogue.
+        </p>
 
-        <div style="display:flex; flex-direction:column; gap:16px; max-width:600px;">
+        <div style="display:flex; flex-direction:column; gap:16px; max-width:620px;">
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
             <div>
               <label style="display:block; font-size:0.85rem; margin-bottom:6px; font-weight:600;">Supplier / Vendor *</label>
-              <select id="po-sup-sel" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle);">
+              <select id="po-sup-sel" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-2); font-weight:600;">
                 ${suppliers.map(s => `<option value="${s.supplierCode || s.supplier_code}">${s.supplierName || s.supplier_name} (${s.supplierCode || s.supplier_code})</option>`).join('')}
               </select>
             </div>
             <div>
               <label style="display:block; font-size:0.85rem; margin-bottom:6px; font-weight:600;">Destination Location *</label>
-              <select id="po-loc-sel" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle);">
+              <select id="po-loc-sel" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-2);">
                 ${locations.map(l => `<option value="${l.locationCode || l.location_code}">${l.locationName || l.location_name} (${l.locationCode || l.location_code})</option>`).join('')}
               </select>
             </div>
           </div>
           <div>
-            <label style="display:block; font-size:0.85rem; margin-bottom:6px; font-weight:600;">Item Code & Ingredient *</label>
-            <select id="po-item-sel" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle);">
-              ${items.map(i => `<option value="${i.itemCode || i.item_code}">${i.itemName || i.item_name} (${i.itemCode || i.item_code})</option>`).join('')}
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+              <label style="font-size:0.85rem; font-weight:600;">Supplier Catalogue Item *</label>
+              <span id="po-cat-badge" style="font-size:0.75rem; color:var(--accent-primary); font-weight:700;"></span>
+            </div>
+            <select id="po-item-sel" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-2);">
+              <!-- Dynamically populated based on selected supplier catalogue -->
             </select>
           </div>
           <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
@@ -3131,10 +3398,18 @@ export class InventoryWorkspaceView {
               <input type="number" id="po-qty" value="100" min="1" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle);">
             </div>
             <div>
-              <label style="display:block; font-size:0.85rem; margin-bottom:6px; font-weight:600;">Unit Price (₹)</label>
-              <input type="number" id="po-price" value="150" min="0" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle);">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <label style="font-size:0.85rem; font-weight:600;">PO Price / Unit (₹) *</label>
+                <span style="font-size:0.7rem; color:var(--text-muted);">Catalogue Auto-Filled</span>
+              </div>
+              <input type="number" id="po-price" value="0" min="0" step="0.01" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle); font-weight:700; color:var(--status-success);">
             </div>
           </div>
+
+          <div id="po-price-variance-note" style="display:none; padding:10px; background:rgba(234, 179, 8, 0.1); border-left:3px solid var(--status-warning); border-radius:4px; font-size:0.78rem; color:var(--status-warning);">
+            ⚠ PO Price differs from Supplier Catalogue reference price. This manual price override will be recorded in procurement history.
+          </div>
+
           <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; border-top:1px solid var(--border-subtle); padding-top:16px;">
             <button class="btn-secondary nav-inv-btn" data-tab="inv-po" style="padding:10px 20px;">Cancel</button>
             <button class="btn-primary" id="btn-po-save" style="padding:12px 24px; font-weight:700; background:linear-gradient(135deg, var(--accent-primary), #6366f1); color:#fff; border:none; border-radius:6px; cursor:pointer;">
@@ -3145,12 +3420,62 @@ export class InventoryWorkspaceView {
       </div>
     `;
 
+    const selSup = mount.querySelector('#po-sup-sel');
+    const selItem = mount.querySelector('#po-item-sel');
+    const inpPrice = mount.querySelector('#po-price');
+    const catBadge = mount.querySelector('#po-cat-badge');
+    const varianceNote = mount.querySelector('#po-price-variance-note');
+
+    let currentCataloguePrice = 0;
+
+    const updateCatalogueItems = () => {
+      const selectedSup = selSup.value;
+      const supCatalogue = catalogueList.filter(c => (c.supplierCode || c.supplier_code || '').toUpperCase() === selectedSup.toUpperCase());
+
+      if (supCatalogue.length > 0) {
+        catBadge.textContent = `${supCatalogue.length} Catalogue Items Mapped`;
+        selItem.innerHTML = supCatalogue.map(c => {
+          const itemCode = c.itemCode || c.item_code;
+          const itemObj = items.find(i => (i.itemCode || i.item_code) === itemCode) || {};
+          const uom = c.purchaseUom || c.purchase_uom || 'BAG';
+          const price = parseFloat(c.unitPrice !== undefined ? c.unitPrice : (c.unit_price || 0));
+          return `<option value="${itemCode}" data-price="${price}">${itemObj.itemName || itemObj.item_name || c.supplierItemName || itemCode} (${itemCode}) — ₹${price}/${uom}</option>`;
+        }).join('');
+      } else {
+        catBadge.textContent = 'No Catalogue Items Mapped';
+        selItem.innerHTML = items.map(i => `<option value="${i.itemCode || i.item_code}" data-price="0">${i.itemName || i.item_name} (${i.itemCode || i.item_code}) — Unmapped</option>`).join('');
+      }
+      updateAutoPrice();
+    };
+
+    const updateAutoPrice = () => {
+      const selectedOpt = selItem.options[selItem.selectedIndex];
+      if (selectedOpt) {
+        currentCataloguePrice = parseFloat(selectedOpt.dataset.price) || 0;
+        inpPrice.value = currentCataloguePrice;
+        varianceNote.style.display = 'none';
+      }
+    };
+
+    selSup.addEventListener('change', updateCatalogueItems);
+    selItem.addEventListener('change', updateAutoPrice);
+    inpPrice.addEventListener('input', () => {
+      const manualPrice = parseFloat(inpPrice.value) || 0;
+      if (currentCataloguePrice > 0 && Math.abs(manualPrice - currentCataloguePrice) > 0.01) {
+        varianceNote.style.display = 'block';
+      } else {
+        varianceNote.style.display = 'none';
+      }
+    });
+
+    updateCatalogueItems();
+
     mount.querySelector('#btn-po-save').addEventListener('click', async () => {
-      const supplierCode = mount.querySelector('#po-sup-sel').value;
+      const supplierCode = selSup.value;
       const destinationLocationCode = mount.querySelector('#po-loc-sel').value;
-      const itemCode = mount.querySelector('#po-item-sel').value;
+      const itemCode = selItem.value;
       const quantity = parseFloat(mount.querySelector('#po-qty').value) || 0;
-      const unitPrice = parseFloat(mount.querySelector('#po-price').value) || 0;
+      const unitPrice = parseFloat(inpPrice.value) || 0;
 
       if (quantity <= 0) {
         alert('❌ Please enter a valid order quantity.');
@@ -3167,21 +3492,159 @@ export class InventoryWorkspaceView {
         po_number: poNumber,
         supplierCode,
         supplier_code: supplierCode,
-        supplierName: suppliers.find(s => s.supplierCode === supplierCode || s.supplier_code === supplierCode)?.supplierName || supplierCode,
+        supplierName: suppliers.find(s => (s.supplierCode || s.supplier_code) === supplierCode)?.supplierName || supplierCode,
         destinationLocationCode,
         destination_location_code: destinationLocationCode,
         orderDate: new Date().toISOString().split('T')[0],
         order_date: new Date().toISOString().split('T')[0],
         grandTotal: quantity * unitPrice,
         grand_total: quantity * unitPrice,
+        lines: [{ itemCode, quantity, unitPrice, cataloguePrice: currentCataloguePrice, priceOverride: Math.abs(unitPrice - currentCataloguePrice) > 0.01 }],
         status: 'APPROVED'
       };
 
       const gw = this._getDataGateway();
       if (gw) await gw.create('purchase_orders', newPo);
 
-      alert(`🎉 Purchase Order ${poNumber} Created Successfully!`);
+      alert(`🎉 Purchase Order ${poNumber} Created Successfully!\nItem: ${itemCode} | Qty: ${quantity} | Price: ₹${unitPrice}`);
       this.activeSubView = 'inv-po';
+      const targetMount = this.rootMount || document.querySelector('#workspace-root-mount') || mount;
+      this.render(targetMount, session);
+    });
+  }
+
+  // --- 9. FULL-SCREEN FORM: OPENING STOCK TRANSACTION ---
+
+  renderOpeningStockFormScreen(mount, tenantId, items, locations, session) {
+    mount.innerHTML = `
+      <div class="card animate-fade-in" style="background:var(--bg-surface-1); padding:24px; border-radius:8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid var(--border-subtle); padding-bottom:14px;">
+          <button class="btn-secondary nav-inv-btn" data-tab="inv-live-stock" style="font-weight:700; padding:8px 16px; border-radius:6px; cursor:pointer;">
+            ← Back to Live Balances
+          </button>
+          <div style="font-weight:700; color:var(--text-muted); font-size:0.85rem;">⚡ Opening Stock Transaction Screen</div>
+        </div>
+
+        <h3 style="margin-top:0; color:var(--accent-primary); font-size:1.5rem;">⚡ Post Initial Opening Stock</h3>
+        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:20px;">
+          Post baseline opening inventory to a storage location. Generates an immutable <strong>OPENING_BALANCE</strong> ledger entry.
+        </p>
+
+        <div style="display:flex; flex-direction:column; gap:16px; max-width:600px;">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+            <div>
+              <label style="display:block; font-size:0.85rem; margin-bottom:6px; font-weight:600;">Storage Location *</label>
+              <select id="openstk-loc-sel" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-2);">
+                ${locations.map(l => `<option value="${l.locationCode || l.location_code}">${l.locationName || l.location_name} (${l.locationCode || l.location_code})</option>`).join('')}
+              </select>
+            </div>
+            <div>
+              <label style="display:block; font-size:0.85rem; margin-bottom:6px; font-weight:600;">Inventory Item *</label>
+              <select id="openstk-item-sel" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-2);">
+                ${items.map(i => `<option value="${i.itemCode || i.item_code}">${i.itemName || i.item_name} (${i.itemCode || i.item_code})</option>`).join('')}
+              </select>
+            </div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+            <div>
+              <label style="display:block; font-size:0.85rem; margin-bottom:6px; font-weight:600;">Opening Quantity *</label>
+              <input type="number" id="openstk-qty" value="50" min="0.01" step="0.01" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle);">
+            </div>
+            <div>
+              <label style="display:block; font-size:0.85rem; margin-bottom:6px; font-weight:600;">Baseline Unit Cost (₹) *</label>
+              <input type="number" id="openstk-cost" value="100" min="0" step="0.01" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle);">
+            </div>
+          </div>
+
+          <div>
+            <label style="display:block; font-size:0.85rem; margin-bottom:6px; font-weight:600;">Audit Notes</label>
+            <input type="text" id="openstk-notes" value="Initial Opening Stock Baseline Audit" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle);">
+          </div>
+
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; border-top:1px solid var(--border-subtle); padding-top:16px;">
+            <button class="btn-secondary nav-inv-btn" data-tab="inv-live-stock" style="padding:10px 20px;">Cancel</button>
+            <button class="btn-primary" id="btn-openstk-save" style="padding:12px 24px; font-weight:700; background:linear-gradient(135deg, var(--accent-primary), #6366f1); color:#fff; border:none; border-radius:6px; cursor:pointer;">
+              ⚡ Post Opening Stock to Ledger
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+
+    mount.querySelector('#btn-openstk-save').addEventListener('click', async () => {
+      const locCode = mount.querySelector('#openstk-loc-sel').value;
+      const itemCode = mount.querySelector('#openstk-item-sel').value;
+      const qty = parseFloat(mount.querySelector('#openstk-qty').value) || 0;
+      const unitCost = parseFloat(mount.querySelector('#openstk-cost').value) || 0;
+      const notes = mount.querySelector('#openstk-notes').value.trim();
+
+      if (qty <= 0) {
+        alert('❌ Please enter a valid opening stock quantity.');
+        return;
+      }
+
+      const itemObj = items.find(i => (i.itemCode || i.item_code) === itemCode) || {};
+      const gw = this._getDataGateway();
+
+      if (gw) {
+        const balances = this._getCollection('stock_balances', tenantId);
+        const existingBalance = balances.find(b => (b.itemCode === itemCode || b.item_code === itemCode) && (b.locationCode === locCode || b.location_code === locCode));
+
+        if (existingBalance) {
+          const newQty = (parseFloat(existingBalance.quantity) || 0) + qty;
+          const newValuation = newQty * unitCost;
+          await gw.update('stock_balances', existingBalance.id, {
+            ...existingBalance,
+            quantity: newQty,
+            unitCost,
+            valuation: newValuation,
+            lastUpdatedAt: new Date().toISOString()
+          });
+        } else {
+          await gw.create('stock_balances', {
+            id: `sb-${Date.now()}`,
+            tenantId,
+            tenant_id: tenantId,
+            itemCode,
+            item_code: itemCode,
+            locationCode: locCode,
+            location_code: locCode,
+            quantity: qty,
+            unitCost,
+            unit_cost: unitCost,
+            valuation: qty * unitCost,
+            lastUpdatedAt: new Date().toISOString()
+          });
+        }
+
+        // Post OPENING_BALANCE movement ledger
+        await gw.create('inventory_movements', {
+          id: `mov-${Date.now()}`,
+          movementId: `MOV-${Date.now().toString().substring(7)}`,
+          tenantId,
+          tenant_id: tenantId,
+          inventoryItemId: itemCode,
+          itemCode,
+          item_code: itemCode,
+          locationCode: locCode,
+          location_code: locCode,
+          movementType: 'OPENING_BALANCE',
+          movement_type: 'OPENING_BALANCE',
+          quantity: qty,
+          unitCost,
+          unit_cost: unitCost,
+          totalCost: qty * unitCost,
+          sourceType: 'OPENING',
+          sourceId: 'OPENING-STOCK-AUDIT',
+          performedBy: (session && session.userName) || 'Inventory Manager',
+          notes: notes || 'Initial Opening Stock Baseline',
+          createdAt: new Date().toISOString()
+        });
+      }
+
+      alert(`🎉 Opening Stock posted for "${itemObj.itemName || itemCode}" (${qty} @ ₹${unitCost}) at ${locCode}!`);
+      this.activeSubView = 'inv-live-stock';
       const targetMount = this.rootMount || document.querySelector('#workspace-root-mount') || mount;
       this.render(targetMount, session);
     });
@@ -4480,6 +4943,1132 @@ export class InventoryWorkspaceView {
         overlay.remove();
         if (parentMount) {
           this.activeSubView = 'inv-categories';
+          await this.render(parentMount, session);
+        }
+      });
+    }
+  }
+
+  // --- SUPPLIERS MASTER WORKFLOWS & MODALS ---
+
+  renderAddSupplierModal(tenantId = 'tenant-demo', session = null, parentMount = null) {
+    const existingModal = document.querySelector('#add-supplier-modal-overlay');
+    if (existingModal) existingModal.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'add-supplier-modal-overlay';
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px);
+      display: flex; justify-content: center; align-items: center; z-index: 9999;
+      animation: fadeIn 0.2s ease-out;
+    `;
+
+    overlay.innerHTML = `
+      <div style="background:var(--bg-surface-1); border:1px solid var(--border-subtle); border-radius:12px; width:520px; max-width:92vw; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,0.4);">
+        <div style="padding:20px 24px; background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <h3 style="margin:0; color:var(--accent-primary); font-size:1.2rem;">🏢 Add New Supplier</h3>
+            <p style="color:var(--text-muted); font-size:0.8rem; margin:2px 0 0 0;">Create vendor identity in Supplier Master</p>
+          </div>
+          <button type="button" id="btn-close-add-sup" style="background:none; border:none; color:var(--text-muted); font-size:1.4rem; cursor:pointer;">×</button>
+        </div>
+        <div style="padding:24px; display:flex; flex-direction:column; gap:14px; font-size:0.85rem;">
+          <div>
+            <label style="font-weight:700; display:block; margin-bottom:4px;">Supplier Code *</label>
+            <input type="text" id="inp-new-sup-code" placeholder="e.g. SUP-006" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main); font-family:monospace;" />
+          </div>
+          <div>
+            <label style="font-weight:700; display:block; margin-bottom:4px;">Vendor / Supplier Name *</label>
+            <input type="text" id="inp-new-sup-name" placeholder="e.g. Metro Food Supplies" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);" />
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div>
+              <label style="font-weight:700; display:block; margin-bottom:4px;">Primary Contact</label>
+              <input type="text" id="inp-new-sup-contact" placeholder="e.g. Rahul Sharma" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);" />
+            </div>
+            <div>
+              <label style="font-weight:700; display:block; margin-bottom:4px;">Phone Number</label>
+              <input type="text" id="inp-new-sup-phone" placeholder="e.g. +91 98201 99999" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);" />
+            </div>
+          </div>
+          <div>
+            <label style="font-weight:700; display:block; margin-bottom:4px;">Email Address</label>
+            <input type="email" id="inp-new-sup-email" placeholder="e.g. orders@metrofoods.com" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);" />
+          </div>
+          <div>
+            <label style="font-weight:700; display:block; margin-bottom:4px;">GSTIN (Tax Identification)</label>
+            <input type="text" id="inp-new-sup-gstin" placeholder="e.g. 27AAAFF1234A1Z5" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main); font-family:monospace;" />
+          </div>
+          <div>
+            <label style="font-weight:700; display:block; margin-bottom:4px;">Physical Address</label>
+            <textarea id="inp-new-sup-address" rows="2" placeholder="e.g. Plot 42, APMC Market, Vashi, Navi Mumbai" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main); resize:none;"></textarea>
+          </div>
+        </div>
+        <div style="padding:16px 24px; background:var(--bg-surface-2); border-top:1px solid var(--border-subtle); display:flex; justify-content:flex-end; gap:10px;">
+          <button type="button" id="btn-cancel-add-sup" class="btn-secondary" style="padding:8px 16px; cursor:pointer;">Cancel</button>
+          <button type="button" id="btn-save-new-sup" class="btn-primary" style="padding:8px 20px; font-weight:700; background:var(--accent-primary); color:#fff; border:none; border-radius:6px; cursor:pointer;">Create Supplier</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const closeFn = () => overlay.remove();
+    overlay.querySelector('#btn-close-add-sup').addEventListener('click', closeFn);
+    overlay.querySelector('#btn-cancel-add-sup').addEventListener('click', closeFn);
+
+    overlay.querySelector('#btn-save-new-sup').addEventListener('click', async () => {
+      const code = overlay.querySelector('#inp-new-sup-code').value.trim().toUpperCase();
+      const name = overlay.querySelector('#inp-new-sup-name').value.trim();
+      const contact = overlay.querySelector('#inp-new-sup-contact').value.trim();
+      const phone = overlay.querySelector('#inp-new-sup-phone').value.trim();
+      const email = overlay.querySelector('#inp-new-sup-email').value.trim();
+      const gstin = overlay.querySelector('#inp-new-sup-gstin').value.trim().toUpperCase();
+      const address = overlay.querySelector('#inp-new-sup-address').value.trim();
+
+      if (!code || !name) {
+        alert('Please fill in mandatory Supplier Code and Supplier Name.');
+        return;
+      }
+
+      await supplierImportController.commitImport([{
+        supplier_code: code,
+        supplier_name: name,
+        contact_person: contact,
+        phone,
+        email,
+        address,
+        gstin,
+        active: 'true'
+      }], tenantId);
+
+      overlay.remove();
+      if (parentMount) await this.render(parentMount, session);
+    });
+  }
+
+  openSupplierDetailDrawer(supplierCode, tenantId = 'tenant-demo', parentMount = null, session = null) {
+    const existingDrawer = document.querySelector('#sup-detail-drawer-overlay');
+    if (existingDrawer) existingDrawer.remove();
+
+    const suppliers = supplierImportController._getCollection('suppliers', tenantId);
+    const sup = suppliers.find(s => (s.supplierCode || s.supplier_code || s.code || '').toUpperCase() === (supplierCode || '').toUpperCase()) || {
+      supplierCode,
+      supplierName: supplierCode,
+      contactPerson: 'N/A',
+      phone: 'N/A',
+      gstin: 'N/A'
+    };
+
+    const targetSupCode = (sup.supplierCode || sup.supplier_code || supplierCode || '').toUpperCase();
+    const catalogueList = supplierCatalogueController._getCollection('supplier_catalogue', tenantId);
+    const supCatalogueItems = catalogueList.filter(c => (c.supplierCode || c.supplier_code || '').toUpperCase() === targetSupCode);
+
+    const overlay = document.createElement('div');
+    overlay.id = 'sup-detail-drawer-overlay';
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(4px);
+      display: flex; justify-content: flex-end; z-index: 9999;
+      animation: fadeIn 0.2s ease-out;
+    `;
+
+    overlay.innerHTML = `
+      <div style="background:var(--bg-surface-1); border-left:1px solid var(--border-subtle); width:440px; height:100vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:-10px 0 25px rgba(0,0,0,0.3);">
+        <div style="padding:20px 24px; background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">SUPPLIER DETAILS</div>
+            <h3 style="margin:2px 0 0 0; color:var(--accent-primary); font-size:1.2rem;">${sup.supplierName || sup.supplier_name}</h3>
+          </div>
+          <button type="button" id="btn-close-sup-drawer" style="background:none; border:none; color:var(--text-muted); font-size:1.4rem; cursor:pointer;">×</button>
+        </div>
+
+        <div style="padding:24px; flex:1; overflow-y:auto; font-size:0.85rem; display:flex; flex-direction:column; gap:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">SUPPLIER CODE</div>
+              <div style="font-weight:700; font-family:monospace; font-size:1rem; color:var(--accent-primary); margin-top:2px;">${sup.supplierCode || sup.supplier_code}</div>
+            </div>
+            <span class="badge ${sup.active !== false ? 'badge-success' : 'badge-secondary'}">${sup.active !== false ? 'ACTIVE' : 'INACTIVE'}</span>
+          </div>
+
+          <div>
+            <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">PRIMARY CONTACT</div>
+            <div style="font-weight:600; color:var(--text-main); margin-top:2px;">${sup.contactPerson || sup.contact_person || 'N/A'}</div>
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div>
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">PHONE NUMBER</div>
+              <div style="font-weight:600; color:var(--text-main); margin-top:2px;">${sup.phone || sup.contact_number || 'N/A'}</div>
+            </div>
+            <div>
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">GSTIN</div>
+              <div style="font-weight:700; font-family:monospace; color:var(--status-info); margin-top:2px;">${sup.gstin || sup.gst_number || 'N/A'}</div>
+            </div>
+          </div>
+
+          <div>
+            <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">EMAIL ADDRESS</div>
+            <div style="color:var(--text-main); margin-top:2px;">${sup.email || 'N/A'}</div>
+          </div>
+
+          <div>
+            <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">ADDRESS</div>
+            <div style="color:var(--text-main); margin-top:2px; font-size:0.82rem;">${sup.address || 'N/A'}</div>
+          </div>
+
+          <!-- SUPPLIER CATALOGUE BRIDGE SECTION -->
+          <div style="background:var(--bg-surface-2); border:1px solid var(--border-subtle); padding:16px; border-radius:8px; margin-top:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+              <div style="font-weight:700; color:var(--accent-primary); font-size:0.85rem;">
+                📦 SUPPLIER CATALOGUE (${supCatalogueItems.length} Mapped Items)
+              </div>
+            </div>
+
+            ${supCatalogueItems.length > 0 ? `
+              <div style="display:flex; flex-direction:column; gap:8px; margin-bottom:12px; max-height:180px; overflow-y:auto;">
+                ${supCatalogueItems.map(c => {
+                  const itemCode = c.itemCode || c.item_code;
+                  const items = this._getCollection('inventory', tenantId);
+                  const itemObj = items.find(i => (i.itemCode || i.item_code) === itemCode) || {};
+                  const price = parseFloat(c.unitPrice !== undefined ? c.unitPrice : (c.unit_price || 0));
+                  const uom = c.purchaseUom || c.purchase_uom || 'BAG';
+                  const packQty = c.packQuantity || c.pack_quantity || 1;
+                  const packUom = c.packUom || c.pack_uom || 'KG';
+                  const pref = c.preferred !== false;
+                  return `
+                    <div style="background:var(--bg-surface-1); padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+                      <div>
+                        <div style="font-weight:700; color:var(--text-main); font-size:0.82rem;">
+                          <span style="font-family:monospace; color:var(--accent-primary); font-weight:700;">${itemCode}</span> ${itemObj.itemName || itemObj.item_name || c.supplierItemName || ''}
+                        </div>
+                        <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">
+                          ${uom} (${packQty} ${packUom}) ${pref ? '• <span style="color:var(--status-success); font-weight:700;">⭐ Preferred</span>' : ''}
+                        </div>
+                      </div>
+                      <div style="font-weight:700; color:var(--status-success); font-size:0.82rem;">
+                        ₹${price.toLocaleString('en-IN')} / ${uom}
+                      </div>
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            ` : `
+              <p style="font-size:0.78rem; color:var(--text-muted); margin:0 0 12px 0;">No catalogue mappings created yet for this supplier.</p>
+            `}
+
+            <button type="button" id="btn-view-sup-cat" class="btn-secondary" style="width:100%; padding:8px 12px; font-size:0.8rem; font-weight:700; background:var(--bg-surface-1); border:1px solid var(--accent-primary); color:var(--accent-primary); border-radius:6px; cursor:pointer;">
+              View Supplier Catalogue Screen →
+            </button>
+          </div>
+        </div>
+
+        <div style="padding:16px 24px; background:var(--bg-surface-2); border-top:1px solid var(--border-subtle); display:flex; gap:10px;">
+          <button type="button" id="btn-close-sup-drawer-bottom" class="btn-secondary" style="flex:1; padding:8px; cursor:pointer;">Close</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const closeFn = () => overlay.remove();
+    overlay.querySelector('#btn-close-sup-drawer').addEventListener('click', closeFn);
+    overlay.querySelector('#btn-close-sup-drawer-bottom').addEventListener('click', closeFn);
+
+    const btnViewCat = overlay.querySelector('#btn-view-sup-cat');
+    if (btnViewCat) {
+      btnViewCat.addEventListener('click', async () => {
+        overlay.remove();
+        if (parentMount) {
+          this.activeSubView = 'inv-supplier-catalogue';
+          await this.render(parentMount, session);
+          const selSup = parentMount.querySelector('#sel-cat-filter-supplier');
+          if (selSup) {
+            selSup.value = targetSupCode;
+            selSup.dispatchEvent(new Event('change'));
+          }
+        }
+      });
+    }
+  }
+
+  handleSupplierExport(tenantId = 'tenant-demo') {
+    const csv = supplierImportController.exportLiveSuppliersCsv(tenantId);
+    this._triggerDownload(csv, 'suppliers_master.csv');
+  }
+
+  handleSupplierTemplateDownload() {
+    const csv = supplierImportController.generateTemplateCsv();
+    this._triggerDownload(csv, 'suppliers_master_template.csv');
+  }
+
+  openSupplierImportModal(tenantId = 'tenant-demo', session = null, parentMount = null) {
+    const existingModal = document.querySelector('#import-sup-modal-overlay');
+    if (existingModal) existingModal.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'import-sup-modal-overlay';
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px);
+      display: flex; justify-content: center; align-items: center; z-index: 9999;
+      animation: fadeIn 0.2s ease-out;
+    `;
+
+    overlay.innerHTML = `
+      <div style="background:var(--bg-surface-1); border:1px solid var(--border-subtle); border-radius:12px; width:720px; max-width:94vw; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,0.4);">
+        <div style="padding:20px 24px; background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <h3 style="margin:0; color:var(--accent-primary); font-size:1.2rem;">🏢 IMPORT SUPPLIERS MASTER</h3>
+            <p style="color:var(--text-muted); font-size:0.8rem; margin:2px 0 0 0;">Incremental & Atomic Supplier Directory Import</p>
+          </div>
+          <button type="button" id="btn-close-sup-import-modal" style="background:none; border:none; color:var(--text-muted); font-size:1.4rem; cursor:pointer;">×</button>
+        </div>
+
+        <!-- 5 STEP PIPELINE BAR -->
+        <div style="background:var(--bg-surface-2); padding:10px 24px; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; font-size:0.75rem; font-weight:700; color:var(--text-muted);">
+          <span id="step-lbl-sup-1" style="color:var(--accent-primary);">STEP 1: Upload</span> ➔ 
+          <span id="step-lbl-sup-2">STEP 2: Validate</span> ➔ 
+          <span id="step-lbl-sup-3">STEP 3: Diff</span> ➔ 
+          <span id="step-lbl-sup-4">STEP 4: Commit</span> ➔ 
+          <span id="step-lbl-sup-5">STEP 5: Result</span>
+        </div>
+
+        <div id="import-sup-modal-body" style="padding:24px; flex:1; overflow-y:auto; font-size:0.85rem;">
+          <!-- STEP 1: UPLOAD DROPZONE -->
+          <div id="import-sup-step-upload">
+            <div id="sup-csv-dropzone" style="border:2px dashed var(--border-subtle); border-radius:8px; padding:36px 20px; text-align:center; background:var(--bg-surface-2); cursor:pointer;">
+              <div style="font-size:2.4rem; margin-bottom:8px;">📄</div>
+              <div style="font-weight:700; font-size:1rem; color:var(--text-main);">Drop your suppliers.csv file here</div>
+              <div style="font-size:0.8rem; color:var(--text-muted); margin-top:4px;">or click to browse your local computer</div>
+              <input type="file" id="file-sup-csv-input" accept=".csv" style="display:none;" />
+            </div>
+
+            <div style="margin-top:20px; padding:12px 16px; background:rgba(99, 102, 241, 0.1); border-left:3px solid var(--accent-primary); border-radius:4px; font-size:0.78rem; color:var(--text-muted);">
+              <strong style="color:var(--accent-primary);">Incremental Update Contract:</strong>
+              Existing suppliers matching <code>supplier_code</code> will be updated while preserving un-edited fields. Blank cells in CSV never overwrite existing DB values. Duplicate codes inside a file are hard errors.
+            </div>
+          </div>
+
+          <!-- PREVIEW / DIFF STEP CONTAINER -->
+          <div id="import-sup-step-preview" style="display:none;"></div>
+        </div>
+
+        <div id="import-sup-modal-footer" style="padding:16px 24px; background:var(--bg-surface-2); border-top:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+          <button type="button" id="btn-cancel-sup-modal" class="btn-secondary" style="padding:8px 16px; cursor:pointer;">Cancel</button>
+          <div id="sup-modal-commit-slot"></div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const closeFn = () => overlay.remove();
+    overlay.querySelector('#btn-close-sup-import-modal').addEventListener('click', closeFn);
+    overlay.querySelector('#btn-cancel-sup-modal').addEventListener('click', closeFn);
+
+    const dropzone = overlay.querySelector('#sup-csv-dropzone');
+    const fileInput = overlay.querySelector('#file-sup-csv-input');
+
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.style.borderColor = 'var(--accent-primary)';
+      dropzone.style.background = 'rgba(99, 102, 241, 0.05)';
+    });
+
+    dropzone.addEventListener('dragleave', () => {
+      dropzone.style.borderColor = 'var(--border-subtle)';
+      dropzone.style.background = 'var(--bg-surface-2)';
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.style.borderColor = 'var(--border-subtle)';
+      dropzone.style.background = 'var(--bg-surface-2)';
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        this._processSupplierCsvFile(overlay, e.dataTransfer.files[0], tenantId, parentMount, session);
+      }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        this._processSupplierCsvFile(overlay, e.target.files[0], tenantId, parentMount, session);
+      }
+    });
+  }
+
+  _processSupplierCsvFile(overlay, file, tenantId = 'tenant-demo', parentMount = null, session = null) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const csvText = e.target.result;
+      const rows = supplierImportController.parseCsv(csvText);
+      if (rows.length === 0) {
+        alert('CSV file appears empty or unreadable.');
+        return;
+      }
+      this._renderSupplierImportPreviewSteps(overlay, rows, tenantId, parentMount, session);
+    };
+    reader.readAsText(file);
+  }
+
+  _renderSupplierImportPreviewSteps(overlay, rows = [], tenantId = 'tenant-demo', parentMount = null, session = null) {
+    const uploadStep = overlay.querySelector('#import-sup-step-upload');
+    const previewStep = overlay.querySelector('#import-sup-step-preview');
+    const commitSlot = overlay.querySelector('#sup-modal-commit-slot');
+
+    if (uploadStep) uploadStep.style.display = 'none';
+    if (previewStep) previewStep.style.display = 'block';
+
+    overlay.querySelector('#step-lbl-sup-2').style.color = 'var(--accent-primary)';
+    overlay.querySelector('#step-lbl-sup-3').style.color = 'var(--accent-primary)';
+
+    const validation = supplierImportController.validateRows(rows, tenantId);
+    const diff = supplierImportController.generateDiffPreview(rows, tenantId);
+    const hasErrors = diff.ERRORS.length > 0;
+
+    previewStep.innerHTML = `
+      <div style="margin-bottom:16px;">
+        <div style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px;">IMPORT PREVIEW BREAKDOWN</div>
+        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px;">
+          <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; text-align:center; border:1px solid var(--border-subtle);">
+            <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">NEW</div>
+            <div style="font-size:1.4rem; font-weight:700; color:var(--status-success); margin-top:2px;">${diff.NEW.length}</div>
+          </div>
+          <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; text-align:center; border:1px solid var(--border-subtle);">
+            <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">UPDATED</div>
+            <div style="font-size:1.4rem; font-weight:700; color:var(--status-info); margin-top:2px;">${diff.UPDATED.length}</div>
+          </div>
+          <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; text-align:center; border:1px solid var(--border-subtle);">
+            <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">UNCHANGED</div>
+            <div style="font-size:1.4rem; font-weight:700; color:var(--text-muted); margin-top:2px;">${diff.UNCHANGED.length}</div>
+          </div>
+          <div style="background:${hasErrors ? 'rgba(239, 68, 68, 0.15)' : 'var(--bg-surface-2)'}; padding:12px; border-radius:6px; text-align:center; border:${hasErrors ? '1px solid var(--status-danger)' : '1px solid var(--border-subtle)'};">
+            <div style="font-size:0.7rem; color:${hasErrors ? 'var(--status-danger)' : 'var(--text-muted)'}; font-weight:700;">ERRORS</div>
+            <div style="font-size:1.4rem; font-weight:700; color:${hasErrors ? 'var(--status-danger)' : 'var(--text-muted)'}; margin-top:2px;">${diff.ERRORS.length} ${hasErrors ? '🔴' : ''}</div>
+          </div>
+        </div>
+      </div>
+
+      ${hasErrors ? `
+        <div style="background:rgba(239, 68, 68, 0.1); border:1px solid var(--status-danger); padding:14px; border-radius:6px; margin-bottom:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div style="font-weight:700; color:var(--status-danger); font-size:0.88rem;">
+              ⚠ IMPORT BLOCKED — ${diff.ERRORS.length} error(s) must be resolved before committing
+            </div>
+            <button type="button" id="btn-export-sup-errors-csv" class="btn-secondary" style="font-size:0.75rem; padding:4px 10px; cursor:pointer; color:var(--status-danger); border-color:var(--status-danger);">
+              ⬇ Export Error Report
+            </button>
+          </div>
+          <ul style="margin:0; padding-left:20px; font-size:0.8rem; color:var(--status-danger); max-height:120px; overflow-y:auto;">
+            ${diff.ERRORS.map(e => `<li>Row ${e.row} [${e.supplierCode || 'CODE'}]: ${e.message}</li>`).join('')}
+          </ul>
+        </div>
+      ` : ''}
+
+      ${diff.NEW.length > 0 ? `
+        <div style="margin-bottom:16px;">
+          <div style="font-weight:700; font-size:0.85rem; color:var(--status-success); margin-bottom:6px;">NEW SUPPLIERS TO CREATE (${diff.NEW.length})</div>
+          <div style="max-height:140px; overflow-y:auto; font-size:0.8rem; color:var(--text-muted); display:flex; flex-direction:column; gap:4px;">
+            ${diff.NEW.map(n => `
+              <div style="background:var(--bg-surface-2); padding:6px 10px; border-radius:4px; font-family:monospace; color:var(--text-main); font-size:0.8rem;">
+                🏢 SUPPLIER: ${n.supplierCode} — ${n.supplierName} (${n.contactPerson || 'No Contact'}, GSTIN: ${n.gstin || 'N/A'})
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      ${diff.UPDATED.length > 0 ? `
+        <div style="margin-bottom:16px;">
+          <div style="font-weight:700; font-size:0.85rem; color:var(--accent-primary); margin-bottom:8px;">UPDATED SUPPLIER COMPARISON (${diff.UPDATED.length})</div>
+          <div style="max-height:180px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;">
+            ${diff.UPDATED.map(u => `
+              <div style="background:var(--bg-surface-2); border-left:3px solid var(--accent-primary); padding:10px; border-radius:4px;">
+                <div style="font-weight:700; font-size:0.85rem; font-family:monospace; color:var(--accent-primary);">🏢 SUPPLIER: ${u.supplierCode} — ${u.supplierName}</div>
+                <table style="width:100%; font-size:0.78rem; margin-top:6px; border-collapse:collapse;">
+                  <thead>
+                    <tr style="color:var(--text-muted); text-align:left; border-bottom:1px solid var(--border-subtle);">
+                      <th style="padding:4px;">Field</th><th style="padding:4px;">EXISTING</th><th style="padding:4px;">IMPORT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${u.fieldChanges.map(fc => `
+                      <tr>
+                        <td style="padding:4px; font-weight:600;">${fc.field}</td>
+                        <td style="padding:4px; color:var(--text-muted);">${fc.existing}</td>
+                        <td style="padding:4px; color:var(--accent-primary); font-weight:700;">${fc.import} ← CHANGED</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+    `;
+
+    if (hasErrors) {
+      commitSlot.innerHTML = `
+        <button type="button" class="btn-secondary" disabled style="padding:8px 18px; font-weight:700; opacity:0.5; cursor:not-allowed; border-radius:6px;">
+          🔒 Commit Import (Blocked)
+        </button>
+      `;
+      const btnExportErr = overlay.querySelector('#btn-export-sup-errors-csv');
+      if (btnExportErr) {
+        btnExportErr.addEventListener('click', () => {
+          const errCsv = supplierImportController.generateErrorReportCsv(diff.ERRORS);
+          this._triggerDownload(errCsv, 'suppliers_import_errors.csv');
+        });
+      }
+    } else {
+      overlay.querySelector('#step-lbl-sup-4').style.color = 'var(--accent-primary)';
+      const changeCount = diff.NEW.length + diff.UPDATED.length;
+      commitSlot.innerHTML = `
+        <button type="button" id="btn-commit-sup-import-action" class="btn-primary" style="padding:8px 20px; font-weight:700; background:var(--status-success); border-color:var(--status-success); color:#fff; border-radius:6px; cursor:pointer;">
+          ✓ Commit ${changeCount} Changes
+        </button>
+      `;
+
+      overlay.querySelector('#btn-commit-sup-import-action').addEventListener('click', async () => {
+        const btnCommit = overlay.querySelector('#btn-commit-sup-import-action');
+        btnCommit.disabled = true;
+        btnCommit.textContent = '⏳ Committing...';
+        const res = await supplierImportController.commitImport(rows, tenantId);
+        this._renderSupplierImportResultStep(overlay, res, parentMount, session);
+      });
+    }
+  }
+
+  _renderSupplierImportResultStep(overlay, res = {}, parentMount = null, session = null) {
+    const previewStep = overlay.querySelector('#import-sup-step-preview');
+    const footer = overlay.querySelector('#import-sup-modal-footer');
+
+    overlay.querySelector('#step-lbl-sup-5').style.color = 'var(--status-success)';
+
+    if (footer) footer.style.display = 'none';
+
+    if (previewStep) {
+      previewStep.innerHTML = `
+        <div style="text-align:center; padding:16px 0;">
+          <div style="font-size:3rem; margin-bottom:10px;">✅</div>
+          <h3 style="margin:0; color:var(--status-success); font-size:1.3rem;">✓ SUPPLIERS IMPORT COMPLETED</h3>
+          <p style="color:var(--text-muted); font-size:0.85rem; margin-top:4px;">Suppliers Master committed atomically to live Supabase storage.</p>
+
+          <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin:20px 0;">
+            <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; border:1px solid var(--border-subtle);">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">CREATED</div>
+              <div style="font-size:1.3rem; font-weight:700; color:var(--status-success); margin-top:2px;">${res.createdCount}</div>
+            </div>
+            <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; border:1px solid var(--border-subtle);">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">UPDATED</div>
+              <div style="font-size:1.3rem; font-weight:700; color:var(--status-info); margin-top:2px;">${res.updatedCount}</div>
+            </div>
+            <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; border:1px solid var(--border-subtle);">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">UNCHANGED</div>
+              <div style="font-size:1.3rem; font-weight:700; color:var(--text-muted); margin-top:2px;">${res.unchangedCount}</div>
+            </div>
+            <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; border:1px solid var(--border-subtle);">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">REJECTED</div>
+              <div style="font-size:1.3rem; font-weight:700; color:var(--text-muted); margin-top:2px;">${res.rejectedCount}</div>
+            </div>
+          </div>
+
+          <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:24px;">
+            Import Audit ID: <strong style="font-family:monospace; color:var(--accent-primary);">${res.importId}</strong>
+          </div>
+
+          <div style="display:flex; justify-content:center; gap:12px;">
+            <button type="button" id="btn-close-sup-modal-finish" class="btn-primary" style="padding:10px 24px; font-weight:700; background:var(--accent-primary); border-radius:6px; border:none; color:#fff; cursor:pointer;">
+              Close & Refresh Suppliers
+            </button>
+          </div>
+        </div>
+      `;
+
+      previewStep.querySelector('#btn-close-sup-modal-finish').addEventListener('click', async () => {
+        overlay.remove();
+        if (parentMount) {
+          this.activeSubView = 'inv-suppliers';
+          await this.render(parentMount, session);
+        }
+      });
+    }
+  }
+
+  // --- SUPPLIER CATALOGUE WORKFLOWS & MODALS ---
+
+  renderAddSupplierCatalogueModal(tenantId = 'tenant-demo', session = null, parentMount = null) {
+    const existingModal = document.querySelector('#add-sup-cat-modal-overlay');
+    if (existingModal) existingModal.remove();
+
+    const suppliers = supplierImportController._getCollection('suppliers', tenantId);
+    const items = this._getCollection('inventory', tenantId);
+
+    const overlay = document.createElement('div');
+    overlay.id = 'add-sup-cat-modal-overlay';
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px);
+      display: flex; justify-content: center; align-items: center; z-index: 9999;
+      animation: fadeIn 0.2s ease-out;
+    `;
+
+    overlay.innerHTML = `
+      <div style="background:var(--bg-surface-1); border:1px solid var(--border-subtle); border-radius:12px; width:560px; max-width:92vw; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,0.4);">
+        <div style="padding:20px 24px; background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <h3 style="margin:0; color:var(--accent-primary); font-size:1.2rem;">📦 Add Supplier Catalogue Item</h3>
+            <p style="color:var(--text-muted); font-size:0.8rem; margin:2px 0 0 0;">Map Supplier to Anchor Inventory Master Item with Commercial Terms</p>
+          </div>
+          <button type="button" id="btn-close-add-sup-cat" style="background:none; border:none; color:var(--text-muted); font-size:1.4rem; cursor:pointer;">×</button>
+        </div>
+        <div style="padding:24px; display:flex; flex-direction:column; gap:14px; font-size:0.85rem;">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div>
+              <label style="font-weight:700; display:block; margin-bottom:4px;">Supplier *</label>
+              <select id="sel-new-cat-sup" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);">
+                ${suppliers.map(s => `<option value="${s.supplierCode || s.supplier_code}">${s.supplierName || s.supplier_name} (${s.supplierCode || s.supplier_code})</option>`).join('')}
+              </select>
+            </div>
+            <div>
+              <label style="font-weight:700; display:block; margin-bottom:4px;">Anchor Inventory Item *</label>
+              <select id="sel-new-cat-item" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);">
+                ${items.map(i => `<option value="${i.itemCode || i.item_code}">${i.itemName || i.item_name} (${i.itemCode || i.item_code})</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div>
+              <label style="font-weight:700; display:block; margin-bottom:4px;">Supplier SKU</label>
+              <input type="text" id="inp-new-cat-sku" placeholder="e.g. ON-50" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main); font-family:monospace;" />
+            </div>
+            <div>
+              <label style="font-weight:700; display:block; margin-bottom:4px;">Supplier Item Description</label>
+              <input type="text" id="inp-new-cat-desc" placeholder="e.g. Fresh Farm Onion" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);" />
+            </div>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
+            <div>
+              <label style="font-weight:700; display:block; margin-bottom:4px;">Purchase UOM *</label>
+              <input type="text" id="inp-new-cat-uom" placeholder="e.g. BAG, BOX" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);" />
+            </div>
+            <div>
+              <label style="font-weight:700; display:block; margin-bottom:4px;">Pack Qty *</label>
+              <input type="number" id="inp-new-cat-pack-qty" placeholder="e.g. 50" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);" />
+            </div>
+            <div>
+              <label style="font-weight:700; display:block; margin-bottom:4px;">Pack UOM *</label>
+              <input type="text" id="inp-new-cat-pack-uom" placeholder="e.g. KG, ML" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);" />
+            </div>
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
+            <div>
+              <label style="font-weight:700; display:block; margin-bottom:4px;">Unit Price (₹) *</label>
+              <input type="number" id="inp-new-cat-price" placeholder="e.g. 2000" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);" />
+            </div>
+            <div>
+              <label style="font-weight:700; display:block; margin-bottom:4px;">GST Rate (%)</label>
+              <input type="number" id="inp-new-cat-gst" placeholder="e.g. 5 (or blank)" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);" />
+            </div>
+            <div>
+              <label style="font-weight:700; display:block; margin-bottom:4px;">MOQ (Units)</label>
+              <input type="number" id="inp-new-cat-moq" placeholder="1" value="1" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);" />
+            </div>
+          </div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <input type="checkbox" id="chk-new-cat-preferred" checked style="width:16px; height:16px; cursor:pointer;" />
+            <label for="chk-new-cat-preferred" style="font-weight:600; cursor:pointer;">Set as Preferred Supplier for this Inventory Item (Max 1 per Item)</label>
+          </div>
+        </div>
+        <div style="padding:16px 24px; background:var(--bg-surface-2); border-top:1px solid var(--border-subtle); display:flex; justify-content:flex-end; gap:10px;">
+          <button type="button" id="btn-cancel-add-sup-cat" class="btn-secondary" style="padding:8px 16px; cursor:pointer;">Cancel</button>
+          <button type="button" id="btn-save-new-sup-cat" class="btn-primary" style="padding:8px 20px; font-weight:700; background:var(--accent-primary); color:#fff; border:none; border-radius:6px; cursor:pointer;">Create Catalogue Mapping</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const closeFn = () => overlay.remove();
+    overlay.querySelector('#btn-close-add-sup-cat').addEventListener('click', closeFn);
+    overlay.querySelector('#btn-cancel-add-sup-cat').addEventListener('click', closeFn);
+
+    overlay.querySelector('#btn-save-new-sup-cat').addEventListener('click', async () => {
+      const supCode = overlay.querySelector('#sel-new-cat-sup').value;
+      const itemCode = overlay.querySelector('#sel-new-cat-item').value;
+      const sku = overlay.querySelector('#inp-new-cat-sku').value.trim();
+      const desc = overlay.querySelector('#inp-new-cat-desc').value.trim();
+      const uom = overlay.querySelector('#inp-new-cat-uom').value.trim().toUpperCase();
+      const packQty = overlay.querySelector('#inp-new-cat-pack-qty').value.trim();
+      const packUom = overlay.querySelector('#inp-new-cat-pack-uom').value.trim().toUpperCase();
+      const price = overlay.querySelector('#inp-new-cat-price').value.trim();
+      const gst = overlay.querySelector('#inp-new-cat-gst').value.trim();
+      const moq = overlay.querySelector('#inp-new-cat-moq').value.trim();
+      const isPref = overlay.querySelector('#chk-new-cat-preferred').checked;
+
+      if (!supCode || !itemCode || !uom || !packQty || !packUom || !price) {
+        alert('Please fill in mandatory fields: Supplier, Item, Purchase UOM, Pack Quantity, Pack UOM, and Unit Price.');
+        return;
+      }
+
+      await supplierCatalogueController.commitImport([{
+        supplier_code: supCode,
+        item_code: itemCode,
+        supplier_sku: sku,
+        supplier_item_name: desc,
+        purchase_uom: uom,
+        pack_quantity: packQty,
+        pack_uom: packUom,
+        unit_price: price,
+        gst_rate: gst,
+        moq: moq || '1',
+        lead_time_days: '2',
+        preferred: isPref ? 'true' : 'false',
+        active: 'true'
+      }], tenantId);
+
+      overlay.remove();
+      if (parentMount) await this.render(parentMount, session);
+    });
+  }
+
+  openSupplierCatalogueDetailDrawer(supplierCode, itemCode, tenantId = 'tenant-demo', parentMount = null, session = null) {
+    const existingDrawer = document.querySelector('#sup-cat-detail-drawer-overlay');
+    if (existingDrawer) existingDrawer.remove();
+
+    const catalogueList = supplierCatalogueController._getCollection('supplier_catalogue', tenantId);
+    const itemCat = catalogueList.find(c => (c.supplierCode || c.supplier_code) === supplierCode && (c.itemCode || c.item_code) === itemCode) || {
+      supplierCode,
+      itemCode,
+      supplierSku: itemCode,
+      purchaseUom: 'BAG',
+      packQuantity: 50,
+      packUom: 'KG',
+      unitPrice: 2000,
+      gstRate: 5
+    };
+
+    const suppliers = supplierImportController._getCollection('suppliers', tenantId);
+    const items = this._getCollection('inventory', tenantId);
+
+    const supObj = suppliers.find(s => (s.supplierCode || s.supplier_code) === supplierCode) || {};
+    const itemObj = items.find(i => (i.itemCode || i.item_code) === itemCode) || {};
+
+    const price = parseFloat(itemCat.unitPrice !== undefined ? itemCat.unitPrice : (itemCat.unit_price || 0));
+    const gst = itemCat.gstRate !== undefined && itemCat.gstRate !== null ? `${itemCat.gstRate}%` : (itemCat.gst_rate !== undefined && itemCat.gst_rate !== null ? `${itemCat.gst_rate}%` : 'Unassigned');
+    const packQty = itemCat.packQuantity || itemCat.pack_quantity || 1;
+    const packUom = itemCat.packUom || itemCat.pack_uom || 'KG';
+    const uom = itemCat.purchaseUom || itemCat.purchase_uom || 'BAG';
+
+    // Price History calculation
+    const priceHist = Array.isArray(itemCat.priceHistory) ? itemCat.priceHistory : [];
+    const lastPurchasePrice = priceHist.length ? priceHist[priceHist.length - 1].newPrice : price;
+
+    const overlay = document.createElement('div');
+    overlay.id = 'sup-cat-detail-drawer-overlay';
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(4px);
+      display: flex; justify-content: flex-end; z-index: 9999;
+      animation: fadeIn 0.2s ease-out;
+    `;
+
+    overlay.innerHTML = `
+      <div style="background:var(--bg-surface-1); border-left:1px solid var(--border-subtle); width:460px; height:100vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:-10px 0 25px rgba(0,0,0,0.3);">
+        <div style="padding:20px 24px; background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">CATALOGUE ITEM DETAILS</div>
+            <h3 style="margin:2px 0 0 0; color:var(--accent-primary); font-size:1.2rem;">${itemObj.itemName || itemObj.item_name || itemCat.supplierItemName || itemCode}</h3>
+          </div>
+          <button type="button" id="btn-close-sup-cat-drawer" style="background:none; border:none; color:var(--text-muted); font-size:1.4rem; cursor:pointer;">×</button>
+        </div>
+
+        <div style="padding:24px; flex:1; overflow-y:auto; font-size:0.85rem; display:flex; flex-direction:column; gap:16px;">
+          <!-- SUPPLIER & ITEM BADGES -->
+          <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; border:1px solid var(--border-subtle); display:flex; flex-direction:column; gap:6px;">
+            <div style="display:flex; justify-content:space-between;">
+              <span style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">SUPPLIER</span>
+              <span style="font-weight:700; font-family:monospace; color:var(--accent-primary);">${supplierCode}</span>
+            </div>
+            <div style="font-weight:700; font-size:0.9rem; color:var(--text-main);">${supObj.supplierName || supObj.supplier_name || supplierCode}</div>
+            
+            <div style="border-top:1px solid var(--border-subtle); margin-top:6px; padding-top:6px; display:flex; justify-content:space-between;">
+              <span style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">ANCHOR MASTER ITEM</span>
+              <span style="font-weight:700; font-family:monospace; color:var(--accent-primary);">${itemCode}</span>
+            </div>
+            <div style="font-weight:700; font-size:0.9rem; color:var(--text-main);">${itemObj.itemName || itemObj.item_name || itemCode}</div>
+          </div>
+
+          <!-- PACKAGING MATH -->
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div>
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">PURCHASE UOM</div>
+              <div style="font-weight:700; color:var(--text-main); margin-top:2px;"><span class="badge badge-info">${uom}</span></div>
+            </div>
+            <div>
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">STRUCTURED PACK</div>
+              <div style="font-weight:700; color:var(--text-main); margin-top:2px;">${packQty} ${packUom} / ${uom}</div>
+            </div>
+          </div>
+
+          <!-- COMMERCIAL TERMS -->
+          <div style="background:var(--bg-surface-2); padding:14px; border-radius:6px; border-left:4px solid var(--status-success); display:flex; flex-direction:column; gap:8px;">
+            <div style="font-weight:700; color:var(--status-success); font-size:0.8rem;">COMMERCIAL TERMS</div>
+            <div style="display:flex; justify-content:space-between;">
+              <span style="color:var(--text-muted);">Catalogue Unit Price:</span>
+              <strong style="color:var(--status-success); font-size:1rem;">₹${price.toLocaleString('en-IN')} / ${uom}</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span style="color:var(--text-muted);">GST Rate:</span>
+              <strong>${gst}</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span style="color:var(--text-muted);">Minimum Order Qty (MOQ):</span>
+              <strong>${itemCat.moq || 1} ${uom}</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span style="color:var(--text-muted);">Delivery Lead Time:</span>
+              <strong>${itemCat.leadTimeDays || itemCat.lead_time_days || 2} Days</strong>
+            </div>
+          </div>
+
+          <!-- PRICE INTELLIGENCE & HISTORY SUMMARY -->
+          <div style="background:var(--bg-surface-2); padding:14px; border-radius:6px; border:1px solid var(--border-subtle); display:flex; flex-direction:column; gap:8px;">
+            <div style="font-weight:700; color:var(--accent-primary); font-size:0.8rem; display:flex; justify-content:space-between;">
+              <span>PRICE INTELLIGENCE</span>
+              <span style="font-size:0.7rem; font-weight:600; color:var(--text-muted);">${priceHist.length} Revisions Recorded</span>
+            </div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; font-size:0.8rem;">
+              <div style="background:var(--bg-surface-1); padding:8px; border-radius:4px;">
+                <div style="font-size:0.68rem; color:var(--text-muted);">Current Catalogue</div>
+                <div style="font-weight:700; color:var(--status-success);">₹${price.toLocaleString('en-IN')}</div>
+              </div>
+              <div style="background:var(--bg-surface-1); padding:8px; border-radius:4px;">
+                <div style="font-size:0.68rem; color:var(--text-muted);">Last Purchase Price</div>
+                <div style="font-weight:700; color:var(--status-info);">₹${lastPurchasePrice.toLocaleString('en-IN')}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div style="padding:16px 24px; background:var(--bg-surface-2); border-top:1px solid var(--border-subtle); display:flex; gap:10px;">
+          <button type="button" id="btn-close-sup-cat-drawer-bottom" class="btn-secondary" style="flex:1; padding:8px; cursor:pointer;">Close</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const closeFn = () => overlay.remove();
+    overlay.querySelector('#btn-close-sup-cat-drawer').addEventListener('click', closeFn);
+    overlay.querySelector('#btn-close-sup-cat-drawer-bottom').addEventListener('click', closeFn);
+  }
+
+  handleSupplierCatalogueExport(tenantId = 'tenant-demo') {
+    const csv = supplierCatalogueController.exportLiveCatalogueCsv(tenantId);
+    this._triggerDownload(csv, 'supplier_catalogue.csv');
+  }
+
+  handleSupplierCatalogueTemplateDownload() {
+    const csv = supplierCatalogueController.generateTemplateCsv();
+    this._triggerDownload(csv, 'supplier_catalogue_template.csv');
+  }
+
+  openSupplierCatalogueImportModal(tenantId = 'tenant-demo', session = null, parentMount = null) {
+    const existingModal = document.querySelector('#import-sup-cat-modal-overlay');
+    if (existingModal) existingModal.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'import-sup-cat-modal-overlay';
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px);
+      display: flex; justify-content: center; align-items: center; z-index: 9999;
+      animation: fadeIn 0.2s ease-out;
+    `;
+
+    overlay.innerHTML = `
+      <div style="background:var(--bg-surface-1); border:1px solid var(--border-subtle); border-radius:12px; width:720px; max-width:94vw; max-height:90vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,0.4);">
+        <div style="padding:20px 24px; background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <h3 style="margin:0; color:var(--accent-primary); font-size:1.2rem;">📦 IMPORT SUPPLIER CATALOGUE</h3>
+            <p style="color:var(--text-muted); font-size:0.8rem; margin:2px 0 0 0;">Incremental Commercial Mapping Import</p>
+          </div>
+          <button type="button" id="btn-close-sup-cat-import-modal" style="background:none; border:none; color:var(--text-muted); font-size:1.4rem; cursor:pointer;">×</button>
+        </div>
+
+        <!-- 5 STEP PIPELINE BAR -->
+        <div style="background:var(--bg-surface-2); padding:10px 24px; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; font-size:0.75rem; font-weight:700; color:var(--text-muted);">
+          <span id="step-lbl-sup-cat-1" style="color:var(--accent-primary);">STEP 1: Upload</span> ➔ 
+          <span id="step-lbl-sup-cat-2">STEP 2: Validate</span> ➔ 
+          <span id="step-lbl-sup-cat-3">STEP 3: Diff</span> ➔ 
+          <span id="step-lbl-sup-cat-4">STEP 4: Commit</span> ➔ 
+          <span id="step-lbl-sup-cat-5">STEP 5: Result</span>
+        </div>
+
+        <div id="import-sup-cat-modal-body" style="padding:24px; flex:1; overflow-y:auto; font-size:0.85rem;">
+          <!-- STEP 1: UPLOAD DROPZONE -->
+          <div id="import-sup-cat-step-upload">
+            <div id="sup-cat-csv-dropzone" style="border:2px dashed var(--border-subtle); border-radius:8px; padding:36px 20px; text-align:center; background:var(--bg-surface-2); cursor:pointer;">
+              <div style="font-size:2.4rem; margin-bottom:8px;">📄</div>
+              <div style="font-weight:700; font-size:1rem; color:var(--text-main);">Drop your supplier_catalogue.csv file here</div>
+              <div style="font-size:0.8rem; color:var(--text-muted); margin-top:4px;">or click to browse your local computer</div>
+              <input type="file" id="file-sup-cat-csv-input" accept=".csv" style="display:none;" />
+            </div>
+
+            <div style="margin-top:20px; padding:12px 16px; background:rgba(99, 102, 241, 0.1); border-left:3px solid var(--accent-primary); border-radius:4px; font-size:0.78rem; color:var(--text-muted);">
+              <strong style="color:var(--accent-primary);">Incremental Catalogue Contract:</strong>
+              Composite key is <code>supplier_code + item_code</code>. Existing commercial mappings will be updated while preserving un-edited fields. Unknown suppliers or inventory items are hard errors (cannot auto-create master items). Duplicate composite keys inside a file block import. Max 1 preferred supplier per item is automatically enforced.
+            </div>
+          </div>
+
+          <!-- PREVIEW / DIFF STEP CONTAINER -->
+          <div id="import-sup-cat-step-preview" style="display:none;"></div>
+        </div>
+
+        <div id="import-sup-cat-modal-footer" style="padding:16px 24px; background:var(--bg-surface-2); border-top:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+          <button type="button" id="btn-cancel-sup-cat-modal" class="btn-secondary" style="padding:8px 16px; cursor:pointer;">Cancel</button>
+          <div id="sup-cat-modal-commit-slot"></div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const closeFn = () => overlay.remove();
+    overlay.querySelector('#btn-close-sup-cat-import-modal').addEventListener('click', closeFn);
+    overlay.querySelector('#btn-cancel-sup-cat-modal').addEventListener('click', closeFn);
+
+    const dropzone = overlay.querySelector('#sup-cat-csv-dropzone');
+    const fileInput = overlay.querySelector('#file-sup-cat-csv-input');
+
+    dropzone.addEventListener('click', () => fileInput.click());
+
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      dropzone.style.borderColor = 'var(--accent-primary)';
+      dropzone.style.background = 'rgba(99, 102, 241, 0.05)';
+    });
+
+    dropzone.addEventListener('dragleave', () => {
+      dropzone.style.borderColor = 'var(--border-subtle)';
+      dropzone.style.background = 'var(--bg-surface-2)';
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      dropzone.style.borderColor = 'var(--border-subtle)';
+      dropzone.style.background = 'var(--bg-surface-2)';
+      if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+        this._processSupplierCatalogueCsvFile(overlay, e.dataTransfer.files[0], tenantId, parentMount, session);
+      }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files[0]) {
+        this._processSupplierCatalogueCsvFile(overlay, e.target.files[0], tenantId, parentMount, session);
+      }
+    });
+  }
+
+  _processSupplierCatalogueCsvFile(overlay, file, tenantId = 'tenant-demo', parentMount = null, session = null) {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const csvText = e.target.result;
+      const rows = supplierCatalogueController.parseCsv(csvText);
+      if (rows.length === 0) {
+        alert('CSV file appears empty or unreadable.');
+        return;
+      }
+      this._renderSupplierCatalogueImportPreviewSteps(overlay, rows, tenantId, parentMount, session);
+    };
+    reader.readAsText(file);
+  }
+
+  _renderSupplierCatalogueImportPreviewSteps(overlay, rows = [], tenantId = 'tenant-demo', parentMount = null, session = null) {
+    const uploadStep = overlay.querySelector('#import-sup-cat-step-upload');
+    const previewStep = overlay.querySelector('#import-sup-cat-step-preview');
+    const commitSlot = overlay.querySelector('#sup-cat-modal-commit-slot');
+
+    if (uploadStep) uploadStep.style.display = 'none';
+    if (previewStep) previewStep.style.display = 'block';
+
+    overlay.querySelector('#step-lbl-sup-cat-2').style.color = 'var(--accent-primary)';
+    overlay.querySelector('#step-lbl-sup-cat-3').style.color = 'var(--accent-primary)';
+
+    const validation = supplierCatalogueController.validateRows(rows, tenantId);
+    const diff = supplierCatalogueController.generateDiffPreview(rows, tenantId);
+    const hasErrors = diff.ERRORS.length > 0;
+
+    previewStep.innerHTML = `
+      <div style="margin-bottom:16px;">
+        <div style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px;">IMPORT PREVIEW BREAKDOWN</div>
+        <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px;">
+          <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; text-align:center; border:1px solid var(--border-subtle);">
+            <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">NEW</div>
+            <div style="font-size:1.4rem; font-weight:700; color:var(--status-success); margin-top:2px;">${diff.NEW.length}</div>
+          </div>
+          <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; text-align:center; border:1px solid var(--border-subtle);">
+            <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">UPDATED</div>
+            <div style="font-size:1.4rem; font-weight:700; color:var(--status-info); margin-top:2px;">${diff.UPDATED.length}</div>
+          </div>
+          <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; text-align:center; border:1px solid var(--border-subtle);">
+            <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">UNCHANGED</div>
+            <div style="font-size:1.4rem; font-weight:700; color:var(--text-muted); margin-top:2px;">${diff.UNCHANGED.length}</div>
+          </div>
+          <div style="background:${hasErrors ? 'rgba(239, 68, 68, 0.15)' : 'var(--bg-surface-2)'}; padding:12px; border-radius:6px; text-align:center; border:${hasErrors ? '1px solid var(--status-danger)' : '1px solid var(--border-subtle)'};">
+            <div style="font-size:0.7rem; color:${hasErrors ? 'var(--status-danger)' : 'var(--text-muted)'}; font-weight:700;">ERRORS</div>
+            <div style="font-size:1.4rem; font-weight:700; color:${hasErrors ? 'var(--status-danger)' : 'var(--text-muted)'}; margin-top:2px;">${diff.ERRORS.length} ${hasErrors ? '🔴' : ''}</div>
+          </div>
+        </div>
+      </div>
+
+      ${hasErrors ? `
+        <div style="background:rgba(239, 68, 68, 0.1); border:1px solid var(--status-danger); padding:14px; border-radius:6px; margin-bottom:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+            <div style="font-weight:700; color:var(--status-danger); font-size:0.88rem;">
+              ⚠ IMPORT BLOCKED — ${diff.ERRORS.length} error(s) must be resolved before committing
+            </div>
+            <button type="button" id="btn-export-sup-cat-errors-csv" class="btn-secondary" style="font-size:0.75rem; padding:4px 10px; cursor:pointer; color:var(--status-danger); border-color:var(--status-danger);">
+              ⬇ Export Error Report
+            </button>
+          </div>
+          <ul style="margin:0; padding-left:20px; font-size:0.8rem; color:var(--status-danger); max-height:120px; overflow-y:auto;">
+            ${diff.ERRORS.map(e => `<li>Row ${e.row} [${e.supplierCode} + ${e.itemCode}]: ${e.message}</li>`).join('')}
+          </ul>
+        </div>
+      ` : ''}
+
+      ${diff.NEW.length > 0 ? `
+        <div style="margin-bottom:16px;">
+          <div style="font-weight:700; font-size:0.85rem; color:var(--status-success); margin-bottom:6px;">NEW CATALOGUE MAPPINGS TO CREATE (${diff.NEW.length})</div>
+          <div style="max-height:140px; overflow-y:auto; font-size:0.8rem; color:var(--text-muted); display:flex; flex-direction:column; gap:4px;">
+            ${diff.NEW.map(n => `
+              <div style="background:var(--bg-surface-2); padding:6px 10px; border-radius:4px; font-family:monospace; color:var(--text-main); font-size:0.8rem;">
+                📦 CATALOGUE: ${n.supplierCode} ➔ ${n.itemCode} (${n.purchaseUom}, ${n.packQuantity} ${n.packUom}, ₹${n.unitPrice})
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      ${diff.UPDATED.length > 0 ? `
+        <div style="margin-bottom:16px;">
+          <div style="font-weight:700; font-size:0.85rem; color:var(--accent-primary); margin-bottom:8px;">UPDATED CATALOGUE COMPARISON (${diff.UPDATED.length})</div>
+          <div style="max-height:180px; overflow-y:auto; display:flex; flex-direction:column; gap:8px;">
+            ${diff.UPDATED.map(u => `
+              <div style="background:var(--bg-surface-2); border-left:3px solid var(--accent-primary); padding:10px; border-radius:4px;">
+                <div style="font-weight:700; font-size:0.85rem; font-family:monospace; color:var(--accent-primary);">📦 CATALOGUE: ${u.supplierCode} ➔ ${u.itemCode}</div>
+                <table style="width:100%; font-size:0.78rem; margin-top:6px; border-collapse:collapse;">
+                  <thead>
+                    <tr style="color:var(--text-muted); text-align:left; border-bottom:1px solid var(--border-subtle);">
+                      <th style="padding:4px;">Field</th><th style="padding:4px;">EXISTING</th><th style="padding:4px;">IMPORT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    ${u.fieldChanges.map(fc => `
+                      <tr>
+                        <td style="padding:4px; font-weight:600;">${fc.field}</td>
+                        <td style="padding:4px; color:var(--text-muted);">${fc.existing}</td>
+                        <td style="padding:4px; color:var(--accent-primary); font-weight:700;">${fc.import} ← CHANGED</td>
+                      </tr>
+                    `).join('')}
+                  </tbody>
+                </table>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+      ` : ''}
+    `;
+
+    if (hasErrors) {
+      commitSlot.innerHTML = `
+        <button type="button" class="btn-secondary" disabled style="padding:8px 18px; font-weight:700; opacity:0.5; cursor:not-allowed; border-radius:6px;">
+          🔒 Commit Import (Blocked)
+        </button>
+      `;
+      const btnExportErr = overlay.querySelector('#btn-export-sup-cat-errors-csv');
+      if (btnExportErr) {
+        btnExportErr.addEventListener('click', () => {
+          const errCsv = supplierCatalogueController.generateErrorReportCsv(diff.ERRORS);
+          this._triggerDownload(errCsv, 'supplier_catalogue_import_errors.csv');
+        });
+      }
+    } else {
+      overlay.querySelector('#step-lbl-sup-cat-4').style.color = 'var(--accent-primary)';
+      const changeCount = diff.NEW.length + diff.UPDATED.length;
+      commitSlot.innerHTML = `
+        <button type="button" id="btn-commit-sup-cat-import-action" class="btn-primary" style="padding:8px 20px; font-weight:700; background:var(--status-success); border-color:var(--status-success); color:#fff; border-radius:6px; cursor:pointer;">
+          ✓ Commit ${changeCount} Changes
+        </button>
+      `;
+
+      overlay.querySelector('#btn-commit-sup-cat-import-action').addEventListener('click', async () => {
+        const btnCommit = overlay.querySelector('#btn-commit-sup-cat-import-action');
+        btnCommit.disabled = true;
+        btnCommit.textContent = '⏳ Committing...';
+        const res = await supplierCatalogueController.commitImport(rows, tenantId);
+        this._renderSupplierCatalogueImportResultStep(overlay, res, parentMount, session);
+      });
+    }
+  }
+
+  _renderSupplierCatalogueImportResultStep(overlay, res = {}, parentMount = null, session = null) {
+    const previewStep = overlay.querySelector('#import-sup-cat-step-preview');
+    const footer = overlay.querySelector('#import-sup-cat-modal-footer');
+
+    overlay.querySelector('#step-lbl-sup-cat-5').style.color = 'var(--status-success)';
+
+    if (footer) footer.style.display = 'none';
+
+    if (previewStep) {
+      previewStep.innerHTML = `
+        <div style="text-align:center; padding:16px 0;">
+          <div style="font-size:3rem; margin-bottom:10px;">✅</div>
+          <h3 style="margin:0; color:var(--status-success); font-size:1.3rem;">✓ SUPPLIER CATALOGUE IMPORT COMPLETED</h3>
+          <p style="color:var(--text-muted); font-size:0.85rem; margin-top:4px;">Commercial catalogue mappings committed atomically to live Supabase storage.</p>
+
+          <div style="display:grid; grid-template-columns:repeat(4, 1fr); gap:10px; margin:20px 0;">
+            <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; border:1px solid var(--border-subtle);">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">CREATED</div>
+              <div style="font-size:1.3rem; font-weight:700; color:var(--status-success); margin-top:2px;">${res.createdCount}</div>
+            </div>
+            <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; border:1px solid var(--border-subtle);">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">UPDATED</div>
+              <div style="font-size:1.3rem; font-weight:700; color:var(--status-info); margin-top:2px;">${res.updatedCount}</div>
+            </div>
+            <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; border:1px solid var(--border-subtle);">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">UNCHANGED</div>
+              <div style="font-size:1.3rem; font-weight:700; color:var(--text-muted); margin-top:2px;">${res.unchangedCount}</div>
+            </div>
+            <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; border:1px solid var(--border-subtle);">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">REJECTED</div>
+              <div style="font-size:1.3rem; font-weight:700; color:var(--text-muted); margin-top:2px;">${res.rejectedCount}</div>
+            </div>
+          </div>
+
+          <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:24px;">
+            Import Audit ID: <strong style="font-family:monospace; color:var(--accent-primary);">${res.importId}</strong>
+          </div>
+
+          <div style="display:flex; justify-content:center; gap:12px;">
+            <button type="button" id="btn-close-sup-cat-modal-finish" class="btn-primary" style="padding:10px 24px; font-weight:700; background:var(--accent-primary); border-radius:6px; border:none; color:#fff; cursor:pointer;">
+              Close & Refresh Catalogue
+            </button>
+          </div>
+        </div>
+      `;
+
+      previewStep.querySelector('#btn-close-sup-cat-modal-finish').addEventListener('click', async () => {
+        overlay.remove();
+        if (parentMount) {
+          this.activeSubView = 'inv-supplier-catalogue';
           await this.render(parentMount, session);
         }
       });
