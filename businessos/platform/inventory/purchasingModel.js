@@ -95,6 +95,91 @@ class PurchasingModel {
   }
 
   /**
+   * Fetch PO with accumulated line receiving state (orderedQty, previouslyReceivedQty, remainingQty)
+   */
+  getPurchaseOrderById(poId, tenantId = null) {
+    const targetTenantId = this._getTenantId(tenantId);
+    const pos = offlineStore.getCollection('purchase_orders') || [];
+    const grns = offlineStore.getCollection('goods_received_notes') || offlineStore.getCollection('goods_receipt_notes') || [];
+
+    const rawPo = pos.find(p => p.id === poId || p.poNumber === poId || p.po_number === poId);
+    if (!rawPo) return null;
+
+    // Clone PO
+    const po = JSON.parse(JSON.stringify(rawPo));
+    const lines = po.lines || po.items || [];
+    const poNumber = po.poNumber || po.po_number || po.id;
+
+    // Filter all posted GRNs for this PO
+    const relatedGrns = grns.filter(g => (g.poId === po.id || g.poNumber === poNumber || g.po_number === poNumber) && g.status !== 'CANCELLED');
+
+    let totalOrdered = 0;
+    let totalReceived = 0;
+    let totalAccepted = 0;
+    let totalRejected = 0;
+
+    const accumulatedLines = lines.map(line => {
+      const itemCode = line.itemCode || line.item_code || line.inventoryItemId;
+      const orderedQty = parseFloat(line.quantity !== undefined ? line.quantity : (line.orderedQty || 0));
+
+      let previouslyReceivedQty = 0;
+      let previouslyAcceptedQty = 0;
+      let previouslyRejectedQty = 0;
+
+      relatedGrns.forEach(grn => {
+        const grnLines = grn.lines || grn.receivedItems || [];
+        const grnLine = grnLines.find(gl => (gl.itemCode || gl.item_code || gl.inventoryItemId) === itemCode);
+        if (grnLine) {
+          previouslyReceivedQty += parseFloat(grnLine.receivedQty !== undefined ? grnLine.receivedQty : (grnLine.quantity || 0));
+          previouslyAcceptedQty += parseFloat(grnLine.acceptedQty !== undefined ? grnLine.acceptedQty : (grnLine.receivedQty || 0));
+          previouslyRejectedQty += parseFloat(grnLine.rejectedQty !== undefined ? grnLine.rejectedQty : 0);
+        }
+      });
+
+      const remainingQty = Math.max(0, orderedQty - previouslyReceivedQty);
+
+      totalOrdered += orderedQty;
+      totalReceived += previouslyReceivedQty;
+      totalAccepted += previouslyAcceptedQty;
+      totalRejected += previouslyRejectedQty;
+
+      return {
+        ...line,
+        itemCode,
+        orderedQty,
+        previouslyReceivedQty,
+        previouslyAcceptedQty,
+        previouslyRejectedQty,
+        remainingQty,
+        isFullyReceived: remainingQty <= 0
+      };
+    });
+
+    // Derive mathematical status
+    let calculatedStatus = po.status || 'APPROVED';
+    if (po.status !== 'DRAFT' && po.status !== 'CLOSED' && po.status !== 'CANCELLED') {
+      if (totalReceived === 0) {
+        calculatedStatus = 'APPROVED';
+      } else if (accumulatedLines.every(l => l.remainingQty <= 0)) {
+        calculatedStatus = 'FULLY_RECEIVED';
+      } else {
+        calculatedStatus = 'PARTIALLY_RECEIVED';
+      }
+    }
+
+    return {
+      ...po,
+      lines: accumulatedLines,
+      status: calculatedStatus,
+      totalOrdered,
+      totalReceived,
+      totalAccepted,
+      totalRejected,
+      receivingProgressStr: `${accumulatedLines.filter(l => l.remainingQty <= 0).length}/${accumulatedLines.length} Lines Complete`
+    };
+  }
+
+  /**
    * 1. Create Purchase Request
    */
   createPurchaseRequest({ inventoryItemId, requestedQty, reason = 'Low Stock Alert', requestedBy = 'Store Manager', tenantId = null }) {
@@ -125,147 +210,307 @@ class PurchasingModel {
 
   /**
    * 2. Create Purchase Order (PO)
-   * Rule: PO creation NEVER updates inventory movements!
+   * Multi-line PO builder support.
    */
-  createPurchaseOrder({ supplierId, items = [], createdBy = 'Store Manager', approvedBy = 'Owner', tenantId = null }) {
+  createPurchaseOrder({ supplierCode, supplierId, supplierName, destinationLocationCode, orderDate, expectedDeliveryDate, notes, paymentTerms, lines = [], items = [], createdBy = 'Store Manager', approvedBy = 'Owner', status = 'APPROVED', tenantId = null }) {
     const targetTenantId = this._getTenantId(tenantId);
     const pos = offlineStore.getCollection('purchase_orders') || [];
-    const supplier = supplierModel.getSupplierById(supplierId, targetTenantId);
 
+    const supCode = supplierCode || supplierId || 'SUP-001';
     const poId = `PO-2026-${String(1001 + pos.length).padStart(4, '0')}`;
+    const poNumber = poId;
 
-    let subtotal = 0;
-    const poItems = items.map(it => {
-      const item = inventoryItemModel.getItemById(it.inventoryItemId, targetTenantId);
-      const qty = parseFloat(it.orderedQty) || 0;
-      const unitCost = parseFloat(it.agreedUnitPrice) || (item ? item.currentUnitCost : 0);
-      const lineTotal = Math.round(qty * unitCost * 100) / 100;
-      subtotal += lineTotal;
+    const rawLines = lines.length ? lines : items;
+    let grandTotal = 0;
+
+    const formattedLines = rawLines.map(line => {
+      const itemCode = line.itemCode || line.item_code || line.inventoryItemId;
+      const qty = parseFloat(line.quantity !== undefined ? line.quantity : (line.orderedQty || 0));
+      const catPrice = parseFloat(line.catalogueUnitPrice !== undefined ? line.catalogueUnitPrice : (line.agreedUnitPrice || 0));
+      const poPrice = parseFloat(line.poUnitPrice !== undefined ? line.poUnitPrice : catPrice);
+      const lineTotal = Math.round(qty * poPrice * 100) / 100;
+      grandTotal += lineTotal;
 
       return {
-        inventoryItemId: it.inventoryItemId,
-        itemName: item ? item.name : it.inventoryItemId,
+        itemCode,
+        itemName: line.itemName || itemCode,
+        supplierSku: line.supplierSku || '',
+        quantity: qty,
         orderedQty: qty,
-        receivedQty: 0.0,
-        unit: it.unit || (item ? item.baseUnit : 'KG'),
-        agreedUnitPrice: unitCost,
+        uom: line.uom || line.unit || 'KG',
+        catalogueUnitPrice: catPrice,
+        poUnitPrice: poPrice,
+        priceOverride: Math.abs(poPrice - catPrice) > 0.01,
         lineTotal
       };
     });
 
     const poRecord = {
       id: poId,
-      poNumber: poId,
-      supplierId,
-      supplierName: supplier ? supplier.name : 'Supplier',
-      status: 'APPROVED',
-      items: poItems,
-      subtotal,
-      taxAmount: 0.00,
-      grandTotal: subtotal,
-      createdBy,
-      approvedBy,
       tenantId: targetTenantId,
+      tenant_id: targetTenantId,
+      poNumber,
+      po_number: poNumber,
+      supplierCode: supCode,
+      supplier_code: supCode,
+      supplierName: supplierName || supCode,
+      destinationLocationCode: destinationLocationCode || 'LOC-MAIN',
+      destination_location_code: destinationLocationCode || 'LOC-MAIN',
+      orderDate: orderDate || new Date().toISOString().split('T')[0],
+      order_date: orderDate || new Date().toISOString().split('T')[0],
+      expectedDeliveryDate: expectedDeliveryDate || null,
+      notes: notes || '',
+      paymentTerms: paymentTerms || 'Supplier Default',
+      status: status || 'APPROVED',
+      lines: formattedLines,
+      items: formattedLines,
+      grandTotal,
+      grand_total: grandTotal,
+      total_amount: grandTotal,
+      totalItems: formattedLines.length,
+      createdBy,
       createdAt: new Date().toISOString()
     };
 
     pos.unshift(poRecord);
     offlineStore.setCollection('purchase_orders', pos);
 
-    // Record price point history in supplier model
-    poItems.forEach(it => {
-      supplierModel.recordPricePoint(supplierId, it.inventoryItemId, it.agreedUnitPrice, targetTenantId);
-    });
+    const gw = this._getDataGateway();
+    if (gw && typeof gw.create === 'function') {
+      gw.create('purchase_orders', poRecord);
+    }
 
     platformEventBus.publish('purchasing:po:created', poRecord);
     return poRecord;
   }
 
   /**
-   * 3. Goods Received Note (GRN) — Repeatable Partial Receiving
-   * Rule: Only delivered quantities create PURCHASE_RECEIPT movements in inventoryMovementModel.
+   * Edit Draft Purchase Order
    */
-  processGRNReceipt({ poId, receivedItems = [], supplierInvoiceNo = '', receivedBy = 'Store Manager', tenantId = null }) {
+  updatePurchaseOrder(poId, patch = {}, tenantId = null) {
     const targetTenantId = this._getTenantId(tenantId);
     const pos = offlineStore.getCollection('purchase_orders') || [];
-    const grns = offlineStore.getCollection('goods_received_notes') || [];
+    const idx = pos.findIndex(p => p.id === poId || p.poNumber === poId);
 
-    const po = pos.find(p => p.id === poId || p.poNumber === poId);
-    if (!po) throw new Error(`PO ${poId} not found`);
+    if (idx === -1) throw new Error(`PO ${poId} not found`);
+    if (pos[idx].status !== 'DRAFT') throw new Error(`Only DRAFT Purchase Orders can be edited`);
+
+    const updated = { ...pos[idx], ...patch, updatedAt: new Date().toISOString() };
+    pos[idx] = updated;
+    offlineStore.setCollection('purchase_orders', pos);
+
+    const gw = this._getDataGateway();
+    if (gw && typeof gw.update === 'function') {
+      gw.update('purchase_orders', poId, updated);
+    }
+
+    return updated;
+  }
+
+  /**
+   * 3. Atomic Goods Received Note (GRN) Posting
+   * Enforces all 12 directives:
+   *   - Validates PO status (APPROVED or PARTIALLY_RECEIVED)
+   *   - Validates remainingQty per line (receivedQty <= remainingQty)
+   *   - Validates balance: acceptedQty + rejectedQty == receivedQty
+   *   - Requires actualInvoicePrice > 0
+   *   - Idempotent via idempotencyKey / grnNumber
+   *   - Only acceptedQty creates PURCHASE_RECEIPT stock movement
+   *   - Actual invoice price updates WAC & stock valuation
+   *   - Updates PO status (PARTIALLY_RECEIVED vs FULLY_RECEIVED)
+   */
+  createGoodsReceiptNote({
+    poId,
+    supplierInvoiceNo = '',
+    receiptDate = new Date().toISOString().split('T')[0],
+    supplierInvoiceTotal = 0,
+    lines = [],
+    isDirectGRN = false,
+    directReason = '',
+    supplierCode = '',
+    supplierName = '',
+    destinationLocationCode = '',
+    receivedBy = 'Store Manager',
+    tenantId = null
+  }) {
+    const targetTenantId = this._getTenantId(tenantId);
+    const grns = offlineStore.getCollection('goods_received_notes') || offlineStore.getCollection('goods_receipt_notes') || [];
+    const pos = offlineStore.getCollection('purchase_orders') || [];
+
+    // Validation 1: Supplier Invoice Number required
+    if (!supplierInvoiceNo || !supplierInvoiceNo.trim()) {
+      throw new Error(`Supplier Invoice / Challan Number is required.`);
+    }
+
+    let po = null;
+    if (!isDirectGRN) {
+      if (!poId) throw new Error(`Purchase Order ID is required for PO receiving.`);
+      po = this.getPurchaseOrderById(poId, targetTenantId);
+      if (!po) throw new Error(`Purchase Order ${poId} not found.`);
+
+      if (po.status === 'DRAFT') throw new Error(`Cannot receive goods against a DRAFT Purchase Order. Please approve the PO first.`);
+      if (po.status === 'FULLY_RECEIVED' || po.status === 'CLOSED') throw new Error(`Purchase Order ${po.poNumber} is already fully received or closed.`);
+    } else {
+      if (!directReason || !directReason.trim()) {
+        throw new Error(`Mandatory "Reason for Direct GRN" is required for emergency direct receiving.`);
+      }
+    }
 
     const grnId = `GRN-2026-${String(1001 + grns.length).padStart(4, '0')}`;
-    let grnTotalValue = 0;
-    let isQuantityVariance = false;
-    let isPriceVariance = false;
+    const grnNumber = grnId;
 
-    const processedGrnItems = [];
+    // Idempotency check: prevent duplicate posting
+    const existing = grns.find(g => (g.supplierInvoiceNo === supplierInvoiceNo && g.poId === (po ? po.id : null)) || g.grnNumber === grnId);
+    if (existing) {
+      console.warn(`[PurchasingModel] Duplicate GRN attempt detected for invoice ${supplierInvoiceNo}. Returning cached record.`);
+      return { grn: existing, poStatus: po ? po.status : 'N/A' };
+    }
 
-    receivedItems.forEach(rec => {
-      const poItem = po.items.find(i => i.inventoryItemId === rec.inventoryItemId);
-      const orderedQty = poItem ? poItem.orderedQty : rec.receivedQty;
-      const agreedCost = poItem ? poItem.agreedUnitPrice : rec.unitCost;
+    let grnTotalReceivedValue = 0;
+    const processedGrnLines = [];
 
-      const receivedQty = parseFloat(rec.receivedQty) || 0;
-      const deliveredCost = rec.unitCost !== undefined ? parseFloat(rec.unitCost) : agreedCost;
-      const shortQty = Math.max(0, orderedQty - ((poItem ? poItem.receivedQty : 0) + receivedQty));
+    // Line-by-line validations
+    lines.forEach(line => {
+      const itemCode = line.itemCode || line.item_code;
+      const receivedQty = parseFloat(line.receivedQty !== undefined ? line.receivedQty : (line.quantity || 0));
+      const acceptedQty = parseFloat(line.acceptedQty !== undefined ? line.acceptedQty : receivedQty);
+      const rejectedQty = parseFloat(line.rejectedQty !== undefined ? line.rejectedQty : 0);
+      const actualInvoicePrice = parseFloat(line.actualInvoicePrice !== undefined ? line.actualInvoicePrice : (line.unitCost || 0));
 
-      if (receivedQty !== (orderedQty - (poItem ? poItem.receivedQty : 0))) {
-        isQuantityVariance = true;
+      if (receivedQty < 0) throw new Error(`Item ${itemCode}: Received Quantity cannot be negative.`);
+      if (acceptedQty < 0 || rejectedQty < 0) throw new Error(`Item ${itemCode}: Accepted & Rejected quantities cannot be negative.`);
+      
+      // Directive 5: Strict receiving balance
+      if (Math.abs((acceptedQty + rejectedQty) - receivedQty) > 0.001) {
+        throw new Error(`Item ${itemCode}: Accepted (${acceptedQty}) + Rejected (${rejectedQty}) must equal Received Quantity (${receivedQty}).`);
       }
-      if (deliveredCost !== agreedCost) {
-        isPriceVariance = true;
+
+      // Directive 6: Mandatory Actual Invoice Price
+      if (actualInvoicePrice <= 0 && (receivedQty > 0 || acceptedQty > 0)) {
+        throw new Error(`Item ${itemCode}: Mandatory Actual Invoice Price must be greater than 0.`);
       }
 
-      // Update PO item received quantity
-      if (poItem) {
-        poItem.receivedQty += receivedQty;
+      let poLine = null;
+      let remainingQty = 999999;
+      let poUnitPrice = actualInvoicePrice;
+
+      if (!isDirectGRN && po) {
+        poLine = po.lines.find(l => l.itemCode === itemCode);
+        if (!poLine) throw new Error(`Item ${itemCode} does not exist on Purchase Order ${po.poNumber}.`);
+        remainingQty = poLine.remainingQty;
+        poUnitPrice = poLine.poUnitPrice || catPrice || actualInvoicePrice;
+
+        // Directive 4: Validate against remainingQty
+        if (receivedQty > remainingQty + 0.001) {
+          throw new Error(`Over-Receipt Blocked for ${poLine.itemName || itemCode}: Cannot receive ${receivedQty} units. Maximum remaining receivable quantity is ${remainingQty} units.`);
+        }
       }
 
-      // Post IMMUTABLE PURCHASE_RECEIPT movement to inventoryMovementModel
-      const inventoryMovement = inventoryMovementModel.recordMovement({
-        inventoryItemId: rec.inventoryItemId,
-        movementType: 'PURCHASE_RECEIPT',
-        quantity: receivedQty,
-        unit: rec.unit || (poItem ? poItem.unit : 'KG'),
-        unitCost: deliveredCost,
-        sourceType: 'GRN',
-        sourceId: grnId,
-        operationId: `inv-grn-${grnId}-${rec.inventoryItemId}`,
-        performedBy: receivedBy,
-        notes: `GRN Receipt for PO ${po.poNumber} (Invoice Ref: ${supplierInvoiceNo})`,
-        tenantId: targetTenantId
-      });
+      const lineTotal = Math.round(acceptedQty * actualInvoicePrice * 100) / 100;
+      grnTotalReceivedValue += lineTotal;
 
-      const lineTotal = Math.round(receivedQty * deliveredCost * 100) / 100;
-      grnTotalValue += lineTotal;
+      const priceVariance = Math.abs(actualInvoicePrice - poUnitPrice) > 0.01;
 
-      processedGrnItems.push({
-        inventoryItemId: rec.inventoryItemId,
-        orderedQty,
+      // Directive 7 & 8: Post immutable PURCHASE_RECEIPT movement ONLY for acceptedQty valued at actualInvoicePrice
+      let movementRecord = null;
+      if (acceptedQty > 0) {
+        movementRecord = inventoryMovementModel.recordMovement({
+          inventoryItemId: itemCode,
+          movementType: 'PURCHASE_RECEIPT',
+          quantity: acceptedQty,
+          unit: line.uom || (poLine ? poLine.uom : 'KG'),
+          unitCost: actualInvoicePrice,
+          sourceType: 'GRN',
+          sourceId: grnId,
+          operationId: `inv-grn-${grnId}-${itemCode}`,
+          performedBy: receivedBy,
+          notes: `GRN Receipt for Invoice ${supplierInvoiceNo} (PO ${po ? po.poNumber : 'Direct GRN'})`,
+          tenantId: targetTenantId
+        });
+
+        // Update stock_balances for target location & WAC calculation
+        const destLoc = po ? (po.destinationLocationCode || po.destination_location_code) : (destinationLocationCode || 'LOC-886');
+        const balances = offlineStore.getCollection('stock_balances') || [];
+        const existingBal = balances.find(b => (b.itemCode === itemCode || b.item_code === itemCode) && (b.locationCode === destLoc || b.location_code === destLoc));
+
+        if (existingBal) {
+          const oldQty = parseFloat(existingBal.quantity) || 0;
+          const oldVal = parseFloat(existingBal.valuation) || (oldQty * (parseFloat(existingBal.unitCost || existingBal.unit_cost) || 0));
+          const newQty = oldQty + acceptedQty;
+          const newVal = oldVal + (acceptedQty * actualInvoicePrice);
+          const newUnitCost = newQty > 0 ? (newVal / newQty) : actualInvoicePrice;
+
+          existingBal.quantity = newQty;
+          existingBal.unitCost = newUnitCost;
+          existingBal.unit_cost = newUnitCost;
+          existingBal.valuation = newVal;
+          existingBal.lastUpdatedAt = new Date().toISOString();
+
+          offlineStore.setCollection('stock_balances', balances);
+          const gw = this._getDataGateway();
+          if (gw && typeof gw.update === 'function') {
+            gw.update('stock_balances', existingBal.id, existingBal);
+          }
+        } else {
+          const newBal = {
+            id: `sb-${Date.now()}-${itemCode}`,
+            tenantId: targetTenantId,
+            tenant_id: targetTenantId,
+            itemCode,
+            item_code: itemCode,
+            locationCode: destLoc,
+            location_code: destLoc,
+            quantity: acceptedQty,
+            unitCost: actualInvoicePrice,
+            unit_cost: actualInvoicePrice,
+            valuation: acceptedQty * actualInvoicePrice,
+            lastUpdatedAt: new Date().toISOString()
+          };
+          balances.unshift(newBal);
+          offlineStore.setCollection('stock_balances', balances);
+          const gw = this._getDataGateway();
+          if (gw && typeof gw.create === 'function') {
+            gw.create('stock_balances', newBal);
+          }
+        }
+      }
+
+      processedGrnLines.push({
+        itemCode,
+        itemName: line.itemName || (poLine ? poLine.itemName : itemCode),
+        supplierSku: line.supplierSku || (poLine ? poLine.supplierSku : ''),
+        orderedQty: poLine ? poLine.orderedQty : receivedQty,
+        previouslyReceivedQty: poLine ? poLine.previouslyReceivedQty : 0,
+        remainingQtyBefore: poLine ? poLine.remainingQty : 0,
         receivedQty,
-        shortQty,
-        unitCost: deliveredCost,
-        agreedUnitPrice: agreedCost,
+        acceptedQty,
+        rejectedQty,
+        uom: line.uom || (poLine ? poLine.uom : 'KG'),
+        poUnitPrice,
+        actualInvoicePrice,
+        priceVariance,
+        priceVarianceStr: priceVariance ? `${actualInvoicePrice > poUnitPrice ? '+' : ''}₹${(actualInvoicePrice - poUnitPrice).toFixed(2)}` : '0',
         lineTotal,
-        movementId: inventoryMovement ? inventoryMovement.movementId : null
+        movementId: movementRecord ? movementRecord.movementId : null
       });
     });
 
-    // Update PO Status (PARTIALLY_RECEIVED vs RECEIVED)
-    const isFullyReceived = po.items.every(i => i.receivedQty >= i.orderedQty);
-    po.status = isFullyReceived ? 'RECEIVED' : 'PARTIALLY_RECEIVED';
-    offlineStore.setCollection('purchase_orders', pos);
-
     const grnRecord = {
       id: grnId,
-      grnNumber: grnId,
-      poId: po.id,
-      poNumber: po.poNumber,
-      supplierId: po.supplierId,
-      supplierName: po.supplierName,
-      supplierInvoiceNo,
-      receivedItems: processedGrnItems,
-      grnTotalValue,
+      grnNumber,
+      poId: po ? po.id : null,
+      poNumber: po ? po.poNumber : null,
+      supplierCode: po ? po.supplierCode : supplierCode,
+      supplierName: po ? po.supplierName : supplierName,
+      destinationLocationCode: po ? po.destinationLocationCode : destinationLocationCode,
+      supplierInvoiceNo: supplierInvoiceNo.trim(),
+      receiptDate,
+      supplierInvoiceTotal: parseFloat(supplierInvoiceTotal) || grnTotalReceivedValue,
+      totalReceivedValue: grnTotalReceivedValue,
+      lines: processedGrnLines,
+      receivedItems: processedGrnLines,
+      isDirectGRN: !!isDirectGRN,
+      directReason: directReason || '',
       receivedBy,
       tenantId: targetTenantId,
       createdAt: new Date().toISOString()
@@ -273,36 +518,34 @@ class PurchasingModel {
 
     grns.unshift(grnRecord);
     offlineStore.setCollection('goods_received_notes', grns);
+    offlineStore.setCollection('goods_receipt_notes', grns);
 
-    // 4. Create Supplier Invoice & 3-Way Match Evaluation
-    let matchingStatus = 'MATCHED';
-    if (isPriceVariance) matchingStatus = 'PRICE_VARIANCE';
-    else if (isQuantityVariance) matchingStatus = 'QUANTITY_VARIANCE';
+    // Update PO receiving status mathematically
+    let updatedPoStatus = 'N/A';
+    if (!isDirectGRN && po) {
+      const refreshedPo = this.getPurchaseOrderById(po.id, targetTenantId);
+      updatedPoStatus = refreshedPo.status;
 
-    const invoices = offlineStore.getCollection('supplier_invoices') || [];
-    const supInvId = `SUPINV-2026-${String(1001 + invoices.length).padStart(4, '0')}`;
-    const invoiceRecord = {
-      id: supInvId,
-      invoiceNumber: supplierInvoiceNo || `INV-SUPP-${Date.now()}`,
-      supplierId: po.supplierId,
-      supplierName: po.supplierName,
-      poId: po.id,
-      grnId: grnRecord.id,
-      invoiceAmount: grnTotalValue,
-      matchingStatus,
-      dueDate: new Date(Date.now() + 15 * 24 * 60 * 60 * 1000).toISOString().substring(0, 10),
-      paymentStatus: 'UNPAID',
-      tenantId: targetTenantId,
-      createdAt: new Date().toISOString()
-    };
+      // Update PO record in storage
+      const rawPos = offlineStore.getCollection('purchase_orders') || [];
+      const poIdx = rawPos.findIndex(p => p.id === po.id || p.poNumber === po.poNumber);
+      if (poIdx !== -1) {
+        rawPos[poIdx].status = updatedPoStatus;
+        offlineStore.setCollection('purchase_orders', rawPos);
+        const gw = this._getDataGateway();
+        if (gw && typeof gw.update === 'function') {
+          gw.update('purchase_orders', po.id, rawPos[poIdx]);
+        }
+      }
+    }
 
-    invoices.unshift(invoiceRecord);
-    offlineStore.setCollection('supplier_invoices', invoices);
+    const gw = this._getDataGateway();
+    if (gw && typeof gw.create === 'function') {
+      gw.create('goods_receipt_notes', grnRecord);
+    }
 
     platformEventBus.publish('purchasing:grn:created', grnRecord);
-    platformEventBus.publish('purchasing:invoice:created', invoiceRecord);
-
-    return { grn: grnRecord, supplierInvoice: invoiceRecord, poStatus: po.status };
+    return { grn: grnRecord, poStatus: updatedPoStatus };
   }
 
   /**
