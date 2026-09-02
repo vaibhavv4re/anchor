@@ -256,10 +256,9 @@ export function formatRecordForTable(entityName, job) {
     if (p.supplierCode || p.supplier_code) formatted.supplier_code = p.supplierCode || p.supplier_code;
     if (p.supplierName || p.supplier_name) formatted.supplier_name = p.supplierName || p.supplier_name;
     if (p.status) formatted.status = p.status;
-    if (p.grandTotal || p.grand_total || p.totalAmount || p.total_amount) {
-      formatted.total_amount = parseFloat(p.grandTotal || p.grand_total || p.totalAmount || p.total_amount) || 0;
-    }
-    if (p.lines || p.data) formatted.data = p;
+    const total = parseFloat(p.grandTotal || p.grand_total || p.totalAmount || p.total_amount) || 0;
+    formatted.total_amount = total;
+    formatted.data = p;
     return formatted;
   }
 

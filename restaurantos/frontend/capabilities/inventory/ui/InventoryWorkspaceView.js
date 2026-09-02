@@ -3433,134 +3433,546 @@ export class InventoryWorkspaceView {
   renderCreatePoFormScreen(mount, tenantId, items, suppliers, locations, session) {
     const catalogueList = supplierCatalogueController._getCollection('supplier_catalogue', tenantId);
 
+    const defaultDeliveryDate = new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0];
+
+    let poBasket = []; // Array of [{ itemCode, itemName, supplierSku, quantity, uom, catalogueUnitPrice, poUnitPrice, priceOverride, lineTotal }]
+
     mount.innerHTML = `
-      <div class="card animate-fade-in" style="background:var(--bg-surface-1); padding:24px; border-radius:8px;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px; border-bottom:1px solid var(--border-subtle); padding-bottom:14px;">
-          <button class="btn-secondary nav-inv-btn" data-tab="inv-po" style="font-weight:700; padding:8px 16px; border-radius:6px; cursor:pointer;">
-            ← Back to Purchase Orders
-          </button>
-          <div style="font-weight:700; color:var(--text-muted); font-size:0.85rem;">📄 Purchase Order Creation Screen</div>
+      <div class="card animate-fade-in" style="background:var(--bg-surface-1); padding:24px; border-radius:8px; max-width:1280px; margin:0 auto;">
+        <!-- Top Navigation & Header -->
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; border-bottom:1px solid var(--border-subtle); padding-bottom:12px; flex-wrap:wrap; gap:12px;">
+          <div style="display:flex; align-items:center; gap:12px;">
+            <button class="btn-secondary nav-inv-btn" data-tab="inv-po" style="font-weight:700; padding:8px 14px; border-radius:6px; cursor:pointer; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);">
+              ← Back to Purchase Orders
+            </button>
+            <div style="font-size:0.85rem; font-weight:700; color:var(--text-muted);">📄 Purchase Order Builder</div>
+          </div>
+          <span style="font-size:0.8rem; padding:4px 10px; border-radius:12px; background:rgba(99, 102, 241, 0.15); color:var(--accent-primary); font-weight:700;">Multi-Line Procurement Engine</span>
         </div>
 
-        <h3 style="margin-top:0; color:var(--accent-primary); font-size:1.5rem;">📋 Create Purchase Order</h3>
-        <p style="color:var(--text-muted); font-size:0.85rem; margin-bottom:20px;">
-          Issue a formal purchase order. Item list is automatically filtered by the selected Supplier's Catalogue.
-        </p>
+        <div style="margin-bottom:20px;">
+          <h3 style="margin:0; color:var(--accent-primary); font-size:1.5rem;">📋 Create Purchase Order</h3>
+          <p style="color:var(--text-muted); font-size:0.85rem; margin-top:4px;">
+            Build a multi-line purchase order from a supplier's catalog with transaction-level price negotiation.
+          </p>
+        </div>
 
-        <div style="display:flex; flex-direction:column; gap:16px; max-width:620px;">
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+        <!-- Supplier & Destination Header Card -->
+        <div style="background:var(--bg-surface-2); padding:16px 20px; border-radius:8px; border:1px solid var(--border-subtle); margin-bottom:24px;">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
             <div>
-              <label style="display:block; font-size:0.85rem; margin-bottom:6px; font-weight:600;">Supplier / Vendor *</label>
-              <select id="po-sup-sel" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-2); font-weight:600;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <label style="font-size:0.85rem; font-weight:700; color:var(--text-main);">Supplier / Vendor *</label>
+                <span id="po-cat-badge" style="font-size:0.75rem; color:var(--accent-primary); font-weight:700; background:rgba(99,102,241,0.1); padding:2px 8px; border-radius:10px;">
+                  37 items available
+                </span>
+              </div>
+              <select id="po-sup-sel" style="width:100%; padding:10px 12px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-1); color:var(--text-main); font-weight:600; font-size:0.9rem;">
                 ${suppliers.map(s => `<option value="${s.supplierCode || s.supplier_code}">${s.supplierName || s.supplier_name} (${s.supplierCode || s.supplier_code})</option>`).join('')}
               </select>
             </div>
+
             <div>
-              <label style="display:block; font-size:0.85rem; margin-bottom:6px; font-weight:600;">Destination Location *</label>
-              <select id="po-loc-sel" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-2);">
+              <label style="display:block; font-size:0.85rem; font-weight:700; color:var(--text-main); margin-bottom:6px;">Destination Location *</label>
+              <select id="po-loc-sel" style="width:100%; padding:10px 12px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-1); color:var(--text-main); font-size:0.9rem;">
                 ${locations.map(l => `<option value="${l.locationCode || l.location_code}">${l.locationName || l.location_name} (${l.locationCode || l.location_code})</option>`).join('')}
               </select>
             </div>
           </div>
-          <div>
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-              <label style="font-size:0.85rem; font-weight:600;">Supplier Catalogue Item *</label>
-              <span id="po-cat-badge" style="font-size:0.75rem; color:var(--accent-primary); font-weight:700;"></span>
-            </div>
-            <select id="po-item-sel" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-2);">
-              <!-- Dynamically populated based on selected supplier catalogue -->
-            </select>
-          </div>
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
-            <div>
-              <label style="display:block; font-size:0.85rem; margin-bottom:6px; font-weight:600;">Order Quantity *</label>
-              <input type="number" id="po-qty" value="100" min="1" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle);">
-            </div>
-            <div>
-              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                <label style="font-size:0.85rem; font-weight:600;">PO Price / Unit (₹) *</label>
-                <span style="font-size:0.7rem; color:var(--text-muted);">Catalogue Auto-Filled</span>
+        </div>
+
+        <!-- Main Workspace Grid: Left Column (Table + Details) & Right Column (Summary Sidebar) -->
+        <div style="display:grid; grid-template-columns:1fr 340px; gap:24px; align-items:start;">
+          <!-- Left Column -->
+          <div style="display:flex; flex-direction:column; gap:20px;">
+            <!-- Order Items Card -->
+            <div style="background:var(--bg-surface-1); border:1px solid var(--border-subtle); border-radius:8px; padding:16px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                <div style="display:flex; align-items:center; gap:8px;">
+                  <h4 style="margin:0; font-size:1.1rem; color:var(--text-main);">ORDER ITEMS</h4>
+                  <span id="po-items-count-badge" class="badge badge-info" style="font-size:0.75rem;">0 items</span>
+                </div>
+                <button type="button" class="btn-primary" id="btn-open-item-picker" style="padding:6px 14px; font-size:0.85rem; font-weight:700; background:var(--accent-primary); border-radius:6px; border:none; cursor:pointer; color:#fff;">
+                  + Add Items from Catalogue
+                </button>
               </div>
-              <input type="number" id="po-price" value="0" min="0" step="0.01" style="width:100%; padding:10px; border-radius:6px; border:1px solid var(--border-subtle); font-weight:700; color:var(--status-success);">
+
+              <!-- Table Mount -->
+              <div id="po-items-table-container"></div>
+            </div>
+
+            <!-- PO Details Section -->
+            <div style="background:var(--bg-surface-2); padding:16px; border-radius:8px; border:1px solid var(--border-subtle);">
+              <h4 style="margin-top:0; margin-bottom:12px; font-size:1rem; color:var(--text-main);">PO DETAILS</h4>
+              <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px;">
+                <div>
+                  <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--text-muted); margin-bottom:4px;">Expected Delivery Date</label>
+                  <input type="date" id="po-delivery-date" value="${defaultDeliveryDate}" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-1); color:var(--text-main); font-weight:600;" />
+                </div>
+                <div>
+                  <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--text-muted); margin-bottom:4px;">Payment Terms</label>
+                  <select id="po-payment-terms" style="width:100%; padding:8px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-1); color:var(--text-main);">
+                    <option value="Supplier Default">Supplier Default</option>
+                    <option value="Net 15">Net 15 Days</option>
+                    <option value="Net 30">Net 30 Days</option>
+                    <option value="COD">Cash on Delivery (COD)</option>
+                  </select>
+                </div>
+              </div>
+              <div style="margin-top:12px;">
+                <label style="display:block; font-size:0.8rem; font-weight:600; color:var(--text-muted); margin-bottom:4px;">Reference / Notes</label>
+                <input type="text" id="po-notes" placeholder="Optional internal reference, delivery instructions or notes..." style="width:100%; padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-1); color:var(--text-main);" />
+              </div>
             </div>
           </div>
 
-          <div id="po-price-variance-note" style="display:none; padding:10px; background:rgba(234, 179, 8, 0.1); border-left:3px solid var(--status-warning); border-radius:4px; font-size:0.78rem; color:var(--status-warning);">
-            ⚠ PO Price differs from Supplier Catalogue reference price. This manual price override will be recorded in procurement history.
-          </div>
+          <!-- Right Column: Order Summary Sidebar -->
+          <div style="position:sticky; top:20px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); border-radius:8px; padding:20px; display:flex; flex-direction:column; gap:16px;">
+            <h4 style="margin:0; font-size:1.1rem; color:var(--text-main); border-bottom:1px solid var(--border-subtle); padding-bottom:10px;">ORDER SUMMARY</h4>
 
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:20px; border-top:1px solid var(--border-subtle); padding-top:16px;">
-            <button class="btn-secondary nav-inv-btn" data-tab="inv-po" style="padding:10px 20px;">Cancel</button>
-            <button class="btn-primary" id="btn-po-save" style="padding:12px 24px; font-weight:700; background:linear-gradient(135deg, var(--accent-primary), #6366f1); color:#fff; border:none; border-radius:6px; cursor:pointer;">
-              Save Purchase Order to Supabase
-            </button>
+            <div style="font-size:0.85rem;">
+              <div style="font-weight:700; color:var(--text-main);" id="sidebar-sup-name">--</div>
+              <div style="color:var(--accent-primary); font-family:monospace; font-weight:700; font-size:0.8rem;" id="sidebar-sup-code">--</div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:8px; font-size:0.85rem; border-top:1px solid var(--border-subtle); border-bottom:1px solid var(--border-subtle); padding:12px 0;">
+              <div style="display:flex; justify-content:space-between;">
+                <span style="color:var(--text-muted);">Items:</span>
+                <strong id="sidebar-items-count" style="color:var(--text-main);">0</strong>
+              </div>
+              <div style="display:flex; justify-content:space-between;">
+                <span style="color:var(--text-muted);">Total Quantity:</span>
+                <strong id="sidebar-total-qty" style="color:var(--text-main);">0</strong>
+              </div>
+              <div style="display:flex; justify-content:space-between;">
+                <span style="color:var(--text-muted);">Subtotal (Catalogue Value):</span>
+                <span id="sidebar-cat-value" style="font-family:monospace;">₹0.00</span>
+              </div>
+              <div style="display:flex; justify-content:space-between; align-items:center;">
+                <span style="color:var(--text-muted);">PO Price Overrides:</span>
+                <span id="sidebar-override-val" style="font-family:monospace; font-weight:700;">₹0.00</span>
+              </div>
+            </div>
+
+            <div>
+              <div style="font-size:0.75rem; text-transform:uppercase; letter-spacing:0.5px; color:var(--text-muted); margin-bottom:2px;">PO TOTAL</div>
+              <div id="sidebar-grand-total" style="font-size:1.6rem; font-weight:800; color:var(--status-success);">₹0.00</div>
+            </div>
+
+            <div style="display:flex; flex-direction:column; gap:10px; margin-top:8px;">
+              <button type="button" class="btn-primary" id="btn-po-create-submit" style="width:100%; padding:12px; font-weight:700; background:linear-gradient(135deg, var(--accent-primary), #6366f1); color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:0.95rem; box-shadow:0 4px 12px rgba(99,102,241,0.25);">
+                🚀 Create Purchase Order
+              </button>
+              <button type="button" class="btn-secondary" id="btn-po-draft-submit" style="width:100%; padding:10px; font-weight:600; background:var(--bg-surface-1); border:1px solid var(--border-subtle); color:var(--text-main); border-radius:6px; cursor:pointer;">
+                💾 Save as Draft
+              </button>
+              <button type="button" class="btn-secondary nav-inv-btn" data-tab="inv-po" style="width:100%; padding:8px; font-size:0.8rem; background:transparent; border:none; color:var(--text-muted); cursor:pointer;">
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       </div>
+
+      <!-- Item Picker Modal Mount -->
+      <div id="po-item-picker-modal-mount"></div>
     `;
 
     const selSup = mount.querySelector('#po-sup-sel');
-    const selItem = mount.querySelector('#po-item-sel');
-    const inpPrice = mount.querySelector('#po-price');
+    const selLoc = mount.querySelector('#po-loc-sel');
     const catBadge = mount.querySelector('#po-cat-badge');
-    const varianceNote = mount.querySelector('#po-price-variance-note');
 
-    let currentCataloguePrice = 0;
+    const sidebarSupName = mount.querySelector('#sidebar-sup-name');
+    const sidebarSupCode = mount.querySelector('#sidebar-sup-code');
+    const sidebarItemsCount = mount.querySelector('#sidebar-items-count');
+    const sidebarTotalQty = mount.querySelector('#sidebar-total-qty');
+    const sidebarCatValue = mount.querySelector('#sidebar-cat-value');
+    const sidebarOverrideVal = mount.querySelector('#sidebar-override-val');
+    const sidebarGrandTotal = mount.querySelector('#sidebar-grand-total');
 
-    const updateCatalogueItems = () => {
-      const selectedSup = selSup.value;
-      const supCatalogue = catalogueList.filter(c => (c.supplierCode || c.supplier_code || '').toUpperCase() === selectedSup.toUpperCase());
+    const tableContainer = mount.querySelector('#po-items-table-container');
+    const countBadge = mount.querySelector('#po-items-count-badge');
 
-      if (supCatalogue.length > 0) {
-        catBadge.textContent = `${supCatalogue.length} Catalogue Items Mapped`;
-        selItem.innerHTML = supCatalogue.map(c => {
-          const itemCode = c.itemCode || c.item_code;
-          const itemObj = items.find(i => (i.itemCode || i.item_code) === itemCode) || {};
-          const uom = c.purchaseUom || c.purchase_uom || 'BAG';
-          const price = parseFloat(c.unitPrice !== undefined ? c.unitPrice : (c.unit_price || 0));
-          return `<option value="${itemCode}" data-price="${price}">${itemObj.itemName || itemObj.item_name || c.supplierItemName || itemCode} (${itemCode}) — ₹${price}/${uom}</option>`;
-        }).join('');
-      } else {
-        catBadge.textContent = 'No Catalogue Items Mapped';
-        selItem.innerHTML = items.map(i => `<option value="${i.itemCode || i.item_code}" data-price="0">${i.itemName || i.item_name} (${i.itemCode || i.item_code}) — Unmapped</option>`).join('');
-      }
-      updateAutoPrice();
+    // Helper: get current supplier's available catalogue
+    const getAvailableCatalogue = () => {
+      const supCode = selSup.value;
+      return catalogueList.filter(c => (c.supplierCode || c.supplier_code || '').toUpperCase() === supCode.toUpperCase());
     };
 
-    const updateAutoPrice = () => {
-      const selectedOpt = selItem.options[selItem.selectedIndex];
-      if (selectedOpt) {
-        currentCataloguePrice = parseFloat(selectedOpt.dataset.price) || 0;
-        inpPrice.value = currentCataloguePrice;
-        varianceNote.style.display = 'none';
-      }
+    // Helper: get selected supplier object
+    const getSelectedSupplierObj = () => {
+      const supCode = selSup.value;
+      return suppliers.find(s => (s.supplierCode || s.supplier_code || '').toUpperCase() === supCode.toUpperCase()) || { supplierName: supCode, supplierCode: supCode };
     };
 
-    selSup.addEventListener('change', updateCatalogueItems);
-    selItem.addEventListener('change', updateAutoPrice);
-    inpPrice.addEventListener('input', () => {
-      const manualPrice = parseFloat(inpPrice.value) || 0;
-      if (currentCataloguePrice > 0 && Math.abs(manualPrice - currentCataloguePrice) > 0.01) {
-        varianceNote.style.display = 'block';
-      } else {
-        varianceNote.style.display = 'none';
-      }
-    });
+    // Render Order Items Table
+    const renderOrderItemsTable = () => {
+      countBadge.textContent = `${poBasket.length} ${poBasket.length === 1 ? 'item' : 'items'}`;
+      const supObj = getSelectedSupplierObj();
 
-    updateCatalogueItems();
-
-    mount.querySelector('#btn-po-save').addEventListener('click', async () => {
-      const supplierCode = selSup.value;
-      const destinationLocationCode = mount.querySelector('#po-loc-sel').value;
-      const itemCode = selItem.value;
-      const quantity = parseFloat(mount.querySelector('#po-qty').value) || 0;
-      const unitPrice = parseFloat(inpPrice.value) || 0;
-
-      if (quantity <= 0) {
-        alert('❌ Please enter a valid order quantity.');
+      if (poBasket.length === 0) {
+        tableContainer.innerHTML = `
+          <div style="text-align:center; padding:36px 16px; background:var(--bg-surface-2); border-radius:8px; border:1px dashed var(--border-subtle);">
+            <div style="font-size:2rem; margin-bottom:8px;">📦</div>
+            <div style="font-weight:700; color:var(--text-main); font-size:1rem; margin-bottom:4px;">No items added to PO yet</div>
+            <div style="font-size:0.85rem; color:var(--text-muted); margin-bottom:16px;">Add items from ${supObj.supplierName || supObj.supplier_code}'s catalogue</div>
+            <button type="button" class="btn-primary" id="btn-add-items-empty" style="padding:10px 18px; font-weight:700; background:var(--accent-primary); border:none; border-radius:6px; color:#fff; cursor:pointer;">
+              + Add items from ${supObj.supplierName || supObj.supplier_code}'s catalogue
+            </button>
+          </div>
+        `;
+        const btnEmpty = tableContainer.querySelector('#btn-add-items-empty');
+        if (btnEmpty) btnEmpty.addEventListener('click', () => openItemPickerModal());
         return;
       }
 
+      tableContainer.innerHTML = `
+        <div class="table-responsive">
+          <table class="data-table" style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border-subtle); text-align:left; background:var(--bg-surface-2);">
+                <th style="padding:10px;">Item Details</th>
+                <th style="padding:10px; width:100px;">Qty</th>
+                <th style="padding:10px; width:70px;">UOM</th>
+                <th style="padding:10px; width:110px;">Catalogue Price</th>
+                <th style="padding:10px; width:140px;">PO Price (₹)</th>
+                <th style="padding:10px; width:120px; text-align:right;">Amount</th>
+                <th style="padding:10px; width:40px; text-align:center;"></th>
+              </tr>
+            </thead>
+            <tbody>
+              ${poBasket.map((row, idx) => {
+                const cataloguePrice = row.catalogueUnitPrice || 0;
+                const poPrice = row.poUnitPrice !== undefined ? row.poUnitPrice : cataloguePrice;
+                const diff = poPrice - cataloguePrice;
+                const priceOverride = Math.abs(diff) > 0.01;
+                const lineTotal = (row.quantity || 0) * poPrice;
+
+                return `
+                  <tr style="border-bottom:1px solid var(--border-subtle);">
+                    <td style="padding:10px;">
+                      <div style="font-weight:700; color:var(--text-main);">${row.itemName}</div>
+                      <div style="font-size:0.75rem; font-family:monospace; color:var(--accent-primary);">
+                        ${row.itemCode} ${row.supplierSku ? `• SKU: ${row.supplierSku}` : ''}
+                      </div>
+                    </td>
+                    <td style="padding:10px;">
+                      <input type="number" class="inp-basket-qty" data-idx="${idx}" value="${row.quantity}" min="0.01" step="any" style="width:80px; padding:6px 8px; border-radius:4px; border:1px solid var(--border-subtle); background:var(--bg-surface-2); font-weight:700; text-align:center; color:var(--text-main);" />
+                    </td>
+                    <td style="padding:10px;">
+                      <span class="badge badge-secondary" style="font-weight:700;">${row.uom || 'KG'}</span>
+                    </td>
+                    <td style="padding:10px; color:var(--text-muted); font-family:monospace;">
+                      ₹${cataloguePrice.toLocaleString('en-IN', {minimumFractionDigits:2})}
+                    </td>
+                    <td style="padding:10px;">
+                      <input type="number" class="inp-basket-price" data-idx="${idx}" value="${poPrice}" min="0" step="0.01" style="width:95px; padding:6px 8px; border-radius:4px; border:1px solid var(--border-subtle); background:var(--bg-surface-2); font-weight:700; color:var(--status-success);" />
+                      ${priceOverride ? `
+                        <div style="font-size:0.7rem; color:var(--status-warning); font-weight:700; margin-top:2px;">
+                          ⚠ ${diff > 0 ? `+₹${diff.toFixed(2)}` : `-₹${Math.abs(diff).toFixed(2)}`} override
+                        </div>
+                      ` : ''}
+                    </td>
+                    <td style="padding:10px; text-align:right; font-weight:700; font-family:monospace; color:var(--text-main);">
+                      ₹${lineTotal.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}
+                    </td>
+                    <td style="padding:10px; text-align:center;">
+                      <button type="button" class="btn-basket-remove" data-idx="${idx}" style="background:none; border:none; color:var(--status-danger); cursor:pointer; font-size:1.1rem; padding:4px;" title="Remove Item">
+                        🗑
+                      </button>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        </div>
+        <div style="margin-top:12px; display:flex; justify-content:flex-end;">
+          <button type="button" class="btn-secondary" id="btn-add-more-items" style="padding:6px 12px; font-size:0.8rem; font-weight:700; border-radius:4px; cursor:pointer; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);">
+            + Add another item
+          </button>
+        </div>
+      `;
+
+      // Wire row input change listeners
+      tableContainer.querySelectorAll('.inp-basket-qty').forEach(inp => {
+        inp.addEventListener('input', (e) => {
+          const idx = parseInt(e.target.dataset.idx, 10);
+          const val = parseFloat(e.target.value) || 0;
+          if (poBasket[idx]) {
+            poBasket[idx].quantity = val;
+            poBasket[idx].lineTotal = val * poBasket[idx].poUnitPrice;
+            updateSummarySidebar();
+            // Partial re-render line total calculation text without blowing focus
+            const rowElem = e.target.closest('tr');
+            if (rowElem) {
+              const amountTd = rowElem.children[5];
+              if (amountTd) amountTd.textContent = `₹${(val * poBasket[idx].poUnitPrice).toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+            }
+          }
+        });
+      });
+
+      tableContainer.querySelectorAll('.inp-basket-price').forEach(inp => {
+        inp.addEventListener('input', (e) => {
+          const idx = parseInt(e.target.dataset.idx, 10);
+          const val = parseFloat(e.target.value) || 0;
+          if (poBasket[idx]) {
+            poBasket[idx].poUnitPrice = val;
+            poBasket[idx].priceOverride = Math.abs(val - poBasket[idx].catalogueUnitPrice) > 0.01;
+            poBasket[idx].lineTotal = poBasket[idx].quantity * val;
+            renderOrderItemsTable(); // Re-render to show/hide override badge
+            updateSummarySidebar();
+          }
+        });
+      });
+
+      tableContainer.querySelectorAll('.btn-basket-remove').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const idx = parseInt(e.target.dataset.idx, 10);
+          poBasket.splice(idx, 1);
+          renderOrderItemsTable();
+          updateSummarySidebar();
+        });
+      });
+
+      const btnMore = tableContainer.querySelector('#btn-add-more-items');
+      if (btnMore) btnMore.addEventListener('click', () => openItemPickerModal());
+    };
+
+    // Update Order Summary Sidebar
+    const updateSummarySidebar = () => {
+      const supObj = getSelectedSupplierObj();
+      sidebarSupName.textContent = supObj.supplierName || supObj.supplier_name || selSup.value;
+      sidebarSupCode.textContent = supObj.supplierCode || supObj.supplier_code || selSup.value;
+
+      sidebarItemsCount.textContent = poBasket.length;
+      const totalQty = poBasket.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0);
+      sidebarTotalQty.textContent = totalQty.toLocaleString('en-IN');
+
+      const catValue = poBasket.reduce((sum, item) => sum + ((parseFloat(item.quantity) || 0) * (parseFloat(item.catalogueUnitPrice) || 0)), 0);
+      const poTotal = poBasket.reduce((sum, item) => sum + ((parseFloat(item.quantity) || 0) * (parseFloat(item.poUnitPrice) || 0)), 0);
+      const overrideVariance = poTotal - catValue;
+
+      sidebarCatValue.textContent = `₹${catValue.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+      
+      if (Math.abs(overrideVariance) > 0.01) {
+        sidebarOverrideVal.textContent = `${overrideVariance > 0 ? `+₹${overrideVariance.toFixed(2)}` : `-₹${Math.abs(overrideVariance).toFixed(2)}`}`;
+        sidebarOverrideVal.style.color = overrideVariance > 0 ? 'var(--status-warning)' : 'var(--status-success)';
+      } else {
+        sidebarOverrideVal.textContent = '₹0.00';
+        sidebarOverrideVal.style.color = 'var(--text-muted)';
+      }
+
+      sidebarGrandTotal.textContent = `₹${poTotal.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+    };
+
+    // Update Header Badge when Supplier Selection Changes
+    const onSupplierChange = () => {
+      const supCat = getAvailableCatalogue();
+      const supObj = getSelectedSupplierObj();
+
+      catBadge.textContent = `${supCat.length} ${supCat.length === 1 ? 'item' : 'items'} available`;
+      poBasket = []; // Reset basket when switching supplier
+      renderOrderItemsTable();
+      updateSummarySidebar();
+    };
+
+    selSup.addEventListener('change', onSupplierChange);
+    onSupplierChange(); // Initial calculation
+
+    // Open Supplier-Aware Item Picker Modal
+    const openItemPickerModal = () => {
+      const supCat = getAvailableCatalogue();
+      const supObj = getSelectedSupplierObj();
+      const modalMount = mount.querySelector('#po-item-picker-modal-mount');
+
+      let selectedItemCodes = new Set(poBasket.map(b => b.itemCode));
+
+      modalMount.innerHTML = `
+        <div style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.6); backdrop-filter:blur(4px); display:flex; align-items:center; justify-content:center; z-index:9999;">
+          <div class="card animate-fade-in" style="background:var(--bg-surface-1); border:1px solid var(--border-subtle); border-radius:12px; width:90%; max-width:680px; max-height:85vh; display:flex; flex-direction:column; box-shadow:0 12px 32px rgba(0,0,0,0.4);">
+            <!-- Modal Header -->
+            <div style="padding:16px 20px; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+              <div>
+                <h4 style="margin:0; font-size:1.1rem; color:var(--text-main);">ADD ITEMS FROM CATALOGUE</h4>
+                <div style="font-size:0.8rem; color:var(--accent-primary); font-weight:700; margin-top:2px;">
+                  ${supObj.supplierName} (${supObj.supplierCode}) • ${supCat.length} items available
+                </div>
+              </div>
+              <button type="button" id="btn-close-picker-modal" style="background:none; border:none; font-size:1.4rem; color:var(--text-muted); cursor:pointer;">✕</button>
+            </div>
+
+            <!-- Filter Controls -->
+            <div style="padding:12px 20px; background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); display:flex; gap:12px; flex-wrap:wrap;">
+              <input type="text" id="inp-picker-search" placeholder="🔍 Search inventory item or code..." style="flex:1; min-width:200px; padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-1); color:var(--text-main);" />
+              <select id="sel-picker-category" style="padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-1); color:var(--text-main);">
+                <option value="ALL">All Categories</option>
+                ${categories.map(c => `<option value="${c.categoryCode || c.category_code}">${c.categoryName || c.category_name}</option>`).join('')}
+              </select>
+            </div>
+
+            <!-- Items List -->
+            <div id="picker-items-list" style="padding:12px 20px; overflow-y:auto; flex:1; display:flex; flex-direction:column; gap:8px;"></div>
+
+            <!-- Modal Footer -->
+            <div style="padding:16px 20px; border-top:1px solid var(--border-subtle); background:var(--bg-surface-2); display:flex; justify-content:space-between; align-items:center;">
+              <button type="button" id="btn-picker-select-all" style="background:none; border:none; color:var(--accent-primary); font-size:0.85rem; font-weight:700; cursor:pointer;">
+                Select All
+              </button>
+              <div style="display:flex; gap:12px; align-items:center;">
+                <button type="button" class="btn-secondary" id="btn-cancel-picker" style="padding:8px 16px; font-size:0.85rem; border-radius:6px; cursor:pointer;">
+                  Cancel
+                </button>
+                <button type="button" class="btn-primary" id="btn-confirm-picker" style="padding:8px 20px; font-weight:700; background:var(--accent-primary); border:none; border-radius:6px; color:#fff; cursor:pointer; font-size:0.85rem;">
+                  Add Selected Items
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+
+      const inpSearch = modalMount.querySelector('#inp-picker-search');
+      const selCat = modalMount.querySelector('#sel-picker-category');
+      const listContainer = modalMount.querySelector('#picker-items-list');
+      const btnConfirm = modalMount.querySelector('#btn-confirm-picker');
+      const btnClose = modalMount.querySelector('#btn-close-picker-modal');
+      const btnCancel = modalMount.querySelector('#btn-cancel-picker');
+      const btnSelectAll = modalMount.querySelector('#btn-picker-select-all');
+
+      const renderPickerList = () => {
+        const query = (inpSearch.value || '').toLowerCase().trim();
+        const catFilter = selCat.value;
+
+        const filteredCat = supCat.filter(c => {
+          const itemCode = c.itemCode || c.item_code;
+          const itemObj = items.find(i => (i.itemCode || i.item_code || '').toUpperCase() === (itemCode || '').toUpperCase()) || {};
+
+          if (catFilter !== 'ALL') {
+            const itemCatCode = (itemObj.categoryCode || itemObj.category_code || '').toUpperCase();
+            if (itemCatCode !== catFilter.toUpperCase()) return false;
+          }
+
+          if (query) {
+            const matchCode = itemCode.toLowerCase().includes(query);
+            const matchName = (itemObj.itemName || c.supplierItemName || '').toLowerCase().includes(query);
+            const matchSku = (c.supplierSku || '').toLowerCase().includes(query);
+            if (!matchCode && !matchName && !matchSku) return false;
+          }
+          return true;
+        });
+
+        if (filteredCat.length === 0) {
+          listContainer.innerHTML = `<div style="text-align:center; padding:32px; color:var(--text-muted); font-size:0.85rem;">No items match the search filter.</div>`;
+          return;
+        }
+
+        listContainer.innerHTML = filteredCat.map(c => {
+          const itemCode = c.itemCode || c.item_code;
+          const itemObj = items.find(i => (i.itemCode || i.item_code || '').toUpperCase() === (itemCode || '').toUpperCase()) || {};
+          const isChecked = selectedItemCodes.has(itemCode);
+          const price = parseFloat(c.unitPrice !== undefined ? c.unitPrice : (c.unit_price || 0));
+          const uom = c.purchaseUom || c.purchase_uom || itemObj.purchaseUom || 'KG';
+
+          return `
+            <label style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:var(--bg-surface-1); border:1px solid var(--border-subtle); border-radius:6px; cursor:pointer; transition:all 0.15s ease;">
+              <div style="display:flex; align-items:center; gap:12px;">
+                <input type="checkbox" class="chk-picker-item" value="${itemCode}" ${isChecked ? 'checked' : ''} style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent-primary);" />
+                <div>
+                  <div style="font-weight:700; color:var(--text-main); font-size:0.9rem;">${itemObj.itemName || itemObj.item_name || c.supplierItemName || itemCode}</div>
+                  <div style="font-size:0.75rem; font-family:monospace; color:var(--accent-primary);">
+                    ${itemCode} ${c.supplierSku ? `• SKU: ${c.supplierSku}` : ''}
+                  </div>
+                </div>
+              </div>
+              <div style="font-weight:700; color:var(--status-success); font-size:0.9rem;">
+                ₹${price.toLocaleString('en-IN')} / ${uom}
+              </div>
+            </label>
+          `;
+        }).join('');
+
+        // Wire checkboxes
+        listContainer.querySelectorAll('.chk-picker-item').forEach(chk => {
+          chk.addEventListener('change', (e) => {
+            if (e.target.checked) {
+              selectedItemCodes.add(e.target.value);
+            } else {
+              selectedItemCodes.delete(e.target.value);
+            }
+            btnConfirm.textContent = `Add ${selectedItemCodes.size} ${selectedItemCodes.size === 1 ? 'Item' : 'Items'}`;
+          });
+        });
+      };
+
+      btnConfirm.textContent = `Add ${selectedItemCodes.size} ${selectedItemCodes.size === 1 ? 'Item' : 'Items'}`;
+
+      inpSearch.addEventListener('input', renderPickerList);
+      selCat.addEventListener('change', renderPickerList);
+      renderPickerList();
+
+      btnSelectAll.addEventListener('click', () => {
+        supCat.forEach(c => selectedItemCodes.add(c.itemCode || c.item_code));
+        renderPickerList();
+        btnConfirm.textContent = `Add ${selectedItemCodes.size} Items`;
+      });
+
+      const closeModal = () => { modalMount.innerHTML = ''; };
+      btnClose.addEventListener('click', closeModal);
+      btnCancel.addEventListener('click', closeModal);
+
+      btnConfirm.addEventListener('click', () => {
+        // Merge selected items into poBasket
+        selectedItemCodes.forEach(code => {
+          if (!poBasket.some(b => b.itemCode === code)) {
+            const catRecord = supCat.find(c => (c.itemCode || c.item_code) === code) || {};
+            const itemObj = items.find(i => (i.itemCode || i.item_code || '').toUpperCase() === code.toUpperCase()) || {};
+            const price = parseFloat(catRecord.unitPrice !== undefined ? catRecord.unitPrice : (catRecord.unit_price || 0));
+            const uom = catRecord.purchaseUom || catRecord.purchase_uom || itemObj.purchaseUom || 'KG';
+
+            poBasket.push({
+              itemCode: code,
+              itemName: itemObj.itemName || itemObj.item_name || catRecord.supplierItemName || code,
+              supplierSku: catRecord.supplierSku || catRecord.supplier_sku || '',
+              quantity: 10, // Default PO order quantity
+              uom,
+              catalogueUnitPrice: price,
+              poUnitPrice: price,
+              priceOverride: false,
+              lineTotal: 10 * price
+            });
+          }
+        });
+
+        // Remove any deselected items from basket
+        poBasket = poBasket.filter(b => selectedItemCodes.has(b.itemCode));
+
+        closeModal();
+        renderOrderItemsTable();
+        updateSummarySidebar();
+      });
+    };
+
+    // Wire Add Items button
+    const btnOpenPicker = mount.querySelector('#btn-open-item-picker');
+    if (btnOpenPicker) btnOpenPicker.addEventListener('click', () => openItemPickerModal());
+
+    // Save PO Submission Handler (Draft or Active PO)
+    const submitPO = async (status = 'APPROVED') => {
+      if (poBasket.length === 0) {
+        alert('❌ Please add at least 1 item to the Purchase Order.');
+        return;
+      }
+
+      const supplierCode = selSup.value;
+      const destinationLocationCode = selLoc.value;
+      const deliveryDate = mount.querySelector('#po-delivery-date').value;
+      const notes = mount.querySelector('#po-notes').value || '';
+      const paymentTerms = mount.querySelector('#po-payment-terms').value;
+      const supObj = getSelectedSupplierObj();
+
+      const totalAmount = poBasket.reduce((sum, b) => sum + (b.quantity * b.poUnitPrice), 0);
       const poNumber = `PO-${Date.now().toString().substring(7)}`;
 
       const newPo = {
@@ -3571,25 +3983,42 @@ export class InventoryWorkspaceView {
         po_number: poNumber,
         supplierCode,
         supplier_code: supplierCode,
-        supplierName: suppliers.find(s => (s.supplierCode || s.supplier_code) === supplierCode)?.supplierName || supplierCode,
+        supplierName: supObj.supplierName || supObj.supplier_name || supplierCode,
         destinationLocationCode,
         destination_location_code: destinationLocationCode,
         orderDate: new Date().toISOString().split('T')[0],
         order_date: new Date().toISOString().split('T')[0],
-        grandTotal: quantity * unitPrice,
-        grand_total: quantity * unitPrice,
-        lines: [{ itemCode, quantity, unitPrice, cataloguePrice: currentCataloguePrice, priceOverride: Math.abs(unitPrice - currentCataloguePrice) > 0.01 }],
-        status: 'APPROVED'
+        expectedDeliveryDate: deliveryDate,
+        notes,
+        paymentTerms,
+        grandTotal: totalAmount,
+        grand_total: totalAmount,
+        totalItems: poBasket.length,
+        lines: poBasket.map(b => ({
+          itemCode: b.itemCode,
+          itemName: b.itemName,
+          supplierSku: b.supplierSku,
+          quantity: b.quantity,
+          uom: b.uom,
+          catalogueUnitPrice: b.catalogueUnitPrice,
+          poUnitPrice: b.poUnitPrice,
+          priceOverride: b.priceOverride,
+          lineTotal: b.lineTotal
+        })),
+        status
       };
 
       const gw = this._getDataGateway();
       if (gw) await gw.create('purchase_orders', newPo);
 
-      alert(`🎉 Purchase Order ${poNumber} Created Successfully!\nItem: ${itemCode} | Qty: ${quantity} | Price: ₹${unitPrice}`);
+      alert(`🎉 Purchase Order ${poNumber} (${status}) Created Successfully!\n${poBasket.length} Lines | Total: ₹${totalAmount.toLocaleString('en-IN', {minimumFractionDigits: 2})}`);
       this.activeSubView = 'inv-po';
       const targetMount = this.rootMount || document.querySelector('#workspace-root-mount') || mount;
       this.render(targetMount, session);
-    });
+    };
+
+    mount.querySelector('#btn-po-create-submit').addEventListener('click', () => submitPO('APPROVED'));
+    mount.querySelector('#btn-po-draft-submit').addEventListener('click', () => submitPO('DRAFT'));
   }
 
   // --- 9. FULL-SCREEN FORM: OPENING STOCK TRANSACTION ---
