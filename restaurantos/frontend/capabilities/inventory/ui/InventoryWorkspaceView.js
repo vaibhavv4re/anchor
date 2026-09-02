@@ -11,6 +11,7 @@ import { inventoryImportController } from '../../../../../businessos/platform/in
 import { categoryImportController } from '../../../../../businessos/platform/inventory/categoryImportController.js';
 import { supplierImportController } from '../../../../../businessos/platform/inventory/supplierImportController.js';
 import { supplierCatalogueController } from '../../../../../businessos/platform/inventory/supplierCatalogueController.js';
+import { inventoryItemModel } from '../../../../../businessos/platform/inventory/inventoryItemModel.js';
 
 export class InventoryWorkspaceView {
   constructor(deps = {}) {
@@ -1417,9 +1418,10 @@ export class InventoryWorkspaceView {
                   const convText = (baseUom.toUpperCase() === purchaseUom.toUpperCase()) ? '1' : `${conv} ${baseUom}/${purchaseUom}`;
                   const reorderVal = Number(i.reorderLevel !== undefined ? i.reorderLevel : (i.reorder_level !== undefined ? i.reorder_level : 0));
                   const reorderText = `${reorderVal.toLocaleString()} ${baseUom}`;
+                  const isAct = i.active !== false;
 
                   return `
-                    <tr style="border-bottom:1px solid var(--border-subtle);">
+                    <tr class="row-master-item-click" data-item-code="${code}" style="border-bottom:1px solid var(--border-subtle); cursor:pointer;">
                       <td style="padding:10px; font-weight:700; font-family:monospace; color:var(--accent-primary);">${code}</td>
                       <td style="padding:10px; font-weight:600;">${name}</td>
                       <td style="padding:10px;"><span class="badge badge-info">${type}</span></td>
@@ -1428,7 +1430,7 @@ export class InventoryWorkspaceView {
                       <td style="padding:10px;"><span class="badge badge-secondary">${purchaseUom}</span></td>
                       <td style="padding:10px; font-weight:600; font-size:0.8rem;">${convText}</td>
                       <td style="padding:10px; font-weight:700; color:var(--status-warning);">${reorderText}</td>
-                      <td style="padding:10px;"><span class="badge badge-success">LIVE SUPABASE</span></td>
+                      <td style="padding:10px;"><span class="badge ${isAct ? 'badge-success' : 'badge-secondary'}">${isAct ? 'ACTIVE' : 'INACTIVE'}</span></td>
                     </tr>
                   `;
                 }).join('')}
@@ -1443,6 +1445,13 @@ export class InventoryWorkspaceView {
 
       const btnExport = mount.querySelector('#btn-inv-master-export');
       if (btnExport) btnExport.addEventListener('click', () => this.handleMasterInventoryExport(tenantId));
+
+      mount.querySelectorAll('.row-master-item-click').forEach(row => {
+        row.addEventListener('click', () => {
+          const itemCode = row.dataset.itemCode;
+          this.openMasterItemDetailDrawer(itemCode, tenantId, mount, session);
+        });
+      });
 
       const btnTemplate = mount.querySelector('#btn-inv-master-template');
       if (btnTemplate) btnTemplate.addEventListener('click', () => this.handleMasterInventoryTemplateDownload());
@@ -6074,6 +6083,330 @@ export class InventoryWorkspaceView {
       });
     }
   }
+
+  // --- MASTER INVENTORY CONTROLLED CRUD & AUDIT DRAWER ---
+
+  openMasterItemDetailDrawer(itemCode, tenantId = 'tenant-demo', parentMount = null, session = null) {
+    const existingDrawer = document.querySelector('#master-item-detail-drawer-overlay');
+    if (existingDrawer) existingDrawer.remove();
+
+    const items = this._getCollection('inventory', tenantId);
+    const item = items.find(i => (i.itemCode || i.item_code || i.sku || i.id || '').toUpperCase() === (itemCode || '').toUpperCase()) || {
+      itemCode,
+      itemName: itemCode,
+      itemType: 'RAW_MATERIAL',
+      categoryCode: 'GENERAL',
+      baseUom: 'KG',
+      purchaseUom: 'KG',
+      conversionFactor: 1,
+      reorderLevel: 10,
+      active: true
+    };
+
+    const code = item.itemCode || item.item_code || itemCode;
+    const name = item.itemName || item.item_name || item.name || code;
+    const type = item.itemType || item.item_type || 'RAW_MATERIAL';
+    const category = item.categoryCode || item.category_code || item.category || 'GENERAL';
+    const baseUom = item.baseUom || item.base_uom || 'KG';
+    const purchaseUom = item.purchaseUom || item.purchase_uom || baseUom;
+    const conv = item.conversionFactor || item.conversion_factor || 1;
+    const reorderLevel = item.reorderLevel !== undefined ? item.reorderLevel : (item.reorder_level || 10);
+    const active = item.active !== false;
+
+    // Derived Product Family
+    const productFamily = category.startsWith('CAT-') ? `FAM-${category.substring(4)}` : 'FAM-GENERAL';
+    const changeHistory = Array.isArray(item.changeHistory) ? item.changeHistory : [];
+
+    const overlay = document.createElement('div');
+    overlay.id = 'master-item-detail-drawer-overlay';
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(15, 23, 42, 0.5); backdrop-filter: blur(4px);
+      display: flex; justify-content: flex-end; z-index: 9999;
+      animation: fadeIn 0.2s ease-out;
+    `;
+
+    overlay.innerHTML = `
+      <div style="background:var(--bg-surface-1); border-left:1px solid var(--border-subtle); width:480px; height:100vh; display:flex; flex-direction:column; overflow:hidden; box-shadow:-10px 0 25px rgba(0,0,0,0.3);">
+        <div style="padding:20px 24px; background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">MASTER INVENTORY ITEM</div>
+            <h3 style="margin:2px 0 0 0; color:var(--accent-primary); font-size:1.2rem;">${name}</h3>
+          </div>
+          <button type="button" id="btn-close-master-drawer" style="background:none; border:none; color:var(--text-muted); font-size:1.4rem; cursor:pointer;">×</button>
+        </div>
+
+        <div style="padding:24px; flex:1; overflow-y:auto; font-size:0.85rem; display:flex; flex-direction:column; gap:16px;">
+          
+          <!-- STATUS & IMMUTABLE CODE HEADER -->
+          <div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface-2); padding:12px; border-radius:6px; border:1px solid var(--border-subtle);">
+            <div>
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">ITEM CODE (IMMUTABLE 🔒)</div>
+              <div style="font-weight:700; font-family:monospace; font-size:1.1rem; color:var(--accent-primary); margin-top:2px;">${code}</div>
+            </div>
+            <span class="badge ${active ? 'badge-success' : 'badge-secondary'}" style="font-size:0.8rem; padding:4px 10px;">${active ? 'ACTIVE' : 'INACTIVE'}</span>
+          </div>
+
+          <!-- IDENTITY SECTION -->
+          <div style="background:var(--bg-surface-2); padding:14px; border-radius:6px; border:1px solid var(--border-subtle); display:flex; flex-direction:column; gap:8px;">
+            <div style="font-weight:700; color:var(--accent-primary); font-size:0.8rem;">IDENTITY & TAXONOMY</div>
+            <div style="display:flex; justify-content:space-between;">
+              <span style="color:var(--text-muted);">Item Name:</span>
+              <strong style="color:var(--text-main);">${name}</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span style="color:var(--text-muted);">Item Type:</span>
+              <span class="badge badge-info">${type}</span>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span style="color:var(--text-muted);">Category Code:</span>
+              <strong>${category}</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span style="color:var(--text-muted);">Derived Product Family:</span>
+              <strong style="color:var(--text-muted);">${productFamily}</strong>
+            </div>
+          </div>
+
+          <!-- UNITS & PACKAGING -->
+          <div style="background:var(--bg-surface-2); padding:14px; border-radius:6px; border:1px solid var(--border-subtle); display:flex; flex-direction:column; gap:8px;">
+            <div style="font-weight:700; color:var(--accent-primary); font-size:0.8rem;">UNITS & CONVERSION</div>
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+              <div>
+                <span style="font-size:0.7rem; color:var(--text-muted); font-weight:700; display:block;">BASE UOM</span>
+                <span class="badge badge-secondary" style="margin-top:2px;">${baseUom}</span>
+              </div>
+              <div>
+                <span style="font-size:0.7rem; color:var(--text-muted); font-weight:700; display:block;">PURCHASE UOM</span>
+                <span class="badge badge-secondary" style="margin-top:2px;">${purchaseUom}</span>
+              </div>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-top:4px;">
+              <span style="color:var(--text-muted);">Conversion Factor:</span>
+              <strong>${conv} ${baseUom} / ${purchaseUom}</strong>
+            </div>
+          </div>
+
+          <!-- PROCUREMENT & REORDER -->
+          <div style="background:var(--bg-surface-2); padding:14px; border-radius:6px; border-left:4px solid var(--status-warning); display:flex; flex-direction:column; gap:8px;">
+            <div style="font-weight:700; color:var(--status-warning); font-size:0.8rem;">PROCUREMENT & THRESHOLDS</div>
+            <div style="display:flex; justify-content:space-between;">
+              <span style="color:var(--text-muted);">Reorder Level:</span>
+              <strong style="color:var(--status-warning); font-size:0.95rem;">${reorderLevel} ${baseUom}</strong>
+            </div>
+          </div>
+
+          <!-- AUDIT TRAIL & CHANGE HISTORY -->
+          <div style="background:var(--bg-surface-2); padding:14px; border-radius:6px; border:1px solid var(--border-subtle); display:flex; flex-direction:column; gap:8px;">
+            <div style="font-weight:700; color:var(--accent-primary); font-size:0.8rem; display:flex; justify-content:space-between;">
+              <span>AUDIT TRAIL & CHANGE HISTORY</span>
+              <span style="font-size:0.7rem; font-weight:600; color:var(--text-muted);">${changeHistory.length} Revisions Logged</span>
+            </div>
+
+            ${changeHistory.length > 0 ? `
+              <div style="max-height:160px; overflow-y:auto; font-size:0.78rem; display:flex; flex-direction:column; gap:6px;">
+                ${changeHistory.map(ch => `
+                  <div style="background:var(--bg-surface-1); padding:8px; border-radius:4px; border-left:2px solid var(--accent-primary);">
+                    <div style="display:flex; justify-content:space-between; color:var(--text-muted); font-size:0.7rem;">
+                      <span>${new Date(ch.timestamp).toLocaleDateString()} ${new Date(ch.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      <span style="font-weight:600;">${ch.changedBy || 'Manager'}</span>
+                    </div>
+                    <div style="color:var(--text-main); font-weight:600; margin-top:2px;">
+                      ${ch.field}: <span style="color:var(--text-muted);">${ch.previousValue}</span> ➔ <span style="color:var(--status-success); font-weight:700;">${ch.newValue}</span>
+                    </div>
+                  </div>
+                `).join('')}
+              </div>
+            ` : `
+              <div style="font-size:0.78rem; color:var(--text-muted);">
+                Item created via master setup import. No manual attribute edits recorded.
+              </div>
+            `}
+          </div>
+        </div>
+
+        <div style="padding:16px 24px; background:var(--bg-surface-2); border-top:1px solid var(--border-subtle); display:flex; gap:10px;">
+          <button type="button" id="btn-edit-master-item-drawer" class="btn-primary" style="flex:1; padding:8px 16px; font-weight:700; background:var(--accent-primary); border:none; border-radius:6px; cursor:pointer; color:#fff;">
+            ✏ Edit Item Attributes
+          </button>
+          <button type="button" id="btn-deactivate-master-item-drawer" class="btn-secondary" style="padding:8px 16px; font-weight:700; cursor:pointer; color:${active ? 'var(--status-danger)' : 'var(--status-success)'}; border-color:${active ? 'var(--status-danger)' : 'var(--status-success)'};">
+            ${active ? 'Deactivate' : 'Activate'}
+          </button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const closeFn = () => overlay.remove();
+    overlay.querySelector('#btn-close-master-drawer').addEventListener('click', closeFn);
+
+    overlay.querySelector('#btn-edit-master-item-drawer').addEventListener('click', () => {
+      overlay.remove();
+      this.renderEditMasterItemModal(code, tenantId, session, parentMount);
+    });
+
+    overlay.querySelector('#btn-deactivate-master-item-drawer').addEventListener('click', async () => {
+      const newActiveState = !active;
+      const confirmMsg = newActiveState 
+        ? `Activate master item "${name}" (${code})?`
+        : `Deactivate master item "${name}" (${code})?\n\nInactive items remain in historical transaction ledgers for reporting but cannot be selected in new POs, recipes, or stock transactions.`;
+
+      if (confirm(confirmMsg)) {
+        inventoryItemModel.updateItem(code, { active: newActiveState }, (session && session.userName) || 'Inventory Manager', tenantId);
+        overlay.remove();
+        if (parentMount) await this.render(parentMount, session);
+      }
+    });
+  }
+
+  renderEditMasterItemModal(itemCode, tenantId = 'tenant-demo', session = null, parentMount = null) {
+    const existingModal = document.querySelector('#edit-master-item-modal-overlay');
+    if (existingModal) existingModal.remove();
+
+    const items = this._getCollection('inventory', tenantId);
+    const item = items.find(i => (i.itemCode || i.item_code || i.sku || i.id || '').toUpperCase() === (itemCode || '').toUpperCase()) || {};
+
+    const code = item.itemCode || item.item_code || itemCode;
+    const name = item.itemName || item.item_name || item.name || '';
+    const type = item.itemType || item.item_type || 'RAW_MATERIAL';
+    const category = item.categoryCode || item.category_code || item.category || 'GENERAL';
+    const baseUom = item.baseUom || item.base_uom || 'KG';
+    const purchaseUom = item.purchaseUom || item.purchase_uom || baseUom;
+    const conv = item.conversionFactor || item.conversion_factor || 1;
+    const reorderLevel = item.reorderLevel !== undefined ? item.reorderLevel : (item.reorder_level || 10);
+
+    const overlay = document.createElement('div');
+    overlay.id = 'edit-master-item-modal-overlay';
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(15, 23, 42, 0.7); backdrop-filter: blur(4px);
+      display: flex; justify-content: center; align-items: center; z-index: 9999;
+      animation: fadeIn 0.2s ease-out;
+    `;
+
+    overlay.innerHTML = `
+      <div style="background:var(--bg-surface-1); border:1px solid var(--border-subtle); border-radius:12px; width:540px; max-width:92vw; overflow:hidden; box-shadow:0 20px 40px rgba(0,0,0,0.4);">
+        <div style="padding:20px 24px; background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <h3 style="margin:0; color:var(--accent-primary); font-size:1.2rem;">✏ Edit Master Inventory Item</h3>
+            <p style="color:var(--text-muted); font-size:0.8rem; margin:2px 0 0 0;">Controlled update with field-level change history audit logging</p>
+          </div>
+          <button type="button" id="btn-close-edit-master-item" style="background:none; border:none; color:var(--text-muted); font-size:1.4rem; cursor:pointer;">×</button>
+        </div>
+        <div style="padding:24px; display:flex; flex-direction:column; gap:14px; font-size:0.85rem;">
+          <div>
+            <label style="font-weight:700; display:block; margin-bottom:4px; color:var(--text-muted);">Item Code (IMMUTABLE 🔒)</label>
+            <input type="text" value="${code}" disabled style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--accent-primary); font-family:monospace; font-weight:700; cursor:not-allowed;" />
+          </div>
+
+          <div>
+            <label style="font-weight:700; display:block; margin-bottom:4px;">Item Name *</label>
+            <input type="text" id="inp-edit-item-name" value="${name}" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);" />
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+            <div>
+              <label style="font-weight:700; display:block; margin-bottom:4px;">Item Type *</label>
+              <select id="sel-edit-item-type" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);">
+                <option value="Raw Material" ${type === 'Raw Material' || type === 'RAW_MATERIAL' ? 'selected' : ''}>Raw Material</option>
+                <option value="Semi Finished" ${type === 'Semi Finished' || type === 'SEMI_FINISHED' ? 'selected' : ''}>Semi Finished</option>
+                <option value="Packaging" ${type === 'Packaging' || type === 'PACKAGING' ? 'selected' : ''}>Packaging</option>
+                <option value="Consumable" ${type === 'Consumable' || type === 'CONSUMABLE' ? 'selected' : ''}>Consumable</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-weight:700; display:block; margin-bottom:4px;">Category Code *</label>
+              <input type="text" id="inp-edit-item-cat" value="${category}" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main); text-transform:uppercase;" />
+            </div>
+          </div>
+
+          <div id="item-type-change-warning" style="display:none; padding:10px; background:rgba(234, 179, 8, 0.1); border-left:3px solid var(--status-warning); border-radius:4px; font-size:0.78rem; color:var(--status-warning);">
+            ⚠ Changing Item Type (e.g. Raw Material ➔ Semi Finished) alters Recipe BOM calculations and production batch rules.
+          </div>
+
+          <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
+            <div>
+              <label style="font-weight:700; display:block; margin-bottom:4px;">Base UOM *</label>
+              <input type="text" id="inp-edit-base-uom" value="${baseUom}" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);" />
+            </div>
+            <div>
+              <label style="font-weight:700; display:block; margin-bottom:4px;">Purchase UOM *</label>
+              <input type="text" id="inp-edit-purchase-uom" value="${purchaseUom}" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);" />
+            </div>
+            <div>
+              <label style="font-weight:700; display:block; margin-bottom:4px;">Conversion *</label>
+              <input type="number" id="inp-edit-conv" value="${conv}" min="0.01" step="0.01" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);" />
+            </div>
+          </div>
+
+          <div>
+            <label style="font-weight:700; display:block; margin-bottom:4px;">Reorder Level Threshold</label>
+            <input type="number" id="inp-edit-reorder" value="${reorderLevel}" min="0" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);" />
+          </div>
+        </div>
+        <div style="padding:16px 24px; background:var(--bg-surface-2); border-top:1px solid var(--border-subtle); display:flex; justify-content:flex-end; gap:10px;">
+          <button type="button" id="btn-cancel-edit-master-item" class="btn-secondary" style="padding:8px 16px; cursor:pointer;">Cancel</button>
+          <button type="button" id="btn-save-edit-master-item" class="btn-primary" style="padding:8px 20px; font-weight:700; background:var(--accent-primary); color:#fff; border:none; border-radius:6px; cursor:pointer;">Save Changes & Audit Log</button>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const closeFn = () => overlay.remove();
+    overlay.querySelector('#btn-close-edit-master-item').addEventListener('click', closeFn);
+    overlay.querySelector('#btn-cancel-edit-master-item').addEventListener('click', closeFn);
+
+    const selType = overlay.querySelector('#sel-edit-item-type');
+    const warningBox = overlay.querySelector('#item-type-change-warning');
+
+    selType.addEventListener('change', () => {
+      if (selType.value !== type) {
+        warningBox.style.display = 'block';
+      } else {
+        warningBox.style.display = 'none';
+      }
+    });
+
+    overlay.querySelector('#btn-save-edit-master-item').addEventListener('click', async () => {
+      const newName = overlay.querySelector('#inp-edit-item-name').value.trim();
+      const newType = selType.value;
+      const newCat = overlay.querySelector('#inp-edit-item-cat').value.trim().toUpperCase();
+      const newBaseUom = overlay.querySelector('#inp-edit-base-uom').value.trim().toUpperCase();
+      const newPurchaseUom = overlay.querySelector('#inp-edit-purchase-uom').value.trim().toUpperCase();
+      const newConv = parseFloat(overlay.querySelector('#inp-edit-conv').value) || 1;
+      const newReorder = parseFloat(overlay.querySelector('#inp-edit-reorder').value) || 0;
+
+      if (!newName || !newCat || !newBaseUom) {
+        alert('Please fill in mandatory fields: Item Name, Category Code, and Base UOM.');
+        return;
+      }
+
+      const updates = {
+        itemName: newName,
+        item_name: newName,
+        itemType: newType,
+        item_type: newType,
+        categoryCode: newCat,
+        category_code: newCat,
+        baseUom: newBaseUom,
+        base_uom: newBaseUom,
+        purchaseUom: newPurchaseUom,
+        purchase_uom: newPurchaseUom,
+        conversionFactor: newConv,
+        conversion_factor: newConv,
+        reorderLevel: newReorder,
+        reorder_level: newReorder
+      };
+
+      inventoryItemModel.updateItem(code, updates, (session && session.userName) || 'Inventory Manager', tenantId);
+
+      overlay.remove();
+      if (parentMount) await this.render(parentMount, session);
+    });
+  }
 }
+
 
 

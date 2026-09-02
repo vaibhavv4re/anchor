@@ -516,6 +516,78 @@ class InventoryItemModel {
     offlineStore.setCollection('inventory_items', store);
     return newItem;
   }
+
+  /**
+   * Controlled Update for Inventory Master Item.
+   * Enforces immutable itemCode policy and logs field-level audit changeHistory.
+   */
+  updateItem(itemCode, updates = {}, userContext = 'Inventory Manager', tenantId = null) {
+    const targetTenantId = this._getTenantId(tenantId);
+    let store = offlineStore.getCollection('inventory') || [];
+    if (!Array.isArray(store) || store.length === 0) {
+      store = offlineStore.getCollection('inventory_items') || [];
+    }
+
+    const idx = store.findIndex(i => (i.itemCode || i.item_code || i.sku || i.id || '').toUpperCase() === (itemCode || '').toUpperCase());
+    if (idx === -1) {
+      throw new Error(`Master inventory item "${itemCode}" not found.`);
+    }
+
+    const existing = store[idx];
+    const changeHistory = Array.isArray(existing.changeHistory) ? [...existing.changeHistory] : [];
+    const fieldChanges = [];
+
+    const fieldLabels = {
+      itemName: 'Item Name',
+      item_name: 'Item Name',
+      itemType: 'Item Type',
+      item_type: 'Item Type',
+      categoryCode: 'Category Code',
+      category_code: 'Category Code',
+      baseUom: 'Base UOM',
+      base_uom: 'Base UOM',
+      purchaseUom: 'Purchase UOM',
+      purchase_uom: 'Purchase UOM',
+      conversionFactor: 'Conversion Factor',
+      reorderLevel: 'Reorder Level',
+      reorder_level: 'Reorder Level',
+      active: 'Status (Active/Inactive)'
+    };
+
+    Object.keys(updates).forEach(key => {
+      if (key === 'itemCode' || key === 'item_code' || key === 'id') return; // IMMUTABLE
+      const oldVal = existing[key];
+      const newVal = updates[key];
+      if (newVal !== undefined && oldVal !== newVal) {
+        fieldChanges.push({
+          timestamp: new Date().toISOString(),
+          field: fieldLabels[key] || key,
+          previousValue: oldVal !== undefined ? String(oldVal) : 'N/A',
+          newValue: String(newVal),
+          changedBy: userContext
+        });
+      }
+    });
+
+    const updatedRecord = {
+      ...existing,
+      ...updates,
+      itemCode: existing.itemCode || existing.item_code || itemCode, // IMMUTABLE LATCH
+      item_code: existing.item_code || existing.itemCode || itemCode, // IMMUTABLE LATCH
+      changeHistory: [...fieldChanges, ...changeHistory],
+      updatedAt: new Date().toISOString()
+    };
+
+    store[idx] = updatedRecord;
+    offlineStore.setCollection('inventory', store);
+    offlineStore.setCollection('inventory_items', store);
+
+    if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.dataGateway) {
+      window.__APP__.platform.dataGateway.update('inventory', existing.id || itemCode, updatedRecord);
+    }
+
+    return updatedRecord;
+  }
 }
 
 export const inventoryItemModel = new InventoryItemModel();
