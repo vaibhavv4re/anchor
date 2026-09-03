@@ -52,19 +52,45 @@ export class InventoryWorkspaceView {
   _getCollection(name, tenantId) {
     try {
       const gw = this._getDataGateway();
+      const localList = offlineStore.getCollection(name, tenantId) || offlineStore.getCollection(name) || [];
+
       if (gw && typeof gw.getCachedCollection === 'function') {
         const targetName = name === 'supplier_catalogue' ? 'supplier_catalog' : name;
-        const cloudList = gw.getCachedCollection(targetName, tenantId);
-        if (Array.isArray(cloudList)) {
-          offlineStore.setCollection(name, cloudList);
-          if (name === 'supplier_catalogue') offlineStore.setCollection('supplier_catalog', cloudList);
-          return cloudList;
+        let cloudList = gw.getCachedCollection(targetName, tenantId);
+
+        if ((!Array.isArray(cloudList) || cloudList.length === 0) && (name === 'goods_receipt_notes' || name === 'goods_received_notes')) {
+          cloudList = gw.getCachedCollection('goods_receipt_notes', tenantId) || gw.getCachedCollection('goods_received_notes', tenantId);
+        }
+
+        if (Array.isArray(cloudList) && cloudList.length > 0) {
+          const mergedMap = new Map();
+          cloudList.forEach(item => {
+            const key = item.id || item.grnNumber || item.grn_number || item.poNumber || item.po_number || item.itemCode || item.code;
+            if (key) mergedMap.set(key, item);
+          });
+          localList.forEach(item => {
+            const key = item.id || item.grnNumber || item.grn_number || item.poNumber || item.po_number || item.itemCode || item.code;
+            if (key && !mergedMap.has(key)) mergedMap.set(key, item);
+          });
+
+          const merged = Array.from(mergedMap.values());
+          offlineStore.setCollection(name, merged);
+          if (name === 'goods_receipt_notes') offlineStore.setCollection('goods_received_notes', merged);
+          if (name === 'supplier_catalogue') offlineStore.setCollection('supplier_catalog', merged);
+          return merged;
+        } else if (Array.isArray(localList) && localList.length > 0) {
+          return localList;
         }
       }
     } catch (e) {
       console.warn(`[InventoryWorkspaceView] Error fetching collection "${name}":`, e);
     }
-    return offlineStore.getCollection(name, tenantId) || offlineStore.getCollection(name) || [];
+    
+    let store = offlineStore.getCollection(name, tenantId) || offlineStore.getCollection(name) || [];
+    if ((!Array.isArray(store) || store.length === 0) && (name === 'goods_receipt_notes' || name === 'goods_received_notes')) {
+      store = offlineStore.getCollection('goods_received_notes', tenantId) || offlineStore.getCollection('goods_received_notes') || offlineStore.getCollection('goods_receipt_notes', tenantId) || offlineStore.getCollection('goods_receipt_notes') || [];
+    }
+    return store;
   }
 
   _getUnifiedCategories(tenantId) {
@@ -161,6 +187,9 @@ export class InventoryWorkspaceView {
         await gw.getCollection('inventory', tenantId);
         await gw.getCollection('suppliers', tenantId);
         await gw.getCollection('inventory_categories', tenantId);
+        await gw.getCollection('goods_receipt_notes', tenantId);
+        await gw.getCollection('goods_received_notes', tenantId);
+        await gw.getCollection('purchase_orders', tenantId);
       }
 
       const items = this._getCollection('inventory', tenantId);
