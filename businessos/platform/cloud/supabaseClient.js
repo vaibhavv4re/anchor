@@ -262,19 +262,16 @@ export function formatRecordForTable(entityName, job) {
     return formatted;
   }
 
-  if (entityName === 'goods_receipt_notes') {
+  if (entityName === 'goods_receipt_notes' || entityName === 'goods_received_notes') {
     const formatted = {};
-    if (p.id) formatted.id = p.id;
-    if (job.tenantId || p.tenantId || p.tenant_id) formatted.tenant_id = job.tenantId || p.tenantId || p.tenant_id;
+    formatted.id = p.id || p.grnNumber || p.grn_number || ('grn-' + Math.random().toString(36).substring(2, 9));
+    formatted.tenant_id = job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf';
     if (p.grnNumber || p.grn_number) formatted.grn_number = p.grnNumber || p.grn_number;
     if (p.poNumber || p.po_number) formatted.po_number = p.poNumber || p.po_number;
     if (p.supplierCode || p.supplier_code) formatted.supplier_code = p.supplierCode || p.supplier_code;
-    if (p.supplierName || p.supplier_name) formatted.supplier_name = p.supplierName || p.supplier_name;
-    if (p.status) formatted.status = p.status;
-    if (p.totalAmount || p.total_amount || p.totalReceivedValue || p.total_received_value) {
-      formatted.total_received_value = parseFloat(p.totalAmount || p.total_amount || p.totalReceivedValue || p.total_received_value) || 0;
-    }
-    if (p.lines || p.data) formatted.data = p;
+    formatted.status = p.status || p.grnStatus || 'POSTED';
+    formatted.total_received_value = parseFloat(p.totalReceivedValue || p.total_received_value || p.totalAmount || p.total_amount || p.supplierInvoiceTotal || 0) || 0;
+    formatted.data = p;
     return formatted;
   }
 

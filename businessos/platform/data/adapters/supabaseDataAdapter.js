@@ -11,6 +11,7 @@ export class SupabaseDataAdapter {
     if (collection === 'supplier_catalogue') return 'supplier_catalog';
     if (collection === 'inventory_items') return 'inventory';
     if (collection === 'categories') return 'inventory_categories';
+    if (collection === 'goods_received_notes') return 'goods_receipt_notes';
     return collection;
   }
 

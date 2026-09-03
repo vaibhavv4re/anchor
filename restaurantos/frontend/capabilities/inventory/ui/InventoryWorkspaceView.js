@@ -1946,7 +1946,7 @@ export class InventoryWorkspaceView {
                   const dcNum = g.deliveryChallanNo || g.delivery_challan_no || 'N/A';
                   const invStatus = g.invoiceStatus || g.invoice_status || (g.supplierInvoiceNo && g.supplierInvoiceNo !== 'NOT_RECEIVED' ? 'RECEIVED' : 'NOT_RECEIVED');
                   const isInvPending = invStatus === 'NOT_RECEIVED';
-                  const receiptVal = parseFloat(g.totalReceivedValue || g.grnTotalValue || g.supplierInvoiceTotal) || 0;
+                  const receiptVal = parseFloat(g.totalReceivedValue || g.total_received_value || g.grnTotalValue || g.supplierInvoiceTotal) || 0;
 
                   return `
                     <tr style="border-bottom:1px solid var(--border-subtle);">
