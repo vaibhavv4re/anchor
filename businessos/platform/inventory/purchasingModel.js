@@ -317,11 +317,48 @@ class PurchasingModel {
    *   - Idempotent via idempotencyKey / grnNumber
    *   - Only acceptedQty creates PURCHASE_RECEIPT stock movement
    *   - Actual invoice price updates WAC & stock valuation
+  /**
+   * Helper: Generate formatted WhatsApp text message for PO sharing
+   */
+  generateWhatsAppPoMessage(po) {
+    if (!po) return '';
+    const poNum = po.poNumber || po.po_number || po.id;
+    const supName = po.supplierName || po.supplier_name || 'Vendor';
+    const deliveryLoc = po.destinationLocationCode || po.destination_location_code || 'Store';
+    const orderDate = po.orderDate || po.order_date || new Date().toISOString().split('T')[0];
+    const totalLines = (po.lines || po.items || []).length;
+    const poValue = (parseFloat(po.grandTotal || po.grand_total || po.total_amount) || 0).toLocaleString('en-IN', { minimumFractionDigits: 2 });
+
+    return `*Purchase Order – Anchor Harbour*\n` +
+      `PO No: *${poNum}*\n` +
+      `Supplier: ${supName}\n` +
+      `Order Date: ${orderDate}\n` +
+      `Delivery Location: ${deliveryLoc}\n` +
+      `Items Count: ${totalLines}\n` +
+      `PO Value: ₹${poValue}\n\n` +
+      `Please confirm receipt of *${poNum}* and expected delivery date.\n` +
+      `⚠️ *Please mention ${poNum} on your delivery challan and invoice.*`;
+  }
+
+  /**
+   * 3. Atomic Goods Received Note (GRN) Posting
+   * Enforces all directives:
+   *   - Validates PO status (APPROVED or PARTIALLY_RECEIVED)
+   *   - Validates remainingQty per line (receivedQty <= remainingQty)
+   *   - Validates balance: acceptedQty + rejectedQty == receivedQty
+   *   - Requires actualInvoicePrice > 0
+   *   - Idempotent via idempotencyKey / grnNumber
+   *   - Only acceptedQty creates PURCHASE_RECEIPT stock movement
+   *   - Actual invoice price updates WAC & stock valuation
+   *   - Decoupled document tracking: deliveryChallanNo & invoiceStatus (NOT_RECEIVED vs RECEIVED)
    *   - Updates PO status (PARTIALLY_RECEIVED vs FULLY_RECEIVED)
    */
   createGoodsReceiptNote({
     poId,
     supplierInvoiceNo = '',
+    deliveryChallanNo = '',
+    hasInvoice = true,
+    invoiceStatus = null,
     receiptDate = new Date().toISOString().split('T')[0],
     supplierInvoiceTotal = 0,
     lines = [],
@@ -337,10 +374,8 @@ class PurchasingModel {
     const grns = offlineStore.getCollection('goods_received_notes') || offlineStore.getCollection('goods_receipt_notes') || [];
     const pos = offlineStore.getCollection('purchase_orders') || [];
 
-    // Validation 1: Supplier Invoice Number required
-    if (!supplierInvoiceNo || !supplierInvoiceNo.trim()) {
-      throw new Error(`Supplier Invoice / Challan Number is required.`);
-    }
+    const computedInvoiceStatus = invoiceStatus || (hasInvoice && supplierInvoiceNo && supplierInvoiceNo !== 'NOT_RECEIVED' ? 'RECEIVED' : 'NOT_RECEIVED');
+    const finalInvoiceNo = (hasInvoice && supplierInvoiceNo && supplierInvoiceNo.trim()) ? supplierInvoiceNo.trim() : 'NOT_RECEIVED';
 
     let po = null;
     if (!isDirectGRN) {
@@ -360,9 +395,9 @@ class PurchasingModel {
     const grnNumber = grnId;
 
     // Idempotency check: prevent duplicate posting
-    const existing = grns.find(g => (g.supplierInvoiceNo === supplierInvoiceNo && g.poId === (po ? po.id : null)) || g.grnNumber === grnId);
+    const existing = grns.find(g => (g.supplierInvoiceNo === finalInvoiceNo && finalInvoiceNo !== 'NOT_RECEIVED' && g.poId === (po ? po.id : null)) || g.grnNumber === grnId);
     if (existing) {
-      console.warn(`[PurchasingModel] Duplicate GRN attempt detected for invoice ${supplierInvoiceNo}. Returning cached record.`);
+      console.warn(`[PurchasingModel] Duplicate GRN attempt detected for invoice ${finalInvoiceNo}. Returning cached record.`);
       return { grn: existing, poStatus: po ? po.status : 'N/A' };
     }
 
@@ -503,7 +538,14 @@ class PurchasingModel {
       supplierCode: po ? po.supplierCode : supplierCode,
       supplierName: po ? po.supplierName : supplierName,
       destinationLocationCode: po ? po.destinationLocationCode : destinationLocationCode,
-      supplierInvoiceNo: supplierInvoiceNo.trim(),
+      deliveryChallanNo: deliveryChallanNo.trim() || 'N/A',
+      delivery_challan_no: deliveryChallanNo.trim() || 'N/A',
+      supplierInvoiceNo: finalInvoiceNo,
+      supplier_invoice_no: finalInvoiceNo,
+      hasInvoice: !!hasInvoice && finalInvoiceNo !== 'NOT_RECEIVED',
+      invoiceStatus: computedInvoiceStatus,
+      invoice_status: computedInvoiceStatus,
+      grnStatus: 'POSTED',
       receiptDate,
       supplierInvoiceTotal: parseFloat(supplierInvoiceTotal) || grnTotalReceivedValue,
       totalReceivedValue: grnTotalReceivedValue,
@@ -546,6 +588,36 @@ class PurchasingModel {
 
     platformEventBus.publish('purchasing:grn:created', grnRecord);
     return { grn: grnRecord, poStatus: updatedPoStatus };
+  }
+
+  /**
+   * Update Invoice Status on a posted GRN (e.g. when Accounting attaches the vendor invoice later)
+   */
+  updateGrnInvoiceStatus(grnId, { invoiceNo, invoiceStatus = 'RECEIVED', invoiceAmount = null }, tenantId = null) {
+    const targetTenantId = this._getTenantId(tenantId);
+    const grns = offlineStore.getCollection('goods_received_notes') || offlineStore.getCollection('goods_receipt_notes') || [];
+    const grn = grns.find(g => g.id === grnId || g.grnNumber === grnId);
+
+    if (!grn) throw new Error(`GRN ${grnId} not found.`);
+
+    grn.supplierInvoiceNo = invoiceNo || grn.supplierInvoiceNo;
+    grn.supplier_invoice_no = invoiceNo || grn.supplier_invoice_no;
+    grn.hasInvoice = true;
+    grn.invoiceStatus = invoiceStatus || 'RECEIVED';
+    grn.invoice_status = invoiceStatus || 'RECEIVED';
+    if (invoiceAmount !== null) grn.supplierInvoiceTotal = parseFloat(invoiceAmount) || grn.supplierInvoiceTotal;
+    grn.updatedAt = new Date().toISOString();
+
+    offlineStore.setCollection('goods_received_notes', grns);
+    offlineStore.setCollection('goods_receipt_notes', grns);
+
+    const gw = this._getDataGateway();
+    if (gw && typeof gw.update === 'function') {
+      gw.update('goods_receipt_notes', grn.id, grn);
+    }
+
+    platformEventBus.publish('purchasing:grn:updated', grn);
+    return grn;
   }
 
   /**

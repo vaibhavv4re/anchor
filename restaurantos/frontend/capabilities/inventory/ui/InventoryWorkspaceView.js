@@ -1889,7 +1889,7 @@ export class InventoryWorkspaceView {
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
             <div>
               <h3 style="font-size:1.4rem; margin:0;">🚚 Goods Receiving Studio (GRN) (${grns.length} Receipts)</h3>
-              <p style="color:var(--text-muted); font-size:0.85rem; margin-top:2px;">Post physical stock receipts and update location <strong>stock_balances</strong> in Supabase.</p>
+              <p style="color:var(--text-muted); font-size:0.85rem; margin-top:2px;">Post physical stock receipts, track delivery challans, and record invoice status for 3-way matching.</p>
             </div>
             <button class="btn-primary nav-inv-btn" data-tab="inv-grn-create" style="padding:10px 18px; font-weight:700; background:linear-gradient(135deg, var(--status-success), #059669); border-radius:6px; border:none; cursor:pointer; color:#fff;">
               📥 + Post Goods Receipt Note (GRN) Screen
@@ -1900,26 +1900,49 @@ export class InventoryWorkspaceView {
               <thead>
                 <tr style="border-bottom:1px solid var(--border-subtle); text-align:left; background:var(--bg-surface-2);">
                   <th style="padding:10px;">GRN #</th>
+                  <th style="padding:10px;">PO #</th>
                   <th style="padding:10px;">Vendor</th>
                   <th style="padding:10px;">Location</th>
                   <th style="padding:10px;">Receipt Date</th>
-                  <th style="padding:10px;">Invoice / Challan #</th>
-                  <th style="padding:10px;">Status</th>
+                  <th style="padding:10px;">Delivery Challan #</th>
+                  <th style="padding:10px;">Invoice Status</th>
+                  <th style="padding:10px; text-align:right;">Receipt Value</th>
+                  <th style="padding:10px; text-align:right;">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                ${grns.length ? grns.map(g => `
-                  <tr style="border-bottom:1px solid var(--border-subtle);">
-                    <td style="padding:10px; font-weight:700; font-family:monospace; color:var(--accent-primary);">${g.grnNumber || g.grn_number || g.id}</td>
-                    <td style="padding:10px; font-weight:600;">${g.supplierName || g.supplier_name || g.supplierCode}</td>
-                    <td style="padding:10px;"><span class="badge badge-info">${g.receivingLocationCode || g.receiving_location_code}</span></td>
-                    <td style="padding:10px;">${g.receivedDate || g.received_date || 'N/A'}</td>
-                    <td style="padding:10px; font-family:monospace;">${g.vendorInvoiceNo || g.vendor_invoice_no || 'N/A'}</td>
-                    <td style="padding:10px;"><span class="badge badge-success">POSTED</span></td>
-                  </tr>
-                `).join('') : `
+                ${grns.length ? grns.map(g => {
+                  const grnId = g.id || g.grnNumber || g.grn_number;
+                  const poNum = g.poNumber || g.po_number || g.poId || 'Direct GRN';
+                  const dcNum = g.deliveryChallanNo || g.delivery_challan_no || 'N/A';
+                  const invStatus = g.invoiceStatus || g.invoice_status || (g.supplierInvoiceNo && g.supplierInvoiceNo !== 'NOT_RECEIVED' ? 'RECEIVED' : 'NOT_RECEIVED');
+                  const isInvPending = invStatus === 'NOT_RECEIVED';
+                  const receiptVal = parseFloat(g.totalReceivedValue || g.grnTotalValue || g.supplierInvoiceTotal) || 0;
+
+                  return `
+                    <tr style="border-bottom:1px solid var(--border-subtle);">
+                      <td style="padding:10px; font-weight:700; font-family:monospace; color:var(--accent-primary);">${g.grnNumber || g.grn_number || g.id}</td>
+                      <td style="padding:10px; font-weight:700; font-family:monospace; color:var(--text-main);">${poNum}</td>
+                      <td style="padding:10px; font-weight:600;">${g.supplierName || g.supplier_name || g.supplierCode}</td>
+                      <td style="padding:10px;"><span class="badge badge-info">${g.destinationLocationCode || g.destination_location_code || g.receivingLocationCode || 'Store'}</span></td>
+                      <td style="padding:10px;">${g.receiptDate || g.receivedDate || g.received_date || 'N/A'}</td>
+                      <td style="padding:10px; font-family:monospace; font-weight:600;">${dcNum}</td>
+                      <td style="padding:10px;">
+                        <span class="badge ${isInvPending ? 'badge-warning' : 'badge-success'}">
+                          ${isInvPending ? '⚠ Invoice Pending' : '✓ Invoice Received'}
+                        </span>
+                      </td>
+                      <td style="padding:10px; text-align:right; font-weight:700; font-family:monospace; color:var(--status-success);">₹${receiptVal.toLocaleString('en-IN', {minimumFractionDigits: 2})}</td>
+                      <td style="padding:10px; text-align:right;">
+                        <button type="button" class="btn-grn-view-drawer" data-grn-id="${grnId}" style="padding:4px 10px; font-size:0.75rem; font-weight:700; border-radius:4px; cursor:pointer; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);">
+                          👁 View GRN
+                        </button>
+                      </td>
+                    </tr>
+                  `;
+                }).join('') : `
                   <tr>
-                    <td colspan="6" style="padding:24px; text-align:center; color:var(--text-muted);">
+                    <td colspan="9" style="padding:24px; text-align:center; color:var(--text-muted);">
                       No GRN receipts posted yet. Click <strong>"+ Post Goods Receipt Note Screen"</strong> to post initial stock receipt.
                     </td>
                   </tr>
@@ -1929,6 +1952,14 @@ export class InventoryWorkspaceView {
           </div>
         </div>
       `;
+
+      // Wire GRN drawer click listeners
+      mount.querySelectorAll('.btn-grn-view-drawer').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const grnId = e.currentTarget.dataset.grnId;
+          this.openGRNDetailDrawer(grnId, tenantId, mount, session);
+        });
+      });
     } else if (tabKey === 'inv-po') {
       mount.innerHTML = `
         <div class="card animate-fade-in" style="background:var(--bg-surface-1); padding:24px; border-radius:8px;">
@@ -4185,7 +4216,28 @@ export class InventoryWorkspaceView {
             <span style="font-size:0.8rem; color:var(--text-muted);">Grand Total:</span>
             <span style="font-size:1.4rem; font-weight:800; color:var(--status-success); margin-left:6px;">₹${(po.grandTotal || po.grand_total || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
           </div>
-          <div style="display:flex; gap:12px;">
+          <div style="display:flex; gap:10px; align-items:center;">
+            <!-- Share PO Dropdown Menu -->
+            <div style="position:relative; display:inline-block;">
+              <button type="button" id="btn-share-po-dropdown" class="btn-primary" style="padding:8px 14px; font-weight:700; background:var(--accent-primary); border:none; border-radius:6px; color:#fff; cursor:pointer; display:flex; align-items:center; gap:6px;">
+                <span>📲 Share PO</span> <span style="font-size:0.7rem;">▼</span>
+              </button>
+              <div id="po-share-menu" style="display:none; position:absolute; bottom:100%; right:0; margin-bottom:6px; width:220px; background:var(--bg-surface-1); border:1px solid var(--border-subtle); border-radius:8px; box-shadow:0 10px 25px rgba(0,0,0,0.5); z-index:100000; overflow:hidden;">
+                <button type="button" id="btn-share-whatsapp" style="width:100%; text-align:left; padding:10px 14px; background:none; border:none; border-bottom:1px solid var(--border-subtle); color:var(--text-main); font-weight:600; font-size:0.85rem; cursor:pointer; display:flex; align-items:center; gap:8px;">
+                  <span>💬</span> Share via WhatsApp
+                </button>
+                <button type="button" id="btn-copy-po-msg" style="width:100%; text-align:left; padding:10px 14px; background:none; border:none; border-bottom:1px solid var(--border-subtle); color:var(--text-main); font-weight:600; font-size:0.85rem; cursor:pointer; display:flex; align-items:center; gap:8px;">
+                  <span>📋</span> Copy Message
+                </button>
+                <button type="button" id="btn-print-po" style="width:100%; text-align:left; padding:10px 14px; background:none; border:none; border-bottom:1px solid var(--border-subtle); color:var(--text-main); font-weight:600; font-size:0.85rem; cursor:pointer; display:flex; align-items:center; gap:8px;">
+                  <span>🖨️</span> Print PO Document
+                </button>
+                <button type="button" id="btn-download-po-summary" style="width:100%; text-align:left; padding:10px 14px; background:none; border:none; color:var(--text-main); font-weight:600; font-size:0.85rem; cursor:pointer; display:flex; align-items:center; gap:8px;">
+                  <span>📥</span> Download PO Summary
+                </button>
+              </div>
+            </div>
+
             <button type="button" id="btn-close-po-drawer-btn" class="btn-secondary" style="padding:8px 16px; border-radius:6px; cursor:pointer;">Close</button>
             ${po.status === 'APPROVED' ? `
               <button type="button" id="btn-drawer-receive-goods" class="btn-primary" style="padding:8px 18px; font-weight:700; background:var(--status-success); border:none; border-radius:6px; color:#fff; cursor:pointer;">
@@ -4208,6 +4260,52 @@ export class InventoryWorkspaceView {
     overlay.querySelector('#btn-close-po-drawer').addEventListener('click', closeDrawer);
     overlay.querySelector('#btn-close-po-drawer-btn').addEventListener('click', closeDrawer);
 
+    // Share Dropdown Logic
+    const btnShareDropdown = overlay.querySelector('#btn-share-po-dropdown');
+    const shareMenu = overlay.querySelector('#po-share-menu');
+    btnShareDropdown.addEventListener('click', (e) => {
+      e.stopPropagation();
+      shareMenu.style.display = shareMenu.style.display === 'none' ? 'block' : 'none';
+    });
+
+    overlay.addEventListener('click', () => {
+      if (shareMenu) shareMenu.style.display = 'none';
+    });
+
+    const waMsg = purchasingModel.generateWhatsAppPoMessage(po);
+
+    overlay.querySelector('#btn-share-whatsapp').addEventListener('click', () => {
+      const waUrl = `https://api.whatsapp.com/send?text=${encodeURIComponent(waMsg)}`;
+      window.open(waUrl, '_blank');
+    });
+
+    overlay.querySelector('#btn-copy-po-msg').addEventListener('click', () => {
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(waMsg);
+        alert(`📋 WhatsApp message for ${po.poNumber || po.id} copied to clipboard!`);
+      } else {
+        alert(waMsg);
+      }
+    });
+
+    overlay.querySelector('#btn-print-po').addEventListener('click', () => {
+      const printWin = window.open('', '_blank');
+      if (printWin) {
+        printWin.document.write(`
+          <html>
+            <head><title>Purchase Order ${po.poNumber || po.id}</title></head>
+            <body style="font-family:monospace; padding:30px; white-space:pre-wrap;">${waMsg}</body>
+          </html>
+        `);
+        printWin.document.close();
+        printWin.print();
+      }
+    });
+
+    overlay.querySelector('#btn-download-po-summary').addEventListener('click', () => {
+      this._triggerDownload(waMsg, `PO_${po.poNumber || po.id}.txt`);
+    });
+
     const btnReceive = overlay.querySelector('#btn-drawer-receive-goods');
     if (btnReceive) {
       btnReceive.addEventListener('click', () => {
@@ -4215,6 +4313,176 @@ export class InventoryWorkspaceView {
         this.activeSubView = 'inv-grn-create';
         this.targetPoForGrn = po.id;
         this.render(mount, session);
+      });
+    }
+  }
+
+  // --- 8B2. GRN DETAIL DRAWER ---
+
+  openGRNDetailDrawer(grnId, tenantId, mount, session) {
+    const grns = offlineStore.getCollection('goods_received_notes') || offlineStore.getCollection('goods_receipt_notes') || [];
+    const grn = grns.find(g => g.id === grnId || g.grnNumber === grnId || g.grn_number === grnId);
+
+    if (!grn) {
+      alert(`❌ Goods Received Note ${grnId} not found.`);
+      return;
+    }
+
+    const existingOverlay = document.querySelector('#grn-detail-drawer-overlay');
+    if (existingOverlay) existingOverlay.remove();
+
+    const lines = grn.lines || grn.receivedItems || [];
+    const poNum = grn.poNumber || grn.po_number || grn.poId || 'Direct GRN';
+    const dcNum = grn.deliveryChallanNo || grn.delivery_challan_no || 'N/A';
+    const invStatus = grn.invoiceStatus || grn.invoice_status || (grn.supplierInvoiceNo && grn.supplierInvoiceNo !== 'NOT_RECEIVED' ? 'RECEIVED' : 'NOT_RECEIVED');
+    const isInvPending = invStatus === 'NOT_RECEIVED';
+
+    const overlay = document.createElement('div');
+    overlay.id = 'grn-detail-drawer-overlay';
+    overlay.style.cssText = `
+      position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+      background: rgba(15, 23, 42, 0.65); backdrop-filter: blur(4px);
+      display: flex; justify-content: flex-end; z-index: 99999;
+      animation: fadeIn 0.2s ease-out;
+    `;
+
+    let totalAcceptedQty = 0;
+    let totalRejectedQty = 0;
+    lines.forEach(l => {
+      totalAcceptedQty += parseFloat(l.acceptedQty !== undefined ? l.acceptedQty : l.receivedQty || 0);
+      totalRejectedQty += parseFloat(l.rejectedQty !== undefined ? l.rejectedQty : 0);
+    });
+
+    overlay.innerHTML = `
+      <div style="background:var(--bg-surface-1); border-left:1px solid var(--border-subtle); width:100%; max-width:680px; height:100vh; display:flex; flex-direction:column; box-shadow:-8px 0 32px rgba(0,0,0,0.5);">
+        <!-- Header -->
+        <div style="padding:20px 24px; border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface-2);">
+          <div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <h3 style="margin:0; font-size:1.4rem; color:var(--text-main); font-family:monospace;">${grn.grnNumber || grn.id}</h3>
+              <span class="badge badge-success" style="font-size:0.8rem; font-weight:700;">POSTED ✓</span>
+            </div>
+            <div style="font-size:0.85rem; color:var(--accent-primary); font-weight:700; margin-top:4px;">
+              ${grn.supplierName || grn.supplier_name || 'Vendor'} • PO: ${poNum}
+            </div>
+          </div>
+          <button type="button" id="btn-close-grn-drawer" style="background:none; border:none; font-size:1.6rem; color:var(--text-muted); cursor:pointer; padding:4px 8px;">✕</button>
+        </div>
+
+        <!-- Document Status Cards -->
+        <div style="padding:16px 24px; background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); display:grid; grid-template-columns:1fr 1fr; gap:16px; font-size:0.85rem;">
+          <div style="background:var(--bg-surface-1); padding:12px; border-radius:6px; border:1px solid var(--border-subtle);">
+            <span style="color:var(--text-muted); display:block; font-size:0.75rem; font-weight:700;">Delivery Document</span>
+            <strong style="color:var(--text-main); font-family:monospace; font-size:0.95rem;">DC #: ${dcNum}</strong>
+            <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Received on ${grn.receiptDate || grn.receivedDate || 'N/A'}</div>
+          </div>
+          <div style="background:var(--bg-surface-1); padding:12px; border-radius:6px; border:1px solid var(--border-subtle);">
+            <span style="color:var(--text-muted); display:block; font-size:0.75rem; font-weight:700;">Supplier Invoice</span>
+            <div style="margin-top:2px;">
+              <span class="badge ${isInvPending ? 'badge-warning' : 'badge-success'}" style="font-size:0.8rem; font-weight:700;">
+                ${isInvPending ? '⚠ Invoice Pending (NOT_RECEIVED)' : `✓ Invoice #${grn.supplierInvoiceNo || grn.supplier_invoice_no}`}
+              </span>
+            </div>
+            <div style="font-size:0.72rem; color:var(--text-muted); margin-top:4px;">
+              ${isInvPending ? 'Physical receipt complete. Awaiting vendor invoice upload from Accounting.' : 'Verified & Matched'}
+            </div>
+          </div>
+        </div>
+
+        <!-- Lines Breakdown Table -->
+        <div style="padding:20px 24px; flex:1; overflow-y:auto;">
+          <h4 style="margin-top:0; margin-bottom:12px; font-size:1rem; color:var(--text-main);">PHYSICAL RECEIPT BREAKDOWN</h4>
+          <table class="data-table" style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border-subtle); text-align:left; background:var(--bg-surface-2);">
+                <th style="padding:8px;">Item</th>
+                <th style="padding:8px; text-align:center;">Ordered</th>
+                <th style="padding:8px; text-align:center;">Received</th>
+                <th style="padding:8px; text-align:center;">Accepted</th>
+                <th style="padding:8px; text-align:center;">Rejected</th>
+                <th style="padding:8px; text-align:right;">Actual Price</th>
+                <th style="padding:8px; text-align:right;">Total</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${lines.map(line => {
+                const recQty = parseFloat(line.receivedQty !== undefined ? line.receivedQty : (line.quantity || 0));
+                const accQty = parseFloat(line.acceptedQty !== undefined ? line.acceptedQty : recQty);
+                const rejQty = parseFloat(line.rejectedQty !== undefined ? line.rejectedQty : 0);
+                const actPrice = parseFloat(line.actualInvoicePrice !== undefined ? line.actualInvoicePrice : (line.unitCost || 0));
+                const lineTotal = line.lineTotal || (accQty * actPrice);
+
+                return `
+                  <tr style="border-bottom:1px solid var(--border-subtle);">
+                    <td style="padding:10px;">
+                      <div style="font-weight:700; color:var(--text-main);">${line.itemName || line.itemCode}</div>
+                      <div style="font-size:0.75rem; font-family:monospace; color:var(--accent-primary);">${line.itemCode}</div>
+                    </td>
+                    <td style="padding:10px; text-align:center; font-weight:600;">${line.orderedQty !== undefined ? line.orderedQty : recQty} ${line.uom || 'KG'}</td>
+                    <td style="padding:10px; text-align:center; font-weight:700;">${recQty}</td>
+                    <td style="padding:10px; text-align:center; color:var(--status-success); font-weight:700;">${accQty}</td>
+                    <td style="padding:10px; text-align:center; color:${rejQty > 0 ? 'var(--status-danger)' : 'var(--text-muted)'}; font-weight:700;">${rejQty}</td>
+                    <td style="padding:10px; text-align:right; font-family:monospace;">₹${actPrice.toFixed(2)}</td>
+                    <td style="padding:10px; text-align:right; font-weight:700; font-family:monospace;">₹${lineTotal.toFixed(2)}</td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+
+          <!-- Stock Balance Audit Callout -->
+          <div style="margin-top:20px; padding:12px 16px; background:rgba(16,185,129,0.1); border:1px solid var(--status-success); border-radius:6px; font-size:0.82rem; color:var(--status-success); font-weight:600; display:flex; align-items:center; gap:8px;">
+            <span>✓</span> Accepted quantity (${totalAcceptedQty} units across ${lines.length} lines) posted to Stock Balances at store location: <strong>${grn.destinationLocationCode || grn.receivingLocationCode || 'Store'}</strong>.
+          </div>
+        </div>
+
+        <!-- Footer Actions -->
+        <div style="padding:16px 24px; border-top:1px solid var(--border-subtle); background:var(--bg-surface-2); display:flex; justify-content:space-between; align-items:center;">
+          <div>
+            <span style="font-size:0.8rem; color:var(--text-muted);">Total Received Value:</span>
+            <span style="font-size:1.4rem; font-weight:800; color:var(--status-success); margin-left:6px;">₹${(parseFloat(grn.totalReceivedValue || grn.supplierInvoiceTotal) || 0).toLocaleString('en-IN', {minimumFractionDigits: 2})}</span>
+          </div>
+          <div style="display:flex; gap:10px;">
+            <button type="button" id="btn-close-grn-drawer-btn" class="btn-secondary" style="padding:8px 16px; border-radius:6px; cursor:pointer;">Close</button>
+            ${grn.poId ? `
+              <button type="button" id="btn-view-linked-po" class="btn-secondary" style="padding:8px 16px; font-weight:700; border-radius:6px; cursor:pointer; background:var(--bg-surface-1); border:1px solid var(--border-subtle); color:var(--accent-primary);">
+                👁 View Linked PO (${poNum})
+              </button>
+            ` : ''}
+            ${isInvPending ? `
+              <button type="button" id="btn-attach-grn-invoice" class="btn-primary" style="padding:8px 18px; font-weight:700; background:var(--accent-primary); border:none; border-radius:6px; color:#fff; cursor:pointer;">
+                📄 Attach Supplier Invoice
+              </button>
+            ` : ''}
+          </div>
+        </div>
+      </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const closeDrawer = () => { overlay.remove(); };
+    overlay.querySelector('#btn-close-grn-drawer').addEventListener('click', closeDrawer);
+    overlay.querySelector('#btn-close-grn-drawer-btn').addEventListener('click', closeDrawer);
+
+    const btnViewPo = overlay.querySelector('#btn-view-linked-po');
+    if (btnViewPo && grn.poId) {
+      btnViewPo.addEventListener('click', () => {
+        closeDrawer();
+        this.openPODetailDrawer(grn.poId, tenantId, mount, session);
+      });
+    }
+
+    const btnAttachInv = overlay.querySelector('#btn-attach-grn-invoice');
+    if (btnAttachInv) {
+      btnAttachInv.addEventListener('click', () => {
+        const invNo = prompt(`Enter Supplier Tax Invoice Number for GRN ${grn.grnNumber || grn.id}:`);
+        if (invNo && invNo.trim()) {
+          purchasingModel.updateGrnInvoiceStatus(grn.id, { invoiceNo: invNo.trim(), invoiceStatus: 'RECEIVED' }, tenantId);
+          alert(`🎉 Invoice ${invNo.trim()} attached to GRN ${grn.grnNumber || grn.id}!`);
+          closeDrawer();
+          this.render(mount, session);
+        }
       });
     }
   }
@@ -4230,6 +4498,7 @@ export class InventoryWorkspaceView {
     this.targetPoForGrn = null; // Clear single-use target
 
     const defaultInvoiceNo = `INV-2026-${Date.now().toString().substring(8)}`;
+    const defaultChallanNo = `DC-2026-${Date.now().toString().substring(8)}`;
     const defaultReceiptDate = new Date().toISOString().split('T')[0];
 
     const renderGrnWorkspace = () => {
@@ -4283,19 +4552,36 @@ export class InventoryWorkspaceView {
 
           <!-- Header Metadata Card -->
           <div style="background:var(--bg-surface-2); padding:16px 20px; border-radius:8px; border:1px solid var(--border-subtle); margin-bottom:24px;">
-            <div style="display:grid; grid-template-columns:1fr 1fr 1fr 1fr; gap:16px;">
+            <div style="display:grid; grid-template-columns:1.2fr 1.2fr 1fr 1fr 1fr; gap:14px; align-items:start;">
               <div>
-                <label style="display:block; font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:4px;">Invoice / Challan # *</label>
+                <label style="display:block; font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:4px;">Delivery Challan / DC # *</label>
+                <input type="text" id="grn-challan-no" value="${defaultChallanNo}" placeholder="e.g. DC-7788" style="width:100%; padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-1); color:var(--text-main); font-weight:700; font-family:monospace;" />
+              </div>
+
+              <div>
+                <label style="display:block; font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:4px;">Supplier Invoice Status</label>
+                <div style="display:flex; gap:12px; margin-top:8px; font-size:0.82rem; font-weight:600;">
+                  <label style="cursor:pointer; display:flex; align-items:center; gap:4px;">
+                    <input type="radio" name="grn-inv-opt" id="opt-inv-yes" value="RECEIVED" checked />
+                    <span>Received</span>
+                  </label>
+                  <label style="cursor:pointer; display:flex; align-items:center; gap:4px;">
+                    <input type="radio" name="grn-inv-opt" id="opt-inv-no" value="NOT_RECEIVED" />
+                    <span style="color:var(--status-warning);">Not Received</span>
+                  </label>
+                </div>
+              </div>
+
+              <div id="box-inv-no">
+                <label style="display:block; font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:4px;">Invoice # *</label>
                 <input type="text" id="grn-invoice-no" value="${defaultInvoiceNo}" placeholder="e.g. INV-2026-88" style="width:100%; padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-1); color:var(--text-main); font-weight:700; font-family:monospace;" />
               </div>
+
               <div>
                 <label style="display:block; font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:4px;">Receipt Date *</label>
                 <input type="date" id="grn-receipt-date" value="${defaultReceiptDate}" style="width:100%; padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-1); color:var(--text-main); font-weight:600;" />
               </div>
-              <div>
-                <label style="display:block; font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:4px;">Supplier Invoice Total (₹)</label>
-                <input type="number" id="grn-invoice-total" value="${po ? (po.grandTotal || po.grand_total || 0) : 0}" step="0.01" style="width:100%; padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-1); color:var(--text-main); font-weight:700;" />
-              </div>
+
               <div>
                 <label style="display:block; font-size:0.8rem; font-weight:700; color:var(--text-muted); margin-bottom:4px;">Received By</label>
                 <input type="text" id="grn-received-by" value="${(session && session.employeeName) || 'Store Manager'}" style="width:100%; padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-1); color:var(--text-main);" />
@@ -4547,18 +4833,48 @@ export class InventoryWorkspaceView {
         updateGrnSidebar();
       }
 
+      // Invoice option radio toggle listeners
+      const radInvYes = mount.querySelector('#opt-inv-yes');
+      const radInvNo = mount.querySelector('#opt-inv-no');
+      const boxInvNo = mount.querySelector('#box-inv-no');
+      const inpInvNo = mount.querySelector('#grn-invoice-no');
+
+      if (radInvYes && radInvNo && boxInvNo) {
+        const syncInvBox = () => {
+          if (radInvNo.checked) {
+            boxInvNo.style.opacity = '0.5';
+            inpInvNo.disabled = true;
+            inpInvNo.value = 'NOT_RECEIVED';
+          } else {
+            boxInvNo.style.opacity = '1';
+            inpInvNo.disabled = false;
+            if (inpInvNo.value === 'NOT_RECEIVED') inpInvNo.value = defaultInvoiceNo;
+          }
+        };
+        radInvYes.addEventListener('change', syncInvBox);
+        radInvNo.addEventListener('change', syncInvBox);
+      }
+
       // Submit Post GRN Handler
       const btnSubmit = mount.querySelector('#btn-post-grn-submit');
       if (btnSubmit) {
         btnSubmit.addEventListener('click', async () => {
           try {
-            const invoiceNo = mount.querySelector('#grn-invoice-no').value;
+            const challanNo = (mount.querySelector('#grn-challan-no') ? mount.querySelector('#grn-challan-no').value : '').trim();
+            const hasInvoice = radInvYes ? radInvYes.checked : true;
+            let invoiceNo = inpInvNo ? inpInvNo.value.trim() : '';
+            if (!hasInvoice) invoiceNo = 'NOT_RECEIVED';
+
             const receiptDate = mount.querySelector('#grn-receipt-date').value;
-            const invoiceTotal = parseFloat(mount.querySelector('#grn-invoice-total').value) || 0;
             const receivedBy = mount.querySelector('#grn-received-by').value;
 
-            if (!invoiceNo || !invoiceNo.trim()) {
-              alert('❌ Supplier Invoice / Challan Number is required.');
+            if (!challanNo) {
+              alert('❌ Delivery Challan Number (DC #) is required.');
+              return;
+            }
+
+            if (hasInvoice && (!invoiceNo || invoiceNo === 'NOT_RECEIVED')) {
+              alert('❌ Supplier Invoice Number is required when Invoice Received is selected.');
               return;
             }
 
@@ -4597,9 +4913,12 @@ export class InventoryWorkspaceView {
 
             const result = purchasingModel.createGoodsReceiptNote({
               poId: po ? po.id : null,
+              deliveryChallanNo: challanNo,
               supplierInvoiceNo: invoiceNo,
+              hasInvoice,
+              invoiceStatus: hasInvoice ? 'RECEIVED' : 'NOT_RECEIVED',
               receiptDate,
-              supplierInvoiceTotal: invoiceTotal,
+              supplierInvoiceTotal: 0,
               lines: grnLinesPayload,
               isDirectGRN,
               directReason: isDirectGRN ? mount.querySelector('#grn-direct-reason').value : '',
@@ -4609,7 +4928,7 @@ export class InventoryWorkspaceView {
               tenantId
             });
 
-            alert(`🎉 Goods Receipt Note ${result.grn.grnNumber} Posted Successfully!\nPO Status Updated to: ${result.poStatus}`);
+            alert(`🎉 Goods Receipt Note ${result.grn.grnNumber} Posted Successfully!\nDelivery Challan: ${challanNo}\nInvoice Status: ${hasInvoice ? 'RECEIVED' : 'NOT_RECEIVED ⚠'}\nPO Status Updated to: ${result.poStatus}`);
             this.activeSubView = 'inv-grn';
             const targetMount = this.rootMount || document.querySelector('#workspace-root-mount') || mount;
             this.render(targetMount, session);
