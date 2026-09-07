@@ -61,15 +61,9 @@ export function startModularApp(options = {}) {
         'production_batches', 'stock_transactions', 'stock_requisitions',
         // Billing & Session domain collections (Cashier & Waiter Realtime Synchronization)
         'table_sessions', 'bill_revisions', 'invoices', 'payments', 'session_audit_logs', 'offline_journal'
-      ])
+      ], 'tenant_h0qc7wf')
         .then(res => {
-          console.log('☁️ [DataGateway] Pre-hydrated 16 domain collections from cloud:', Object.keys(res));
-          // Sync any locally drafted/approved recipes into Supabase
-          import('../../businessos/platform/kitchen/recipeModel.js').then(({ recipeModel }) => {
-            if (recipeModel && typeof recipeModel.syncOfflineRecipesToCloud === 'function') {
-              recipeModel.syncOfflineRecipesToCloud();
-            }
-          }).catch(() => {});
+          console.log('☁️ [DataGateway] Pre-hydrated domain collections from cloud for tenant_h0qc7wf:', Object.keys(res));
         })
         .catch(err => {
           console.warn('⚠️ [DataGateway] Hydration fallback notice:', err.message || err);

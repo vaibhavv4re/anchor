@@ -273,6 +273,55 @@ CREATE TABLE IF NOT EXISTS stock_balances (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 📑 5b. Immutable Inventory Movements Ledger & Operations (K-08 Consumption Engine)
+CREATE TABLE IF NOT EXISTS stock_operations (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  operation_id TEXT NOT NULL,
+  operation_type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'COMPLETED',
+  reference_type TEXT NOT NULL,
+  reference_id TEXT NOT NULL,
+  reference_line_id TEXT,
+  recipe_id TEXT,
+  recipe_version TEXT DEFAULT 'v1.0',
+  occurred_at TIMESTAMPTZ NOT NULL,
+  performed_by TEXT NOT NULL DEFAULT 'System',
+  metadata JSONB DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT uq_stock_op_idempotency UNIQUE (tenant_id, operation_id)
+);
+
+CREATE TABLE IF NOT EXISTS stock_transactions (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  operation_id TEXT NOT NULL,
+  transaction_type TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'POSTED',
+  reference_type TEXT NOT NULL,
+  reference_id TEXT NOT NULL,
+  reference_line_id TEXT,
+  recipe_id TEXT,
+  recipe_version TEXT DEFAULT 'v1.0',
+  reversal_of_operation_id TEXT,
+  reversal_reason TEXT,
+  item_code TEXT NOT NULL,
+  item_name TEXT,
+  location_code TEXT NOT NULL,
+  quantity NUMERIC(12, 4) NOT NULL,
+  uom TEXT NOT NULL,
+  unit_cost NUMERIC(10, 2) NOT NULL,
+  total_cost NUMERIC(12, 2) NOT NULL,
+  performed_by TEXT NOT NULL DEFAULT 'System',
+  correlation_id TEXT,
+  notes TEXT,
+  data JSONB DEFAULT '{}'::jsonb,
+  occurred_at TIMESTAMPTZ NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CONSTRAINT chk_stock_txn_qty CHECK (quantity != 0),
+  CONSTRAINT uq_stock_txn_op_item_loc UNIQUE (tenant_id, operation_id, item_code, location_code)
+);
+
 CREATE TABLE IF NOT EXISTS inventory_requests (
   id TEXT PRIMARY KEY,
   tenant_id TEXT NOT NULL,

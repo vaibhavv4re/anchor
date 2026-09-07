@@ -97,8 +97,7 @@ export class BarWorkspaceView {
   }
 
   getBarDrinkMenuItems() {
-    const allItems = kitchenMenuModel.getAll() || [];
-    return allItems.filter(i => i.productionArea === 'BAR' || i.routing === 'BAR' || i.category === 'BEVERAGES' || i.category === 'BAR' || i.category === 'COCKTAILS' || i.category === 'MOCKTAILS' || i.category === 'BEERS' || (i.category && i.category.includes('WHISKY')));
+    return kitchenMenuModel.getAll(null, { domain: 'BAR' }) || [];
   }
 
   getBarRecipes() {

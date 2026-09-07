@@ -6,6 +6,7 @@
 
 import { offlineStore } from '../offline_store/offlineStore.js';
 import { SCHEMA_VERSION } from './canonicalImportSpec.js';
+import { CategoryRepository } from '../repositories/categoryRepository.js';
 
 export class CanonicalExportEngine {
   /**
@@ -172,16 +173,15 @@ export class CanonicalExportEngine {
       { location_code: 'LOC-BAR', location_name: 'Bar Counter Store', location_type: 'DISPENSE' }
     ];
 
-    const exportFoundationCategories = [
-      { category_code: 'CAT-MEAT', category_name: 'Poultry & Meat', department: 'KITCHEN' },
-      { category_code: 'CAT-SEAFOOD', category_name: 'Fresh Seafood', department: 'KITCHEN' },
-      { category_code: 'CAT-PRODUCE', category_name: 'Vegetables & Herbs', department: 'KITCHEN' },
-      { category_code: 'CAT-DAIRY', category_name: 'Dairy & Cheese', department: 'KITCHEN' },
-      { category_code: 'CAT-GRAINS', category_name: 'Grains, Flour & Pulses', department: 'KITCHEN' },
-      { category_code: 'CAT-SPICES', category_name: 'Spices & Oil', department: 'KITCHEN' },
-      { category_code: 'CAT-BAR', category_name: 'Spirits & Beverages', department: 'BAR' },
-      { category_code: 'CAT-SEMI', category_name: 'Semi-Finished Preps', department: 'PRODUCTION' }
-    ];
+    const catRepo = new CategoryRepository({ offlineStore });
+    const liveCats = catRepo.getAll(tenantId) || [];
+    const exportFoundationCategories = liveCats.map(c => ({
+      category_code: c.categoryCode || c.category_code,
+      category_name: c.categoryName || c.category_name,
+      product_family_code: c.productFamilyCode || c.product_family_code || 'FAM-PRODUCE',
+      product_family_name: c.productFamilyName || c.product_family_name || '',
+      default_uom: c.defaultUom || c.default_uom || 'KG'
+    }));
 
     return {
       manifest,

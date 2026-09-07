@@ -386,6 +386,7 @@ export class ActiveSessionView {
     const modal = new OrderReviewModal({
       sessionId: this.sessionId,
       tableNumber: projection.tableNumber,
+      tableCode: projection.tableCode || projection.table_code || (projection.tableNumber ? `T-${String(projection.tableNumber).padStart(2, '0')}` : 'T-01'),
       draftItems: items || this.draftItems,
       onClose: () => {},
       onOrderConfirmed: (confirmedOrder) => {
@@ -443,15 +444,26 @@ export class ActiveSessionView {
     const finaliseBillBtn = this.container.querySelector('#btn-finalise-bill-cashier');
     if (finaliseBillBtn) {
       finaliseBillBtn.addEventListener('click', () => {
-        const rev = billRevisionModel.createRevision({
-          sessionId: this.sessionId,
-          tableNumber: projection.tableNumber,
-          tableCode: projection.tableCode,
-          items: projection.itemizedList,
-          subtotal: projection.subtotal,
-          waiterId: projection.waiter ? projection.waiter.id : 'emp-waiter',
-          waiterName: projection.waiter ? projection.waiter.name : 'Staff'
-        });
+        if (!projection.itemizedList || projection.itemizedList.length === 0) {
+          alert('⚠️ Cannot generate bill: There are no billable items recorded for this table session.');
+          return;
+        }
+
+        let rev;
+        try {
+          rev = billRevisionModel.createRevision({
+            sessionId: this.sessionId,
+            tableNumber: projection.tableNumber,
+            tableCode: projection.tableCode,
+            items: projection.itemizedList,
+            subtotal: projection.subtotal,
+            waiterId: projection.waiter ? projection.waiter.id : 'emp-waiter',
+            waiterName: projection.waiter ? projection.waiter.name : 'Staff'
+          });
+        } catch (err) {
+          alert(`⚠️ Bill generation blocked: ${err.message}`);
+          return;
+        }
 
         sessionStateMachine.transitionMilestone(this.sessionId, SessionMilestones.BILL_GENERATED);
         tableStateMachine.transitionTableState(projection.tableNumber, PhysicalTableStates.PAYMENT_PENDING);

@@ -46,8 +46,11 @@ import { WaiterWorkspaceView } from './capabilities/guest_service/ui/WaiterWorks
 import { AccountsCaWorkspaceView } from './capabilities/accounting/ui/AccountsCaWorkspaceView.js';
 import { OwnerWorkspaceView } from './capabilities/owner/ui/OwnerWorkspaceView.js';
 import { BarWorkspaceView } from './capabilities/bar/ui/BarWorkspaceView.js';
+import { CashierWorkspaceView } from './capabilities/billing/ui/CashierWorkspaceView.js';
 import { orderModel } from '../../businessos/platform/ordering/orderModel.js';
 import { productionRoutingEngine } from '../../businessos/platform/ordering/productionRoutingEngine.js';
+import { ConnectivityComponent } from '../../businessos/platform/connectivity/connectivityComponent.js';
+import { connectivityManager } from '../../businessos/platform/connectivity/connectivityManager.js';
 
 export class ApplicationShell {
   constructor(deps = {}) {
@@ -64,6 +67,7 @@ export class ApplicationShell {
     this.notificationEngine = deps.notificationEngine || (deps.appDependencies ? deps.appDependencies.notificationEngine : notificationEngine);
     this.rbacEngine = deps.rbacEngine || (deps.appDependencies ? deps.appDependencies.rbacEngine : rbacEngine);
     this.repositories = deps.repositories || (deps.appDependencies ? deps.appDependencies.repositories : null);
+    this.connectivityComponent = new ConnectivityComponent({ connectivityManager });
   }
 
   _getDataGateway() {
@@ -143,6 +147,9 @@ export class ApplicationShell {
 
     this.appEl.innerHTML = `
       <div class="flex-col h-full" style="min-height:100vh;">
+        <!-- Persistent Platform Connectivity Banner -->
+        <div id="connectivity-banner-mount" style="width:100%; display:none;"></div>
+
         <!-- Top Header Controls -->
         <header class="app-header">
           <div class="flex items-center gap-md" style="flex-wrap:wrap;">
@@ -151,6 +158,9 @@ export class ApplicationShell {
           </div>
 
           <div class="flex items-center gap-md" style="flex-wrap:wrap;">
+            <!-- Header Connectivity Status Badge Mount -->
+            <div id="connectivity-status-mount"></div>
+
             <div class="employee-confirm-avatar" style="padding:4px 12px;">
               <img src="${session.avatarUrl || 'https://api.dicebear.com/7.x/avataaars/svg?seed=' + encodeURIComponent(session.employeeName || 'Staff')}" class="employee-avatar-img" alt="${session.employeeName}" style="width:32px; height:32px; border-radius:50%;">
               <div style="font-size:0.875rem;">
@@ -171,6 +181,12 @@ export class ApplicationShell {
     `;
 
     this.bindHeaderEvents();
+    if (this.connectivityComponent) {
+      this.connectivityComponent.mount(
+        this.appEl.querySelector('#connectivity-status-mount'),
+        this.appEl.querySelector('#connectivity-banner-mount')
+      );
+    }
     const rootMount = this.appEl.querySelector('#workspace-root-mount');
 
     const opts = {

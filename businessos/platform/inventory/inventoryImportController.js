@@ -7,11 +7,13 @@
  */
 
 import { offlineStore } from '../offline_store/offlineStore.js';
+import { CategoryRepository } from '../repositories/categoryRepository.js';
 
 export class InventoryImportController {
   constructor(deps = {}) {
     this.dataGateway = deps.dataGateway || (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform ? window.__APP__.platform.dataGateway : null);
     this.offlineStore = deps.offlineStore || offlineStore;
+    this.categoryRepo = deps.categoryRepo || null;
   }
 
   _getDataGateway() {
@@ -87,6 +89,13 @@ export class InventoryImportController {
     return result;
   }
 
+  _getCategoryMaster(tenantId) {
+    if (!this.categoryRepo) {
+      this.categoryRepo = new CategoryRepository({ dataGateway: this._getDataGateway(), offlineStore: this.offlineStore });
+    }
+    return this.categoryRepo.getAll(tenantId) || [];
+  }
+
   /**
    * Validates parsed CSV rows against Frozen Inventory Master Schema rules.
    * @param {Array<Object>} rows 
@@ -100,6 +109,15 @@ export class InventoryImportController {
 
     const existingItems = this._getCollection('inventory', tenantId);
     const existingCodeMap = new Map(existingItems.map(i => [(i.itemCode || i.item_code || i.sku || i.code || i.id || '').toUpperCase(), i]));
+
+    const categories = this._getCategoryMaster(tenantId);
+    const validCategoryMap = new Map();
+    categories.forEach(c => {
+      const code = (c.categoryCode || c.category_code || c.code || '').trim().toUpperCase();
+      const name = (c.categoryName || c.category_name || c.name || '').trim().toUpperCase();
+      if (code) validCategoryMap.set(code, c);
+      if (name) validCategoryMap.set(name, c);
+    });
 
     rows.forEach(row => {
       const rowNum = row._rowNum;
@@ -184,14 +202,35 @@ export class InventoryImportController {
         }
       }
 
-      // 7. Optional Category Warning for NEW records
-      if (!rawCategory && !existing) {
-        warnings.push({
+      // 7. Category Master Validation (Hard Error Enforcement)
+      if (rawCategory) {
+        const matchedCat = validCategoryMap.get(rawCategory.toUpperCase());
+        if (!matchedCat) {
+          const validCodes = Array.from(new Set(categories.map(c => c.categoryCode || c.category_code).filter(Boolean))).join(', ');
+          errors.push({
+            row: rowNum,
+            itemCode: itemCode || 'UNKNOWN',
+            field: 'category',
+            message: `Category "${rawCategory}" does not exist in Category Master. Incoming categories must exist in Category Master prior to import. (Valid: ${validCodes})`
+          });
+        }
+      } else if (!existing) {
+        errors.push({
           row: rowNum,
-          itemCode,
+          itemCode: itemCode || 'UNKNOWN',
           field: 'category',
-          message: 'Category is missing. Defaulted to "GENERAL".'
+          message: 'Missing mandatory category for new inventory record. Category must exist in Category Master.'
         });
+      } else {
+        const exCatCode = String(existing.categoryCode || existing.category_code || existing.category || '').trim().toUpperCase();
+        if (!exCatCode || !validCategoryMap.has(exCatCode)) {
+          errors.push({
+            row: rowNum,
+            itemCode,
+            field: 'category',
+            message: `Existing record has invalid or legacy category "${exCatCode || 'NONE'}". A valid category from Category Master must be provided.`
+          });
+        }
       }
 
       // 8. Reorder Level Numeric Check
@@ -241,6 +280,15 @@ export class InventoryImportController {
     const validation = this.validateRows(rows, tenantId);
     const errorRows = new Set(validation.errors.map(e => e.row));
 
+    const categories = this._getCategoryMaster(tenantId);
+    const validCategoryMap = new Map();
+    categories.forEach(c => {
+      const code = (c.categoryCode || c.category_code || c.code || '').trim().toUpperCase();
+      const name = (c.categoryName || c.category_name || c.name || '').trim().toUpperCase();
+      if (code) validCategoryMap.set(code, c);
+      if (name) validCategoryMap.set(name, c);
+    });
+
     const diff = {
       NEW: [],
       UPDATED: [],
@@ -266,7 +314,8 @@ export class InventoryImportController {
         // NEW Record
         const itemName = rawName;
         const itemType = rawType || 'RAW_MATERIAL';
-        const category = rawCat || 'GENERAL';
+        const matchedCat = validCategoryMap.get(rawCat.toUpperCase());
+        const category = matchedCat ? (matchedCat.categoryCode || matchedCat.category_code) : rawCat;
         const baseUom = rawBaseUom || 'KG';
         const purchaseUom = rawPurchUom || baseUom;
         let convFactor = Number(rawConvFactor || 1);
@@ -287,7 +336,7 @@ export class InventoryImportController {
         // EXISTING Record: Preserve existing values for blank cells
         const exName = existing.itemName || existing.item_name || existing.name || '';
         const exType = existing.itemType || existing.item_type || existing.type || 'RAW_MATERIAL';
-        const exCat = existing.categoryCode || existing.category || 'GENERAL';
+        const exCat = existing.categoryCode || existing.category_code || existing.category || '';
         const exBaseUom = existing.baseUom || existing.base_uom || existing.baseUnit || 'KG';
         const exPurchUom = existing.purchaseUom || existing.purchase_uom || existing.purchaseUnit || exBaseUom;
         const exConv = Number(existing.conversionFactor || existing.conversion_factor || 1);
@@ -297,7 +346,11 @@ export class InventoryImportController {
 
         if (rawName && rawName !== exName) fieldChanges.push({ field: 'Item Name', existing: exName, import: rawName });
         if (rawType && rawType !== exType) fieldChanges.push({ field: 'Item Type', existing: exType, import: rawType });
-        if (rawCat && rawCat !== exCat) fieldChanges.push({ field: 'Category', existing: exCat, import: rawCat });
+        if (rawCat) {
+          const matchedCat = validCategoryMap.get(rawCat.toUpperCase());
+          const targetCat = matchedCat ? (matchedCat.categoryCode || matchedCat.category_code) : rawCat;
+          if (targetCat !== exCat) fieldChanges.push({ field: 'Category', existing: exCat, import: targetCat });
+        }
         if (rawBaseUom && rawBaseUom !== exBaseUom) fieldChanges.push({ field: 'Base UOM', existing: exBaseUom, import: rawBaseUom });
         if (rawPurchUom && rawPurchUom !== exPurchUom) fieldChanges.push({ field: 'Purchase UOM', existing: exPurchUom, import: rawPurchUom });
 
@@ -335,6 +388,7 @@ export class InventoryImportController {
   /**
    * Commits package atomically to live database store.
    * Preserves existing DB values for blank CSV cells on UPDATE records.
+   * Synchronizes category taxonomy with Category Master across SQL columns and data JSONB.
    * @param {Array<Object>} rows 
    * @param {string} tenantId 
    * @returns {Object} Commit report
@@ -348,6 +402,15 @@ export class InventoryImportController {
     const diff = this.generateDiffPreview(rows, tenantId);
     const existingItems = this._getCollection('inventory', tenantId);
     const itemMap = new Map(existingItems.map(i => [(i.itemCode || i.item_code || i.sku || i.code || i.id || '').toUpperCase(), i]));
+
+    const categories = this._getCategoryMaster(tenantId);
+    const validCategoryMap = new Map();
+    categories.forEach(c => {
+      const code = (c.categoryCode || c.category_code || c.code || '').trim().toUpperCase();
+      const name = (c.categoryName || c.category_name || c.name || '').trim().toUpperCase();
+      if (code) validCategoryMap.set(code, c);
+      if (name) validCategoryMap.set(name, c);
+    });
 
     let createdCount = 0;
     let updatedCount = 0;
@@ -365,10 +428,29 @@ export class InventoryImportController {
 
       const existing = itemMap.get(itemCode);
 
+      // Resolve category strictly against Category Master
+      let resolvedCategory = null;
+      if (rawCat && validCategoryMap.has(rawCat.toUpperCase())) {
+        resolvedCategory = validCategoryMap.get(rawCat.toUpperCase());
+      } else if (existing) {
+        const exCatCode = String(existing.categoryCode || existing.category_code || existing.category || '').trim().toUpperCase();
+        if (validCategoryMap.has(exCatCode)) {
+          resolvedCategory = validCategoryMap.get(exCatCode);
+        }
+      }
+
+      if (!resolvedCategory) {
+        throw new Error(`[Atomic Commit Blocked] Cannot resolve category "${rawCat}" against Category Master for item ${itemCode}.`);
+      }
+
+      const catCode = resolvedCategory.categoryCode || resolvedCategory.category_code;
+      const catName = resolvedCategory.categoryName || resolvedCategory.category_name || catCode;
+      const pfCode = resolvedCategory.productFamilyCode || resolvedCategory.product_family_code || 'FAM-SUPPLIES';
+      const pfName = resolvedCategory.productFamilyName || resolvedCategory.product_family_name || pfCode;
+
       // Value Resolution Logic (Preserves Existing Value for Blank CSV Cell)
       const itemName = rawName || (existing ? (existing.itemName || existing.item_name || existing.name) : '');
       const itemType = rawType || (existing ? (existing.itemType || existing.item_type || existing.type) : 'RAW_MATERIAL');
-      const category = rawCat || (existing ? (existing.categoryCode || existing.category) : 'GENERAL');
       const baseUom = rawBaseUom || (existing ? (existing.baseUom || existing.base_uom || existing.baseUnit) : 'KG');
       const purchaseUom = rawPurchUom || (existing ? (existing.purchaseUom || existing.purchase_uom || existing.purchaseUnit) : baseUom);
 
@@ -377,6 +459,16 @@ export class InventoryImportController {
 
       const reorderLevel = rawReorderLevel !== '' ? Number(rawReorderLevel) : (existing ? Number(existing.reorderLevel || existing.reorder_level || 0) : 0);
       const active = rawActive !== '' ? (rawActive.toLowerCase() !== 'false') : (existing ? (existing.active !== false) : true);
+
+      // Synchronize category taxonomy into data JSONB
+      const existingData = (existing && existing.data && typeof existing.data === 'object') ? { ...existing.data } : {};
+      const updatedData = {
+        ...existingData,
+        categoryCode: catCode,
+        categoryName: catName,
+        productFamilyCode: pfCode,
+        productFamilyName: pfName
+      };
 
       const record = {
         id: existing ? existing.id : `inv-${itemCode.toLowerCase()}`,
@@ -391,9 +483,16 @@ export class InventoryImportController {
         itemType,
         item_type: itemType,
         type: itemType,
-        categoryCode: category,
-        category,
-        category_code: category,
+        categoryCode: catCode,
+        category: catCode,
+        category_code: catCode,
+        categoryName: catName,
+        category_name: catName,
+        productFamilyCode: pfCode,
+        product_family_code: pfCode,
+        productFamilyName: pfName,
+        product_family_name: pfName,
+        data: updatedData,
         baseUom,
         base_uom: baseUom,
         baseUnit: baseUom,
@@ -457,9 +556,9 @@ export class InventoryImportController {
    */
   generateTemplateCsv() {
     return 'item_code,item_name,item_type,category,base_uom,purchase_uom,conversion_factor,reorder_level,active\n' +
-      'RM0309,"Onions",RAW_MATERIAL,PRODUCE,KG,BAG,50,20,true\n' +
-      'RM0310,"Tomatoes",RAW_MATERIAL,PRODUCE,KG,CRATE,25,20,true\n' +
-      'RM0409,"Ghee",RAW_MATERIAL,DAIRY,KG,TIN,15,5,true\n';
+      'RM0309,"Onions",RAW_MATERIAL,CAT-VEG,KG,BAG,50,20,true\n' +
+      'RM0310,"Tomatoes",RAW_MATERIAL,CAT-VEG,KG,CRATE,25,20,true\n' +
+      'RM0409,"Ghee",RAW_MATERIAL,CAT-BUTTER,KG,TIN,15,5,true\n';
   }
 
   /**

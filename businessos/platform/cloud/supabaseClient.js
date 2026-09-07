@@ -19,14 +19,70 @@ export class SupabaseClient {
     };
   }
 
+  getFilterKey(tableName, id) {
+    if (tableName === 'tenants') return `tenant_id=eq.${id}`;
+    if (tableName === 'inventory') {
+      return (typeof id === 'string' && id.startsWith('uuid-')) ? `uuid=eq.${id}` : `item_code=eq.${id}`;
+    }
+    if (tableName === 'suppliers') {
+      return (typeof id === 'string' && id.startsWith('sup-')) ? `id=eq.${id}` : `supplier_code=eq.${id}`;
+    }
+    if (tableName === 'goods_receipt_notes' || tableName === 'goods_received_notes') {
+      return (typeof id === 'string' && id.startsWith('grn-')) ? `id=eq.${id}` : `grn_number=eq.${id}`;
+    }
+    if (tableName === 'purchase_orders') {
+      return (typeof id === 'string' && id.startsWith('po-')) ? `id=eq.${id}` : `po_number=eq.${id}`;
+    }
+    if (tableName === 'inventory_categories') {
+      return (typeof id === 'string' && id.startsWith('cat-')) ? `id=eq.${id}` : `category_code=eq.${id}`;
+    }
+    if (tableName === 'product_families') {
+      return (typeof id === 'string' && id.startsWith('pf-')) ? `id=eq.${id}` : `family_code=eq.${id}`;
+    }
+    if (tableName === 'kitchen_menu_items') {
+      return (typeof id === 'string' && id.startsWith('menu-item-')) ? `id=eq.${id}` : `item_code=eq.${id}`;
+    }
+    if (tableName === 'recipes') {
+      return (typeof id === 'string' && id.startsWith('rcp-')) ? `id=eq.${id}` : `recipe_code=eq.${id}`;
+    }
+    if (tableName === 'orders') {
+      return (typeof id === 'string' && id.startsWith('ORD-')) ? `order_number=eq.${id}` : `id=eq.${id}`;
+    }
+    if (tableName === 'bill_revisions') {
+      return (typeof id === 'string' && id.startsWith('BILL-')) ? `bill_number=eq.${id}` : `id=eq.${id}`;
+    }
+    if (tableName === 'invoices') {
+      return (typeof id === 'string' && id.startsWith('inv_')) ? `id=eq.${id}` : `invoice_number=eq.${id}`;
+    }
+    if (tableName === 'stock_transfers') {
+      return (typeof id === 'string' && id.startsWith('trf-')) ? `id=eq.${id}` : `transfer_number=eq.${id}`;
+    }
+    if (tableName === 'stock_issues') {
+      return (typeof id === 'string' && id.startsWith('iss-')) ? `id=eq.${id}` : `issue_number=eq.${id}`;
+    }
+    if (tableName === 'stock_adjustments') {
+      return (typeof id === 'string' && id.startsWith('adj-')) ? `id=eq.${id}` : `adjustment_number=eq.${id}`;
+    }
+    if (tableName === 'stock_counts') {
+      return (typeof id === 'string' && id.startsWith('cnt-')) ? `id=eq.${id}` : `count_number=eq.${id}`;
+    }
+    if (tableName === 'stock_operations') {
+      return (typeof id === 'string' && id.startsWith('op-')) ? `id=eq.${id}` : `operation_id=eq.${id}`;
+    }
+    if (tableName === 'stock_transactions') {
+      return `id=eq.${id}`;
+    }
+    return `id=eq.${id}`;
+  }
+
   async createRecord(tableName, record) {
     return this.upsertRecord(tableName, record);
   }
 
   async updateRecord(tableName, id, patch) {
     try {
-      const filterKey = tableName === 'tenants' ? `tenant_id=eq.${id}` : `id=eq.${id}`;
-      const formatted = formatRecordForTable(tableName, { payload: patch });
+      const filterKey = this.getFilterKey(tableName, id);
+      const formatted = formatPatchForTable(tableName, patch);
 
       const resp = await fetch(`${this.baseUrl}/${tableName}?${filterKey}`, {
         method: 'PATCH',
@@ -36,6 +92,7 @@ export class SupabaseClient {
 
       if (!resp.ok) {
         const errText = await resp.text();
+        console.warn(`[SupabaseClient] updateRecord failed for ${tableName}?${filterKey}: status=${resp.status}`, errText);
         return { success: false, status: resp.status, error: errText };
       }
       
@@ -47,6 +104,7 @@ export class SupabaseClient {
       const resultData = Array.isArray(data) && data.length > 0 ? data[0] : patch;
       return { success: true, data: resultData };
     } catch (e) {
+      console.warn(`[SupabaseClient] updateRecord caught error for ${tableName}:${id}`, e.message);
       return { success: false, error: e.message };
     }
   }
@@ -93,6 +151,24 @@ export class SupabaseClient {
         headers: this.getHeaders()
       });
       if (!resp.ok) return { success: false, status: resp.status };
+      const data = await resp.json();
+      return { success: true, data };
+    } catch (e) {
+      return { success: false, error: e.message };
+    }
+  }
+
+  async rpc(fnName, params = {}) {
+    try {
+      const resp = await fetch(`${this.baseUrl}/rpc/${fnName}`, {
+        method: 'POST',
+        headers: this.getHeaders(),
+        body: JSON.stringify(params)
+      });
+      if (!resp.ok) {
+        const errText = await resp.text();
+        return { success: false, status: resp.status, error: errText };
+      }
       const data = await resp.json();
       return { success: true, data };
     } catch (e) {
@@ -206,15 +282,42 @@ export function formatRecordForTable(entityName, job) {
     };
   }
 
-  if (entityName === 'inventory_categories') {
-    return {
+  if (entityName === 'inventory_categories' || entityName === 'categories') {
+    const pfCode = p.productFamilyCode || p.product_family_code || p.productFamily || 'FAM-PRODUCE';
+    const pfName = p.productFamilyName || p.product_family_name || pfCode;
+    const catCode = p.categoryCode || p.category_code || '';
+    const catName = p.categoryName || p.category_name || '';
+    const catType = p.categoryType || p.category_type || 'OPERATIONAL';
+    const statusVal = p.status || (p.active !== false ? 'ACTIVE' : 'INACTIVE');
+    const uom = p.defaultUom || p.default_uom || p.defaultBaseUom || p.default_base_uom || 'KG';
+    const desc = p.description || '';
+
+    const payloadData = {
       id: p.id || p.uuid || ('cat-' + Math.random().toString(36).substring(2, 7)),
-      tenant_id: job.tenantId || p.tenantId || p.tenant_id || '',
-      category_code: p.categoryCode || p.category_code || '',
-      category_name: p.categoryName || p.category_name || '',
-      product_family_code: p.productFamilyCode || p.product_family_code || p.productFamily || 'FAM-GENERAL',
-      status: p.status || 'ACTIVE',
-      data: p
+      tenantId: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      categoryCode: catCode,
+      category_code: catCode,
+      categoryName: catName,
+      category_name: catName,
+      productFamilyCode: pfCode,
+      product_family_code: pfCode,
+      productFamilyName: pfName,
+      product_family_name: pfName,
+      defaultUom: uom,
+      default_uom: uom,
+      description: desc,
+      status: statusVal,
+      ...(p.data || {})
+    };
+
+    return {
+      id: p.id || p.uuid || payloadData.id,
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      category_code: catCode,
+      category_name: catName,
+      category_type: catType,
+      data: payloadData
     };
   }
 
@@ -275,6 +378,44 @@ export function formatRecordForTable(entityName, job) {
     return formatted;
   }
 
+  if (entityName === 'supplier_invoices') {
+    return {
+      id: p.id || p.supplierInvoiceId || ('sinv-' + Math.random().toString(36).substring(2, 9)),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      invoice_number: p.supplierInvoiceNumber || p.invoice_number || p.invoiceNumber || '',
+      supplier_code: p.supplierCode || p.supplier_code || '',
+      supplier_name: p.supplierName || p.supplier_name || '',
+      po_number: p.poNumber || p.po_number || null,
+      invoice_date: p.invoiceDate || p.invoice_date || new Date().toISOString().split('T')[0],
+      due_date: p.dueDate || p.due_date || null,
+      subtotal: parseFloat(p.subtotal) || 0,
+      tax_amount: parseFloat(p.taxAmount || p.tax_amount) || 0,
+      grand_total: parseFloat(p.grandTotal || p.grand_total) || 0,
+      status: p.status || 'SUBMITTED',
+      match_status: p.matchStatus || p.match_status || 'PENDING',
+      data: p
+    };
+  }
+
+  if (entityName === 'supplier_payments') {
+    return {
+      id: p.id || ('spay-' + Math.random().toString(36).substring(2, 9)),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      payment_number: p.paymentNumber || p.payment_number || ('PAY-AP-' + Math.floor(1000 + Math.random() * 9000)),
+      supplier_invoice_id: p.supplierInvoiceId || p.supplier_invoice_id || '',
+      invoice_number: p.supplierInvoiceNumber || p.invoice_number || '',
+      supplier_code: p.supplierCode || p.supplier_code || '',
+      supplier_name: p.supplierName || p.supplier_name || '',
+      amount: parseFloat(p.amount) || 0,
+      payment_method: p.paymentMethod || p.payment_method || 'BANK_TRANSFER',
+      reference_utr: p.referenceUtr || p.reference_utr || 'N/A',
+      payment_date: p.paymentDate || p.payment_date || new Date().toISOString(),
+      paid_by: p.paidBy || p.paid_by || 'Finance Manager',
+      status: p.status || 'DISBURSED',
+      data: p
+    };
+  }
+
   if (entityName === 'inventory_requests' || entityName === 'stock_requisitions') {
     return {
       id: p.id || ('req-' + Math.random().toString(36).substring(2, 9)),
@@ -287,15 +428,119 @@ export function formatRecordForTable(entityName, job) {
   }
 
   if (entityName === 'stock_balances') {
+    const rawData = p.data || p;
+    const sanitizedData = (rawData && rawData.data && typeof rawData.data === 'object') ? { ...rawData.data, ...rawData } : { ...rawData };
+    delete sanitizedData.data;
+    const qty = parseFloat(p.quantity) || 0;
+    const val = parseFloat(p.valuation) || 0;
+    sanitizedData.quantity = qty;
+    sanitizedData.valuation = val;
+
     return {
       id: p.id || ('sb-' + Math.random().toString(36).substring(2, 7)),
       tenant_id: job.tenantId || p.tenantId || p.tenant_id || '',
       item_code: p.itemCode || p.item_code || '',
       location_code: p.locationCode || p.location_code || '',
-      quantity: parseFloat(p.quantity) || 0,
+      quantity: qty,
       unit_cost: parseFloat(p.unitCost || p.unit_cost) || 0,
-      valuation: parseFloat(p.valuation) || 0,
+      valuation: val,
+      data: sanitizedData
+    };
+  }
+
+  if (entityName === 'stock_transfers') {
+    return {
+      id: p.id || ('trf-' + Math.random().toString(36).substring(2, 9)),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      transfer_number: p.transferNumber || p.transfer_number || p.transferNo || p.transfer_no || ('TRF-' + Date.now()),
+      from_location_code: p.fromLocationCode || p.from_location_code || '',
+      to_location_code: p.toLocationCode || p.to_location_code || '',
+      status: p.status || 'COMPLETED',
       data: p
+    };
+  }
+
+  if (entityName === 'stock_issues') {
+    return {
+      id: p.id || ('iss-' + Math.random().toString(36).substring(2, 9)),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      issue_number: p.issueNumber || p.issue_number || p.issueNo || p.issue_no || ('ISS-' + Date.now()),
+      location_code: p.locationCode || p.location_code || '',
+      department: p.department || 'Kitchen',
+      status: p.status || 'POSTED',
+      data: p
+    };
+  }
+
+  if (entityName === 'stock_adjustments') {
+    return {
+      id: p.id || ('adj-' + Math.random().toString(36).substring(2, 9)),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      adjustment_number: p.adjustmentNumber || p.adjustment_number || p.adjustmentNo || p.adjustment_no || ('ADJ-' + Date.now()),
+      location_code: p.locationCode || p.location_code || '',
+      reason: p.reason || p.reasonCode || p.reason_code || 'AUDIT_VARIANCE',
+      status: p.status || 'POSTED',
+      data: p
+    };
+  }
+
+  if (entityName === 'stock_counts') {
+    return {
+      id: p.id || ('cnt-' + Math.random().toString(36).substring(2, 9)),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      count_number: p.countNumber || p.count_number || p.countNo || p.count_no || ('CNT-' + Date.now()),
+      location_code: p.locationCode || p.location_code || '',
+      status: p.status || 'COMPLETED',
+      data: p
+    };
+  }
+
+  if (entityName === 'stock_operations') {
+    return {
+      id: p.id || ('op-' + Math.random().toString(36).substring(2, 9)),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      operation_id: p.operationId || p.operation_id || ('OP-' + Date.now()),
+      operation_type: p.operationType || p.operation_type || 'SALE_CONSUMPTION',
+      status: p.status || 'COMPLETED',
+      reference_type: p.referenceType || p.reference_type || 'KOT_LINE',
+      reference_id: p.referenceId || p.reference_id || '',
+      reference_line_id: p.referenceLineId || p.reference_line_id || null,
+      recipe_id: p.recipeId || p.recipe_id || null,
+      recipe_version: p.recipeVersion || p.recipe_version || 'v1.0',
+      occurred_at: p.occurredAt || p.occurred_at || new Date().toISOString(),
+      performed_by: p.performedBy || p.performed_by || 'System',
+      metadata: p.metadata || {},
+      created_at: p.createdAt || p.created_at || new Date().toISOString()
+    };
+  }
+
+  if (entityName === 'stock_transactions') {
+    return {
+      id: p.id || ('txn-' + Math.random().toString(36).substring(2, 9)),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      operation_id: p.operationId || p.operation_id || '',
+      transaction_type: p.transactionType || p.transaction_type || 'SALE_CONSUMPTION',
+      status: p.status || 'POSTED',
+      reference_type: p.referenceType || p.reference_type || 'KOT_LINE',
+      reference_id: p.referenceId || p.reference_id || '',
+      reference_line_id: p.referenceLineId || p.reference_line_id || null,
+      recipe_id: p.recipeId || p.recipe_id || null,
+      recipe_version: p.recipeVersion || p.recipe_version || 'v1.0',
+      reversal_of_operation_id: p.reversalOfOperationId || p.reversal_of_operation_id || null,
+      reversal_reason: p.reversalReason || p.reversal_reason || null,
+      item_code: p.itemCode || p.item_code || '',
+      item_name: p.itemName || p.item_name || '',
+      location_code: p.locationCode || p.location_code || '',
+      quantity: parseFloat(p.quantity) || 0,
+      uom: p.uom || 'KG',
+      unit_cost: parseFloat(p.unitCost || p.unit_cost) || 0,
+      total_cost: parseFloat(p.totalCost || p.total_cost) || 0,
+      performed_by: p.performedBy || p.performed_by || 'System',
+      correlation_id: p.correlationId || p.correlation_id || null,
+      notes: p.notes || null,
+      data: p.data || p,
+      occurred_at: p.occurredAt || p.occurred_at || new Date().toISOString(),
+      created_at: p.createdAt || p.created_at || new Date().toISOString()
     };
   }
 
@@ -362,6 +607,25 @@ export function formatRecordForTable(entityName, job) {
   }
 
   if (entityName === 'orders') {
+    const rawData = p.data || p;
+    const sId = p.sessionId || p.session_id || rawData?.sessionId || rawData?.session_id;
+    const orderData = {
+      ...(rawData || {}),
+      sessionId: sId,
+      session_id: sId,
+      tableNumber: p.tableNumber || p.table_number || rawData?.tableNumber,
+      table_number: p.tableNumber || p.table_number || rawData?.table_number,
+      tableCode: p.tableCode || p.table_code || rawData?.tableCode,
+      table_code: p.tableCode || p.table_code || rawData?.table_code,
+      tableId: p.tableId || p.table_id || p.tableCode || p.table_code,
+      table_id: p.tableId || p.table_id || p.tableCode || p.table_code,
+      waiterId: p.waiterId || p.waiter_id || rawData?.waiterId,
+      orderNumber: p.orderNumber || p.order_number || rawData?.orderNumber,
+      order_number: p.orderNumber || p.order_number || rawData?.order_number,
+      items: Array.isArray(p.items) ? p.items : (rawData?.items || []),
+      tickets: Array.isArray(p.tickets) ? p.tickets : (rawData?.tickets || []),
+      status: p.status || p.orderStatus || rawData?.status || 'CONFIRMED'
+    };
     return {
       id: p.id || p.orderId || ('ord-' + Math.random().toString(36).substring(2, 9)),
       tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
@@ -371,7 +635,7 @@ export function formatRecordForTable(entityName, job) {
       status: p.status || p.orderStatus || 'CONFIRMED',
       total_amount: parseFloat(p.totalAmount || p.total_amount || p.subtotal) || 0,
       items: Array.isArray(p.items) ? p.items : (p.data?.items || []),
-      data: p
+      data: orderData
     };
   }
 
@@ -379,7 +643,10 @@ export function formatRecordForTable(entityName, job) {
     return {
       id: p.id || p.sessionId || ('sess_' + Math.random().toString(36).substring(2, 9)),
       tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      table_number: p.tableNumber ? parseInt(p.tableNumber) : (p.table_number ? parseInt(p.table_number) : null),
+      table_code: p.tableCode || p.table_code || (p.tableNumber ? `T-${String(p.tableNumber).padStart(2, '0')}` : null),
       status: p.status || 'GUESTS_SEATED',
+      bill_status: p.billStatus || p.bill_status || 'UNBILLED',
       data: p
     };
   }
@@ -459,4 +726,289 @@ export function formatRecordForTable(entityName, job) {
   }
 
   return p;
+}
+
+/**
+ * Helper mapper to format PATCH payloads (only present fields) per table.
+ */
+export function formatPatchForTable(entityName, patch) {
+  if (!patch || typeof patch !== 'object') return {};
+  
+  const p = patch.payload || patch;
+  const result = {};
+
+  if (p.data !== undefined) result.data = p.data;
+
+  const copyIfPresent = (patchKey, tableCol, transform = (v) => v) => {
+    if (p[patchKey] !== undefined) {
+      result[tableCol] = transform(p[patchKey]);
+    } else if (p[tableCol] !== undefined) {
+      result[tableCol] = transform(p[tableCol]);
+    }
+  };
+
+  if (entityName === 'inventory') {
+    copyIfPresent('uuid', 'uuid');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('itemCode', 'item_code');
+    copyIfPresent('itemName', 'item_name');
+    copyIfPresent('itemType', 'item_type');
+    copyIfPresent('categoryCode', 'category_code');
+    copyIfPresent('baseUom', 'base_uom');
+    copyIfPresent('openingStock', 'opening_stock', v => parseFloat(v) || 0);
+    copyIfPresent('reorderLevel', 'reorder_level', v => parseFloat(v) || 0);
+    copyIfPresent('unitValuation', 'unit_valuation', v => parseFloat(v) || 0);
+    copyIfPresent('defaultLocationCode', 'default_location_code');
+    copyIfPresent('defaultSupplierCode', 'default_supplier_code');
+    copyIfPresent('version', 'version', v => parseInt(v) || 1);
+    copyIfPresent('status', 'status');
+    copyIfPresent('active', 'status', v => (v === false ? 'INACTIVE' : (v === true ? 'ACTIVE' : v)));
+  } else if (entityName === 'tenants') {
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('name', 'name');
+    copyIfPresent('legalName', 'legal_name');
+    copyIfPresent('adminName', 'admin_name');
+    copyIfPresent('adminPin', 'admin_pin');
+    copyIfPresent('profileVersion', 'profile_version');
+  } else if (entityName === 'suppliers') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('supplierCode', 'supplier_code');
+    copyIfPresent('supplierName', 'supplier_name');
+    copyIfPresent('primaryContact', 'primary_contact');
+    copyIfPresent('phone', 'phone');
+    copyIfPresent('email', 'email');
+    copyIfPresent('gstin', 'gstin');
+    copyIfPresent('status', 'status');
+  } else if (entityName === 'purchase_orders') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('poNumber', 'po_number');
+    copyIfPresent('supplierCode', 'supplier_code');
+    copyIfPresent('supplierName', 'supplier_name');
+    copyIfPresent('status', 'status');
+    copyIfPresent('grandTotal', 'total_amount', v => parseFloat(v) || 0);
+    copyIfPresent('totalAmount', 'total_amount', v => parseFloat(v) || 0);
+  } else if (entityName === 'goods_receipt_notes' || entityName === 'goods_received_notes') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('grnNumber', 'grn_number');
+    copyIfPresent('poNumber', 'po_number');
+    copyIfPresent('supplierCode', 'supplier_code');
+    copyIfPresent('status', 'status');
+    copyIfPresent('totalReceivedValue', 'total_received_value', v => parseFloat(v) || 0);
+  } else if (entityName === 'recipes') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('recipeCode', 'recipe_code');
+    copyIfPresent('recipeName', 'recipe_name');
+    copyIfPresent('menuItemId', 'menu_item_id');
+    copyIfPresent('version', 'version');
+    copyIfPresent('status', 'status');
+    copyIfPresent('yieldQuantity', 'yield_quantity', v => parseFloat(v) || 1);
+    copyIfPresent('yieldUom', 'yield_uom');
+    copyIfPresent('portionCount', 'portion_count', v => parseInt(v) || 1);
+    copyIfPresent('totalCost', 'total_cost', v => parseFloat(v) || 0);
+    copyIfPresent('costPerPortion', 'cost_per_portion', v => parseFloat(v) || 0);
+  } else if (entityName === 'stock_balances') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('locationCode', 'location_code');
+    copyIfPresent('itemCode', 'item_code');
+    copyIfPresent('quantity', 'quantity', v => parseFloat(v) || 0);
+    copyIfPresent('unitCost', 'unit_cost', v => parseFloat(v) || 0);
+    copyIfPresent('valuation', 'valuation', v => parseFloat(v) || 0);
+    result.updated_at = new Date().toISOString();
+    // Synchronize embedded data payload and unnest any legacy recursive data wrappers
+    if (result.quantity !== undefined || result.valuation !== undefined) {
+      const rawData = p.data || p;
+      const unnested = (rawData && rawData.data && typeof rawData.data === 'object') ? { ...rawData.data, ...rawData } : { ...rawData };
+      delete unnested.data;
+      result.data = {
+        ...unnested,
+        ...(result.quantity !== undefined ? { quantity: result.quantity } : {}),
+        ...(result.valuation !== undefined ? { valuation: result.valuation } : {})
+      };
+    }
+  } else if (entityName === 'orders') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('orderNumber', 'order_number');
+    copyIfPresent('tableId', 'table_id');
+    copyIfPresent('tableCode', 'table_id');
+    copyIfPresent('waiterId', 'waiter_id');
+    copyIfPresent('orderStatus', 'status');
+    copyIfPresent('status', 'status');
+    copyIfPresent('totalAmount', 'total_amount', v => parseFloat(v) || 0);
+    copyIfPresent('items', 'items');
+    result.data = {
+      ...(p.data || p),
+      ...(result.status ? { status: result.status, orderStatus: result.status } : {}),
+      ...(result.items ? { items: result.items } : {}),
+      ...(p.tickets ? { tickets: p.tickets } : {})
+    };
+  } else if (entityName === 'table_sessions') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('tableNumber', 'table_number', v => parseInt(v) || null);
+    copyIfPresent('tableCode', 'table_code');
+    copyIfPresent('status', 'status');
+    copyIfPresent('billStatus', 'bill_status');
+    result.data = {
+      ...(p.data || p),
+      ...(result.status ? { status: result.status } : {}),
+      ...(result.bill_status ? { billStatus: result.bill_status, bill_status: result.bill_status } : {}),
+      ...(result.table_code ? { tableCode: result.table_code, table_code: result.table_code } : {})
+    };
+  } else if (entityName === 'bill_revisions') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('sessionId', 'session_id');
+    copyIfPresent('billNumber', 'bill_number');
+    copyIfPresent('revisionNumber', 'revision_number', v => parseInt(v) || 1);
+    copyIfPresent('grandTotal', 'grand_total', v => parseFloat(v) || 0);
+    copyIfPresent('revisionStatus', 'revision_status');
+    copyIfPresent('invoiceStatus', 'invoice_status');
+    copyIfPresent('paymentStatus', 'payment_status');
+    result.data = {
+      ...(p.data || p),
+      ...(result.revision_status ? { revisionStatus: result.revision_status, status: result.revision_status } : {}),
+      ...(result.invoice_status ? { invoiceStatus: result.invoice_status } : {}),
+      ...(result.payment_status ? { paymentStatus: result.payment_status } : {})
+    };
+  } else if (entityName === 'orders') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('orderNumber', 'order_number');
+    copyIfPresent('tableId', 'table_id');
+    copyIfPresent('tableCode', 'table_id');
+    copyIfPresent('waiterId', 'waiter_id');
+    copyIfPresent('status', 'status');
+    copyIfPresent('totalAmount', 'total_amount', v => parseFloat(v) || 0);
+    if (p.items !== undefined) result.items = Array.isArray(p.items) ? p.items : (p.data?.items || []);
+    
+    const existingData = (p.data && typeof p.data === 'object') ? p.data : {};
+    const sId = p.sessionId || p.session_id || existingData.sessionId || existingData.session_id;
+    result.data = {
+      ...existingData,
+      ...(sId ? { sessionId: sId, session_id: sId } : {}),
+      ...(p.tableNumber ? { tableNumber: p.tableNumber } : {}),
+      ...(p.tableCode ? { tableCode: p.tableCode } : {}),
+      ...(p.status ? { status: p.status, orderStatus: p.status } : {}),
+      ...(p.items ? { items: p.items } : {}),
+      ...(p.tickets ? { tickets: p.tickets } : {})
+    };
+  } else if (entityName === 'invoices') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('sessionId', 'session_id');
+    copyIfPresent('invoiceNumber', 'invoice_number');
+    copyIfPresent('billNumber', 'bill_number');
+    copyIfPresent('grandTotal', 'grand_total', v => parseFloat(v) || 0);
+    copyIfPresent('status', 'status');
+    result.data = { ...(p.data || p), ...(result.status ? { status: result.status } : {}) };
+  } else if (entityName === 'payments') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('sessionId', 'session_id');
+    copyIfPresent('billNumber', 'bill_number');
+    copyIfPresent('invoiceNumber', 'invoice_number');
+    copyIfPresent('amount', 'amount', v => parseFloat(v) || 0);
+    copyIfPresent('paymentMethod', 'payment_method');
+    copyIfPresent('status', 'status');
+    result.data = { ...(p.data || p), ...(result.status ? { status: result.status } : {}) };
+  } else if (entityName === 'stock_transfers') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('transferNumber', 'transfer_number');
+    copyIfPresent('transferNo', 'transfer_number');
+    copyIfPresent('transfer_no', 'transfer_number');
+    copyIfPresent('fromLocationCode', 'from_location_code');
+    copyIfPresent('toLocationCode', 'to_location_code');
+    copyIfPresent('status', 'status');
+  } else if (entityName === 'stock_issues') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('issueNumber', 'issue_number');
+    copyIfPresent('issueNo', 'issue_number');
+    copyIfPresent('issue_no', 'issue_number');
+    copyIfPresent('locationCode', 'location_code');
+    copyIfPresent('department', 'department');
+    copyIfPresent('status', 'status');
+  } else if (entityName === 'stock_adjustments') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('adjustmentNumber', 'adjustment_number');
+    copyIfPresent('adjustmentNo', 'adjustment_number');
+    copyIfPresent('adjustment_no', 'adjustment_number');
+    copyIfPresent('locationCode', 'location_code');
+    copyIfPresent('reason', 'reason');
+    copyIfPresent('status', 'status');
+  } else if (entityName === 'stock_counts') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('countNumber', 'count_number');
+    copyIfPresent('countNo', 'count_number');
+    copyIfPresent('count_no', 'count_number');
+    copyIfPresent('locationCode', 'location_code');
+    copyIfPresent('status', 'status');
+  } else if (entityName === 'stock_operations') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('operationId', 'operation_id');
+    copyIfPresent('operationType', 'operation_type');
+    copyIfPresent('status', 'status');
+    copyIfPresent('referenceType', 'reference_type');
+    copyIfPresent('referenceId', 'reference_id');
+    copyIfPresent('referenceLineId', 'reference_line_id');
+    copyIfPresent('recipeId', 'recipe_id');
+    copyIfPresent('recipeVersion', 'recipe_version');
+    copyIfPresent('occurredAt', 'occurred_at');
+    copyIfPresent('performedBy', 'performed_by');
+    copyIfPresent('metadata', 'metadata');
+  } else if (entityName === 'stock_transactions') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('operationId', 'operation_id');
+    copyIfPresent('transactionType', 'transaction_type');
+    copyIfPresent('status', 'status');
+    copyIfPresent('itemCode', 'item_code');
+    copyIfPresent('itemName', 'item_name');
+    copyIfPresent('locationCode', 'location_code');
+    copyIfPresent('quantity', 'quantity', v => parseFloat(v) || 0);
+    copyIfPresent('uom', 'uom');
+    copyIfPresent('unitCost', 'unit_cost', v => parseFloat(v) || 0);
+    copyIfPresent('totalCost', 'total_cost', v => parseFloat(v) || 0);
+    copyIfPresent('reversalOfOperationId', 'reversal_of_operation_id');
+    copyIfPresent('reversalReason', 'reversal_reason');
+    copyIfPresent('occurredAt', 'occurred_at');
+    copyIfPresent('performedBy', 'performed_by');
+  } else if (entityName === 'inventory_categories' || entityName === 'categories') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('categoryCode', 'category_code');
+    copyIfPresent('categoryName', 'category_name');
+    copyIfPresent('categoryType', 'category_type');
+    if (p.data !== undefined) {
+      result.data = p.data;
+    } else {
+      const currentData = {};
+      if (p.productFamilyCode || p.product_family_code) currentData.productFamilyCode = p.productFamilyCode || p.product_family_code;
+      if (p.productFamilyName || p.product_family_name) currentData.productFamilyName = p.productFamilyName || p.product_family_name;
+      if (p.defaultUom || p.default_uom) currentData.defaultUom = p.defaultUom || p.default_uom;
+      if (p.status) currentData.status = p.status;
+      if (p.description) currentData.description = p.description;
+      if (Object.keys(currentData).length > 0) result.data = currentData;
+    }
+  } else {
+    Object.keys(p).forEach(k => {
+      result[k] = p[k];
+    });
+  }
+
+  if (Object.keys(result).length === 0) {
+    return { ...p };
+  }
+
+  return result;
 }

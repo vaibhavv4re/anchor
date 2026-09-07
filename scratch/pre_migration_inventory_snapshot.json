@@ -1,0 +1,1766 @@
+[
+  {
+    "item_code": "BAR0001",
+    "item_name": "Red Wine",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0002",
+    "item_name": "White Wine",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0003",
+    "item_name": "Sparkling White",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0004",
+    "item_name": "Glenfiddich 12 Yr Old",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0005",
+    "item_name": "Singleton Luscious 12 Yr Old",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0006",
+    "item_name": "Chivas Regal 12 Yrs",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0007",
+    "item_name": "J.W. Black Label",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0008",
+    "item_name": "J.W. Red Label",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0009",
+    "item_name": "Jack Daniels",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0010",
+    "item_name": "Black Dog Gold",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0011",
+    "item_name": "Teachers Highland",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0012",
+    "item_name": "100 Pipers",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0013",
+    "item_name": "Black & White",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0014",
+    "item_name": "Vat 69",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0015",
+    "item_name": "Ballantine's Finest Scotch",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0016",
+    "item_name": "Jamson",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0017",
+    "item_name": "Blenders Pride Reserve",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0018",
+    "item_name": "Blenders Pride",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0019",
+    "item_name": "Antiquity Blue",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0020",
+    "item_name": "Signature",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0021",
+    "item_name": "Royal Challenge",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0022",
+    "item_name": "Royal Stag",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0023",
+    "item_name": "Imperial Blue",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0024",
+    "item_name": "Monarch Brandy",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0025",
+    "item_name": "Dr. Brandy",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0026",
+    "item_name": "Bombay Sapphire",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0027",
+    "item_name": "Greater Than Londan Dry Gin",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0028",
+    "item_name": "Don Julio Blanco",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0029",
+    "item_name": "Absolute",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0030",
+    "item_name": "Smirnoff No. 21 Red",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0031",
+    "item_name": "Smirnoff Minty Jamun",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0032",
+    "item_name": "Smirnoff Green Apple",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0033",
+    "item_name": "Bacardi White",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0034",
+    "item_name": "Old Monk",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0035",
+    "item_name": "Budweiser Mild",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0036",
+    "item_name": "Kingfisher Ultra",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0037",
+    "item_name": "Kingfisher Mild",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0038",
+    "item_name": "Tuborg",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0039",
+    "item_name": "Heineken",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0040",
+    "item_name": "Hoegarden",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0041",
+    "item_name": "Corona",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0042",
+    "item_name": "London Pilsner",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0043",
+    "item_name": "Budweiser Magnum",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0044",
+    "item_name": "Carlsberg Elephant",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0045",
+    "item_name": "Tuborg Strong",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0046",
+    "item_name": "Kingfisher Strong",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0047",
+    "item_name": "Breezer",
+    "category_code": "CAT-BEV-ALC",
+    "data_categoryCode": "CAT-BEV-ALC",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0048",
+    "item_name": "Bottled Water",
+    "category_code": "CAT-BEV-SOFT",
+    "data_categoryCode": "CAT-BEV-SOFT",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0049",
+    "item_name": "Cold Drink",
+    "category_code": "CAT-BEV-SOFT",
+    "data_categoryCode": "CAT-BEV-SOFT",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "BAR0050",
+    "item_name": "Soda",
+    "category_code": "CAT-BEV-SOFT",
+    "data_categoryCode": "CAT-BEV-SOFT",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "PKG0001",
+    "item_name": "Millet Papads (Jowar, Bajra, Ragi)",
+    "category_code": "CAT-PKG",
+    "data_categoryCode": "CAT-PKG",
+    "data_categoryName": "CAT-PKG",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "PKG0002",
+    "item_name": "Natural Charcoal Briquettes (Grill)",
+    "category_code": "CAT-CONS",
+    "data_categoryCode": "CAT-CONS",
+    "data_categoryName": "CAT-CONS",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0101",
+    "item_name": "Chicken Boneless (Thigh & Breast)",
+    "category_code": "CAT-MEAT",
+    "data_categoryCode": "CAT-MEAT",
+    "data_categoryName": "CAT-MEAT",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0102",
+    "item_name": "Whole Chicken (Curry Cut)",
+    "category_code": "CAT-MEAT",
+    "data_categoryCode": "CAT-MEAT",
+    "data_categoryName": "CAT-MEAT",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0103",
+    "item_name": "Chicken Mince (Keema)",
+    "category_code": "CAT-MEAT",
+    "data_categoryCode": "CAT-MEAT",
+    "data_categoryName": "CAT-MEAT",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0104",
+    "item_name": "Chicken Wings & Lollipops",
+    "category_code": "CAT-MEAT",
+    "data_categoryCode": "CAT-MEAT",
+    "data_categoryName": "CAT-MEAT",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0105",
+    "item_name": "Mutton Curry Cut (Bone-in)",
+    "category_code": "CAT-MEAT",
+    "data_categoryCode": "CAT-MEAT",
+    "data_categoryName": "CAT-MEAT",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0106",
+    "item_name": "Mutton Mince (Keema)",
+    "category_code": "CAT-MEAT",
+    "data_categoryCode": "CAT-MEAT",
+    "data_categoryName": "CAT-MEAT",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0107",
+    "item_name": "Mutton Paya (Trotters for Broth)",
+    "category_code": "CAT-MEAT",
+    "data_categoryCode": "CAT-MEAT",
+    "data_categoryName": "CAT-MEAT",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0201",
+    "item_name": "Bombil / Bombay Duck (Fresh)",
+    "category_code": "CAT-SEAFOOD",
+    "data_categoryCode": "CAT-SEAFOOD",
+    "data_categoryName": "CAT-SEAFOOD",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0202",
+    "item_name": "Surmai / Seer Fish (King Mackerel)",
+    "category_code": "CAT-SEAFOOD",
+    "data_categoryCode": "CAT-SEAFOOD",
+    "data_categoryName": "CAT-SEAFOOD",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0203",
+    "item_name": "Pomfret (Silver / Black)",
+    "category_code": "CAT-SEAFOOD",
+    "data_categoryCode": "CAT-SEAFOOD",
+    "data_categoryName": "CAT-SEAFOOD",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0204",
+    "item_name": "Rawas / Indian Salmon",
+    "category_code": "CAT-SEAFOOD",
+    "data_categoryCode": "CAT-SEAFOOD",
+    "data_categoryName": "CAT-SEAFOOD",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0205",
+    "item_name": "Dadha / Indian Threadfin",
+    "category_code": "CAT-SEAFOOD",
+    "data_categoryCode": "CAT-SEAFOOD",
+    "data_categoryName": "CAT-SEAFOOD",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0206",
+    "item_name": "Tiger Prawns (Cleaned & Deveined)",
+    "category_code": "CAT-SEAFOOD",
+    "data_categoryCode": "CAT-SEAFOOD",
+    "data_categoryName": "CAT-SEAFOOD",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0207",
+    "item_name": "Mud Crab (Live / Cleaned)",
+    "category_code": "CAT-SEAFOOD",
+    "data_categoryCode": "CAT-SEAFOOD",
+    "data_categoryName": "CAT-SEAFOOD",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0208",
+    "item_name": "Rock Lobster (Fresh)",
+    "category_code": "CAT-SEAFOOD",
+    "data_categoryCode": "CAT-SEAFOOD",
+    "data_categoryName": "CAT-SEAFOOD",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0301",
+    "item_name": "Fresh Paneer (Malai)",
+    "category_code": "CAT-DAIRY",
+    "data_categoryCode": "CAT-DAIRY",
+    "data_categoryName": "CAT-DAIRY",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0302",
+    "item_name": "Colocasia Leaves (Alu Leaves)",
+    "category_code": "CAT-PRODUCE",
+    "data_categoryCode": "CAT-PRODUCE",
+    "data_categoryName": "CAT-PRODUCE",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0303",
+    "item_name": "Raw Banana (Kacha Kela)",
+    "category_code": "CAT-PRODUCE",
+    "data_categoryCode": "CAT-PRODUCE",
+    "data_categoryName": "CAT-PRODUCE",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0304",
+    "item_name": "Raw Jackfruit (Phanas)",
+    "category_code": "CAT-PRODUCE",
+    "data_categoryCode": "CAT-PRODUCE",
+    "data_categoryName": "CAT-PRODUCE",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0305",
+    "item_name": "Button Mushrooms",
+    "category_code": "CAT-PRODUCE",
+    "data_categoryCode": "CAT-PRODUCE",
+    "data_categoryName": "CAT-PRODUCE",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0306",
+    "item_name": "Small Brinjal (Vangi)",
+    "category_code": "CAT-PRODUCE",
+    "data_categoryCode": "CAT-PRODUCE",
+    "data_categoryName": "CAT-PRODUCE",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0307",
+    "item_name": "Baby Corn & Cauliflower",
+    "category_code": "CAT-PRODUCE",
+    "data_categoryCode": "CAT-PRODUCE",
+    "data_categoryName": "CAT-PRODUCE",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0308",
+    "item_name": "Sprouted Green Gram (Moong)",
+    "category_code": "CAT-PRODUCE",
+    "data_categoryCode": "CAT-PRODUCE",
+    "data_categoryName": "CAT-PRODUCE",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0309",
+    "item_name": "Red & White Onions",
+    "category_code": "CAT-PRODUCE",
+    "data_categoryCode": "CAT-PRODUCE",
+    "data_categoryName": "CAT-PRODUCE",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0310",
+    "item_name": "Tomatoes (Ripe & Charred)",
+    "category_code": "CAT-PRODUCE",
+    "data_categoryCode": "CAT-PRODUCE",
+    "data_categoryName": "CAT-PRODUCE",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0311",
+    "item_name": "Fresh Herbs (Coriander, Mint, Parsley)",
+    "category_code": "CAT-PRODUCE",
+    "data_categoryCode": "CAT-PRODUCE",
+    "data_categoryName": "CAT-PRODUCE",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0312",
+    "item_name": "Green Chillies & Byadagi Chillies",
+    "category_code": "CAT-PRODUCE",
+    "data_categoryCode": "CAT-PRODUCE",
+    "data_categoryName": "CAT-PRODUCE",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0313",
+    "item_name": "Fresh Coconut (Gratable)",
+    "category_code": "CAT-PRODUCE",
+    "data_categoryCode": "CAT-PRODUCE",
+    "data_categoryName": "CAT-PRODUCE",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0314",
+    "item_name": "Fresh Kokum & Kokum Extract",
+    "category_code": "CAT-PRODUCE",
+    "data_categoryCode": "CAT-PRODUCE",
+    "data_categoryName": "CAT-PRODUCE",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0401",
+    "item_name": "Kolam Rice (Steamed)",
+    "category_code": "CAT-GRAIN",
+    "data_categoryCode": "CAT-GRAIN",
+    "data_categoryName": "CAT-GRAIN",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0402",
+    "item_name": "Indrayani Rice (Sticky)",
+    "category_code": "CAT-GRAIN",
+    "data_categoryCode": "CAT-GRAIN",
+    "data_categoryName": "CAT-GRAIN",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0403",
+    "item_name": "Basmati Rice (Long Grain Biryani)",
+    "category_code": "CAT-GRAIN",
+    "data_categoryCode": "CAT-GRAIN",
+    "data_categoryName": "CAT-GRAIN",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0404",
+    "item_name": "Rice Flour (Tandalachi Pithi)",
+    "category_code": "CAT-GRAIN",
+    "data_categoryCode": "CAT-GRAIN",
+    "data_categoryName": "CAT-GRAIN",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0405",
+    "item_name": "Whole Wheat Atta & Maida",
+    "category_code": "CAT-GRAIN",
+    "data_categoryCode": "CAT-GRAIN",
+    "data_categoryName": "CAT-GRAIN",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0406",
+    "item_name": "Millet Flour Mix (Ragi, Jowar, Bajra)",
+    "category_code": "CAT-GRAIN",
+    "data_categoryCode": "CAT-GRAIN",
+    "data_categoryName": "CAT-GRAIN",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0407",
+    "item_name": "Tur Dal & Yellow Lentils",
+    "category_code": "CAT-GRAIN",
+    "data_categoryCode": "CAT-GRAIN",
+    "data_categoryName": "CAT-GRAIN",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0408",
+    "item_name": "Amul Butter (Unsalted / Salted)",
+    "category_code": "CAT-DAIRY",
+    "data_categoryCode": "CAT-DAIRY",
+    "data_categoryName": "CAT-DAIRY",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0409",
+    "item_name": "Desi Cow Ghee (Pure)",
+    "category_code": "CAT-OIL",
+    "data_categoryCode": "CAT-OIL",
+    "data_categoryName": "CAT-OIL",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0410",
+    "item_name": "Pressed Mustard Oil & Coconut Oil",
+    "category_code": "CAT-OIL",
+    "data_categoryCode": "CAT-OIL",
+    "data_categoryName": "CAT-OIL",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0411",
+    "item_name": "Coconut Milk & Cream",
+    "category_code": "CAT-DAIRY",
+    "data_categoryCode": "CAT-DAIRY",
+    "data_categoryName": "CAT-DAIRY",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0501",
+    "item_name": "Kasundi Mustard Paste",
+    "category_code": "CAT-SPICE",
+    "data_categoryCode": "CAT-SPICE",
+    "data_categoryName": "CAT-SPICE",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0502",
+    "item_name": "Goan Toddy Vinegar / Sugarcane Vinegar",
+    "category_code": "CAT-SPICE",
+    "data_categoryCode": "CAT-SPICE",
+    "data_categoryName": "CAT-SPICE",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0503",
+    "item_name": "Triphal & Whole Black Peppercorns",
+    "category_code": "CAT-SPICE",
+    "data_categoryCode": "CAT-SPICE",
+    "data_categoryName": "CAT-SPICE",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0504",
+    "item_name": "Poppy Seeds (Khas Khas) & Mustard Seeds",
+    "category_code": "CAT-SPICE",
+    "data_categoryCode": "CAT-SPICE",
+    "data_categoryName": "CAT-SPICE",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0601",
+    "item_name": "Goan Poi Breads (Traditional)",
+    "category_code": "CAT-GRAIN",
+    "data_categoryCode": "CAT-GRAIN",
+    "data_categoryName": "CAT-GRAIN",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "RM0701",
+    "item_name": "Potatoes",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0702",
+    "item_name": "Carrots",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0703",
+    "item_name": "Cauliflower",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0704",
+    "item_name": "French Beans",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0705",
+    "item_name": "Spinach",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0706",
+    "item_name": "Cabbage",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0707",
+    "item_name": "Capsicum",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0708",
+    "item_name": "Cucumber",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0709",
+    "item_name": "Radish",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0710",
+    "item_name": "Shallots",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0711",
+    "item_name": "Lemons / Limes",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0712",
+    "item_name": "Fresh Garlic",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0713",
+    "item_name": "Fresh Ginger",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0714",
+    "item_name": "Fresh Curry Leaves",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0715",
+    "item_name": "Fresh Parsley",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0716",
+    "item_name": "Fresh Celery",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0717",
+    "item_name": "Fresh Mint",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0719",
+    "item_name": "Fresh Red Chillies",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0720",
+    "item_name": "Seasonal Mixed Vegetables",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0721",
+    "item_name": "Fresh Colocasia Leaves & Stems",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0722",
+    "item_name": "Young Raw Jackfruit",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0723",
+    "item_name": "Lemongrass",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0724",
+    "item_name": "Fresh Coconut",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0725",
+    "item_name": "Kokum",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0726",
+    "item_name": "Tomatoes",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0727",
+    "item_name": "Ripe Bananas",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0729",
+    "item_name": "Small Brinjal",
+    "category_code": "CAT-VEG",
+    "data_categoryCode": "CAT-VEG",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0730",
+    "item_name": "Fresh Cream",
+    "category_code": "CAT-CHEESE",
+    "data_categoryCode": "CAT-CHEESE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0731",
+    "item_name": "Fresh Curd",
+    "category_code": "CAT-CHEESE",
+    "data_categoryCode": "CAT-CHEESE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0732",
+    "item_name": "Hung Curd",
+    "category_code": "CAT-CHEESE",
+    "data_categoryCode": "CAT-CHEESE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0733",
+    "item_name": "Grated Cheese",
+    "category_code": "CAT-CHEESE",
+    "data_categoryCode": "CAT-CHEESE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0734",
+    "item_name": "Coconut Cream",
+    "category_code": "CAT-CHEESE",
+    "data_categoryCode": "CAT-CHEESE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0740",
+    "item_name": "Besan (Gram Flour)",
+    "category_code": "CAT-RICE",
+    "data_categoryCode": "CAT-RICE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0741",
+    "item_name": "Corn Starch",
+    "category_code": "CAT-RICE",
+    "data_categoryCode": "CAT-RICE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0742",
+    "item_name": "Semolina / Rava",
+    "category_code": "CAT-RICE",
+    "data_categoryCode": "CAT-RICE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0743",
+    "item_name": "Urad Dal",
+    "category_code": "CAT-PULSES",
+    "data_categoryCode": "CAT-PULSES",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0744",
+    "item_name": "Moong Dal",
+    "category_code": "CAT-PULSES",
+    "data_categoryCode": "CAT-PULSES",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0745",
+    "item_name": "Peanuts / Groundnuts",
+    "category_code": "CAT-RICE",
+    "data_categoryCode": "CAT-RICE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0746",
+    "item_name": "Cashew Nuts",
+    "category_code": "CAT-RICE",
+    "data_categoryCode": "CAT-RICE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0747",
+    "item_name": "Sesame Seeds",
+    "category_code": "CAT-SPICE-WHOLE",
+    "data_categoryCode": "CAT-SPICE-WHOLE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0748",
+    "item_name": "Whole Wheat Flour / Atta",
+    "category_code": "CAT-RICE",
+    "data_categoryCode": "CAT-RICE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0749",
+    "item_name": "Maida",
+    "category_code": "CAT-RICE",
+    "data_categoryCode": "CAT-RICE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0750",
+    "item_name": "Jowar Flour",
+    "category_code": "CAT-RICE",
+    "data_categoryCode": "CAT-RICE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0751",
+    "item_name": "Bajra Flour",
+    "category_code": "CAT-RICE",
+    "data_categoryCode": "CAT-RICE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0752",
+    "item_name": "Ragi Flour",
+    "category_code": "CAT-RICE",
+    "data_categoryCode": "CAT-RICE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0760",
+    "item_name": "Cumin Seeds",
+    "category_code": "CAT-SPICE-WHOLE",
+    "data_categoryCode": "CAT-SPICE-WHOLE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0761",
+    "item_name": "Coriander Seeds",
+    "category_code": "CAT-SPICE-WHOLE",
+    "data_categoryCode": "CAT-SPICE-WHOLE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0762",
+    "item_name": "Fennel Seeds",
+    "category_code": "CAT-SPICE-WHOLE",
+    "data_categoryCode": "CAT-SPICE-WHOLE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0763",
+    "item_name": "Mustard Seeds",
+    "category_code": "CAT-SPICE-WHOLE",
+    "data_categoryCode": "CAT-SPICE-WHOLE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0764",
+    "item_name": "Nigella / Kalonji Seeds",
+    "category_code": "CAT-SPICE-WHOLE",
+    "data_categoryCode": "CAT-SPICE-WHOLE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0765",
+    "item_name": "Cloves",
+    "category_code": "CAT-SPICE-WHOLE",
+    "data_categoryCode": "CAT-SPICE-WHOLE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0766",
+    "item_name": "Cinnamon",
+    "category_code": "CAT-SPICE-WHOLE",
+    "data_categoryCode": "CAT-SPICE-WHOLE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0767",
+    "item_name": "Cardamom",
+    "category_code": "CAT-SPICE-WHOLE",
+    "data_categoryCode": "CAT-SPICE-WHOLE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0768",
+    "item_name": "Black Peppercorns",
+    "category_code": "CAT-SPICE-WHOLE",
+    "data_categoryCode": "CAT-SPICE-WHOLE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0770",
+    "item_name": "Hing / Asafoetida",
+    "category_code": "CAT-SPICE-POWDER",
+    "data_categoryCode": "CAT-SPICE-POWDER",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0771",
+    "item_name": "White Pepper Powder",
+    "category_code": "CAT-SPICE-POWDER",
+    "data_categoryCode": "CAT-SPICE-POWDER",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0772",
+    "item_name": "Black Pepper Powder",
+    "category_code": "CAT-SPICE-POWDER",
+    "data_categoryCode": "CAT-SPICE-POWDER",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0773",
+    "item_name": "Turmeric Powder",
+    "category_code": "CAT-SPICE-POWDER",
+    "data_categoryCode": "CAT-SPICE-POWDER",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0774",
+    "item_name": "Byadgi Chilli Powder",
+    "category_code": "CAT-SPICE-POWDER",
+    "data_categoryCode": "CAT-SPICE-POWDER",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0775",
+    "item_name": "Guntur Chilli Powder",
+    "category_code": "CAT-SPICE-POWDER",
+    "data_categoryCode": "CAT-SPICE-POWDER",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0776",
+    "item_name": "Smoked Paprika",
+    "category_code": "CAT-SPICE-POWDER",
+    "data_categoryCode": "CAT-SPICE-POWDER",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0777",
+    "item_name": "Chilli Powder",
+    "category_code": "CAT-SPICE-POWDER",
+    "data_categoryCode": "CAT-SPICE-POWDER",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0778",
+    "item_name": "Aromat / Seasoning Powder",
+    "category_code": "CAT-SPICE-POWDER",
+    "data_categoryCode": "CAT-SPICE-POWDER",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0780",
+    "item_name": "Coconut Oil",
+    "category_code": "CAT-OILS",
+    "data_categoryCode": "CAT-OILS",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0781",
+    "item_name": "Olive Oil",
+    "category_code": "CAT-OILS",
+    "data_categoryCode": "CAT-OILS",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0782",
+    "item_name": "Sugar",
+    "category_code": "CAT-RICE",
+    "data_categoryCode": "CAT-RICE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0783",
+    "item_name": "Jaggery",
+    "category_code": "CAT-RICE",
+    "data_categoryCode": "CAT-RICE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0784",
+    "item_name": "Honey",
+    "category_code": "CAT-DIPS",
+    "data_categoryCode": "CAT-DIPS",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0785",
+    "item_name": "Tamarind",
+    "category_code": "CAT-DIPS",
+    "data_categoryCode": "CAT-DIPS",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0786",
+    "item_name": "Soy Sauce",
+    "category_code": "CAT-DIPS",
+    "data_categoryCode": "CAT-DIPS",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0787",
+    "item_name": "Vinegar",
+    "category_code": "CAT-DIPS",
+    "data_categoryCode": "CAT-DIPS",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0788",
+    "item_name": "Tomato Sauce / Ketchup",
+    "category_code": "CAT-DIPS",
+    "data_categoryCode": "CAT-DIPS",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM0789",
+    "item_name": "Mustard Paste",
+    "category_code": "CAT-DIPS",
+    "data_categoryCode": "CAT-DIPS",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "RM5247",
+    "item_name": "DAL",
+    "category_code": "CAT-RICE",
+    "data_categoryCode": "CAT-RICE",
+    "data_categoryName": "Rice & Staples",
+    "data_productFamilyCode": "FAM-GRAINS",
+    "data_productFamilyName": "Grains, Pulses & Dry Goods"
+  },
+  {
+    "item_code": "RM5712",
+    "item_name": "Rice",
+    "category_code": "CAT-RICE",
+    "data_categoryCode": "CAT-RICE",
+    "data_categoryName": "Rice & Staples",
+    "data_productFamilyCode": "FAM-GRAINS",
+    "data_productFamilyName": "Grains, Pulses & Dry Goods"
+  },
+  {
+    "item_code": "SF0001",
+    "item_name": "Signature Damao Masala Paste",
+    "category_code": "CAT-PREP",
+    "data_categoryCode": "CAT-PREP",
+    "data_categoryName": "CAT-PREP",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "SF0002",
+    "item_name": "Goan Recheado Red Spice Paste",
+    "category_code": "CAT-PREP",
+    "data_categoryCode": "CAT-PREP",
+    "data_categoryName": "CAT-PREP",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "SF0003",
+    "item_name": "Goan Green Cafreal Herb Marinade",
+    "category_code": "CAT-PREP",
+    "data_categoryCode": "CAT-PREP",
+    "data_categoryName": "CAT-PREP",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "SF0004",
+    "item_name": "Mangalorean Ghee Roast Masala",
+    "category_code": "CAT-PREP",
+    "data_categoryCode": "CAT-PREP",
+    "data_categoryName": "CAT-PREP",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "SF0005",
+    "item_name": "Goan Xacuti Roasted Coconut Masala",
+    "category_code": "CAT-PREP",
+    "data_categoryCode": "CAT-PREP",
+    "data_categoryName": "CAT-PREP",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "SF0006",
+    "item_name": "Malvani Roasted Coconut Rassa Base",
+    "category_code": "CAT-PREP",
+    "data_categoryCode": "CAT-PREP",
+    "data_categoryName": "CAT-PREP",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "SF0007",
+    "item_name": "Signature House Green Dip (Molho Verde)",
+    "category_code": "CAT-PREP",
+    "data_categoryCode": "CAT-PREP",
+    "data_categoryName": "CAT-PREP",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "SF0008",
+    "item_name": "Signature House Red Pepper Dip",
+    "category_code": "CAT-PREP",
+    "data_categoryCode": "CAT-PREP",
+    "data_categoryName": "CAT-PREP",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "SF0009",
+    "item_name": "Signature Mustard Coconut Dip",
+    "category_code": "CAT-PREP",
+    "data_categoryCode": "CAT-PREP",
+    "data_categoryName": "CAT-PREP",
+    "data_productFamilyCode": "FAM-PRODUCE",
+    "data_productFamilyName": "Fruits & Vegetables"
+  },
+  {
+    "item_code": "SF0010",
+    "item_name": "Chicken Broth",
+    "category_code": "CAT-BROTH",
+    "data_categoryCode": "CAT-BROTH",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "SF0011",
+    "item_name": "Paya / Mutton Broth",
+    "category_code": "CAT-BROTH",
+    "data_categoryCode": "CAT-BROTH",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "SF0012",
+    "item_name": "Seafood Broth",
+    "category_code": "CAT-BROTH",
+    "data_categoryCode": "CAT-BROTH",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "SF0013",
+    "item_name": "Signature Batter Mix",
+    "category_code": "CAT-MASALA-BASE",
+    "data_categoryCode": "CAT-MASALA-BASE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "SF0014",
+    "item_name": "Cucumber Slaw",
+    "category_code": "CAT-SALADS",
+    "data_categoryCode": "CAT-SALADS",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "SF0015",
+    "item_name": "Kachumber Salad",
+    "category_code": "CAT-SALADS",
+    "data_categoryCode": "CAT-SALADS",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "SF0016",
+    "item_name": "Onion Salad",
+    "category_code": "CAT-SALADS",
+    "data_categoryCode": "CAT-SALADS",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "SF0017",
+    "item_name": "Harbour Salad",
+    "category_code": "CAT-SALADS",
+    "data_categoryCode": "CAT-SALADS",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "SF0018",
+    "item_name": "Pickled Onion & Radish Slaw",
+    "category_code": "CAT-SALADS",
+    "data_categoryCode": "CAT-SALADS",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "SF0019",
+    "item_name": "Balchao Glaze",
+    "category_code": "CAT-MASALA-BASE",
+    "data_categoryCode": "CAT-MASALA-BASE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "SF0020",
+    "item_name": "Damao Masala",
+    "category_code": "CAT-MASALA-BASE",
+    "data_categoryCode": "CAT-MASALA-BASE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "SF0021",
+    "item_name": "Cafreal Masala / Marinade",
+    "category_code": "CAT-MASALA-BASE",
+    "data_categoryCode": "CAT-MASALA-BASE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "SF0022",
+    "item_name": "Ghee Roast Masala",
+    "category_code": "CAT-MASALA-BASE",
+    "data_categoryCode": "CAT-MASALA-BASE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "SF0023",
+    "item_name": "Xacuti Masala",
+    "category_code": "CAT-MASALA-BASE",
+    "data_categoryCode": "CAT-MASALA-BASE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  },
+  {
+    "item_code": "SF0024",
+    "item_name": "Malvani Rassa Base",
+    "category_code": "CAT-MASALA-BASE",
+    "data_categoryCode": "CAT-MASALA-BASE",
+    "data_categoryName": null,
+    "data_productFamilyCode": null,
+    "data_productFamilyName": null
+  }
+]

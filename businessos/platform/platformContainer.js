@@ -5,10 +5,13 @@ import { getDeviceId, attachStandardMetadata } from './metadata/entityMetadata.j
 import { OfflineJournal } from './sync/offlineJournal.js';
 import { UOM_REGISTRY } from './uom/uomRegistry.js';
 import { UomConversionEngine } from './uom/uomConversionEngine.js';
+import { platformEventBus } from './events/platformEvents.js';
+import { offlineStore as defaultOfflineStore } from './offline_store/offlineStore.js';
 
 import { DataGateway } from './data/dataGateway.js';
 import { SupabaseRealtime } from './realtime/supabaseRealtime.js';
 import { IdentityModel } from './identity/identityModel.js';
+import { connectivityManager } from './connectivity/connectivityManager.js';
 
 import { CategoryRepository } from './repositories/categoryRepository.js';
 import { GoodsReceiptRepository } from './repositories/goodsReceiptRepository.js';
@@ -34,8 +37,10 @@ import { UomRepository } from './repositories/uomRepository.js';
  */
 export class PlatformContainer {
   constructor(config = {}) {
-    const storeInstance = config.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : null);
+    const storeInstance = config.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : defaultOfflineStore);
     const deviceId = config.getDeviceId || getDeviceId;
+
+    this.eventBus = config.eventBus || platformEventBus;
 
     const journalInstance = config.offlineJournal ||
       (storeInstance ? new OfflineJournal(storeInstance, deviceId) :
@@ -69,6 +74,9 @@ export class PlatformContainer {
     };
 
     this.realtime = config.realtime || new SupabaseRealtime(config.realtimeConfig || {});
+    if (this.realtime && typeof this.realtime.setEventBus === 'function') {
+      this.realtime.setEventBus(this.eventBus);
+    }
 
     this.dataGateway = config.dataGateway || new DataGateway({
       cloudAdapter: config.cloudAdapter,
@@ -84,6 +92,8 @@ export class PlatformContainer {
       dataGateway: this.dataGateway,
       offlineStore: this.services.offlineStore
     });
+
+    this.connectivityManager = config.connectivityManager || connectivityManager;
 
     if (config.autoInitRepositories !== false) {
       this.initRepositories(config.repositories);

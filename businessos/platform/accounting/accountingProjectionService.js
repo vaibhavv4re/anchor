@@ -17,6 +17,8 @@ import { paymentModel } from '../billing/paymentModel.js';
 import { billRevisionModel } from '../billing/billRevisionModel.js';
 import { sessionAuditModel } from '../session/sessionAuditModel.js';
 import { financialPeriodService } from './financialPeriodService.js';
+import { supplierInvoiceModel } from './supplierInvoiceModel.js';
+import { supplierPaymentModel } from './supplierPaymentModel.js';
 import { platformEventBus } from '../events/platformEvents.js';
 
 class AccountingProjectionService {
@@ -214,6 +216,13 @@ class AccountingProjectionService {
 
     const periodInfo = financialPeriodService.getPeriodStatusForDate(new Date(), tenantId);
 
+    const allExpenses = offlineStore.getCollection('operational_expenses', tenantId) || offlineStore.getCollection('operational_expenses') || [];
+    const filteredExpenses = this.filterRecordsByDate(allExpenses, dateFilter, 'expenseDate');
+    let totalExpenses = 0;
+    filteredExpenses.forEach(e => {
+      totalExpenses += parseFloat(e.amount || e.grandTotal) || 0;
+    });
+
     return {
       period: periodInfo,
       dateFilter,
@@ -224,6 +233,10 @@ class AccountingProjectionService {
       sgstTotal: Math.round(sgstTotal * 100) / 100,
       serviceChargeTotal: Math.round(serviceChargeTotal * 100) / 100,
       grandTotalInvoiced: Math.round(grandTotalInvoiced * 100) / 100,
+
+      // Expenses Projection
+      totalExpenses: Math.round(totalExpenses * 100) / 100,
+      expenseCount: filteredExpenses.length,
 
       // Collections (Sales != Collections)
       totalCollected: Math.round(totalCollected * 100) / 100,
@@ -291,20 +304,30 @@ class AccountingProjectionService {
     const allPayments = paymentModel.getAllPayments(tenantId);
     const filteredPayments = this.filterRecordsByDate(allPayments, dateFilter, 'receivedAt');
 
-    return filteredPayments.map(p => ({
-      id: p.id || p.paymentId,
-      paymentId: p.paymentId || p.id,
-      invoiceNumber: p.invoiceNumber || 'N/A',
-      billNumber: p.billNumber || 'N/A',
-      sessionId: p.sessionId,
-      tableNumber: p.tableNumber || 1,
-      paymentMethod: String(p.paymentMethod || 'CASH').toUpperCase(),
-      referenceNo: p.referenceNo || '—',
-      amount: Math.round((parseFloat(p.amount) || 0) * 100) / 100,
-      receivedByName: p.receivedByName || 'Cashier',
-      receivedAt: p.receivedAt || p.createdAt || p.created_at,
-      status: p.status || 'SETTLED'
-    }));
+    return filteredPayments.map(p => {
+      const amt = Math.round((parseFloat(p.amount) || 0) * 100) / 100;
+      let status = p.status || 'SETTLED';
+      if (amt === 0) {
+        status = 'ZERO_VALUED';
+      } else if (!p.invoiceNumber || p.invoiceNumber === 'N/A' || p.invoiceNumber === 'UNLINKED') {
+        status = 'UNALLOCATED';
+      }
+
+      return {
+        id: p.id || p.paymentId,
+        paymentId: p.paymentId || p.id,
+        invoiceNumber: p.invoiceNumber || 'N/A',
+        billNumber: p.billNumber || 'N/A',
+        sessionId: p.sessionId,
+        tableNumber: p.tableNumber || 1,
+        paymentMethod: String(p.paymentMethod || 'CASH').toUpperCase(),
+        referenceNo: p.referenceNo || '—',
+        amount: amt,
+        receivedByName: p.receivedByName || 'Cashier',
+        receivedAt: p.receivedAt || p.createdAt || p.created_at,
+        status
+      };
+    });
   }
 
   /**
@@ -803,14 +826,226 @@ class AccountingProjectionService {
 
     const orders = (offlineStore.getCollection('orders') || []).filter(o => o.sessionId === sessionId || o.session_id === sessionId);
 
+    const totalCollected = payments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+    const invoicedTotal = invoice ? (parseFloat(invoice.grandTotal) || 0) : 0;
+    const difference = Math.round((invoicedTotal - totalCollected) * 100) / 100;
+
+    let chainStatus = 'COMPLETE';
+    let chainStatusLabel = '✓ Complete Evidence Chain';
+    let isFullyReconciled = true;
+
+    if (!invoice && payments.length > 0) {
+      chainStatus = 'UNRECONCILED';
+      chainStatusLabel = '⚠️ Unreconciled Collection (Payment exists without matching tax invoice)';
+      isFullyReconciled = false;
+    } else if (invoice && (invoice.invoiceNumber === 'INV-PENDING' || invoice.status === 'PENDING')) {
+      chainStatus = 'INCOMPLETE';
+      chainStatusLabel = '⚠️ Incomplete — Tax Invoice Pending';
+      isFullyReconciled = false;
+    } else if (invoice && difference !== 0) {
+      chainStatus = 'AMOUNT_MISMATCH';
+      chainStatusLabel = `⚠️ Financial Mismatch (Invoice: ₹${invoicedTotal.toFixed(2)} vs Payment: ₹${totalCollected.toFixed(2)})`;
+      isFullyReconciled = false;
+    } else if (orders.length === 0) {
+      chainStatus = 'FINANCIALLY_COMPLETE_NO_OPS';
+      chainStatusLabel = '✓ Financially Complete (Operational provenance unavailable)';
+    }
+
     return {
       sessionId,
       invoice,
       revisions,
       orders,
       payments,
-      auditLogs
+      auditLogs,
+      invoicedTotal,
+      totalCollected,
+      difference,
+      chainStatus,
+      chainStatusLabel,
+      isFullyReconciled,
+      hasOperationalProvenance: orders.length > 0,
+      hasAuditProvenance: auditLogs.length > 0
     };
+  }
+
+  /**
+   * 10. Unreconciled Sales Exception Projection
+   */
+  getUnreconciledSales(filters = {}) {
+    const tenantId = this._getTenantId(filters.tenantId);
+    const dateFilter = filters.dateFilter || 'all';
+
+    const invoices = this.getSalesRegister({ tenantId, dateFilter }).filter(i => i.status !== 'CANCELLED');
+    const payments = this.getPaymentLedger({ tenantId, dateFilter });
+
+    const paymentsBySession = new Map();
+    const paymentsByInvoice = new Map();
+    payments.forEach(p => {
+      if (p.invoiceNumber && p.invoiceNumber !== 'N/A') {
+        const list = paymentsByInvoice.get(p.invoiceNumber) || [];
+        list.push(p);
+        paymentsByInvoice.set(p.invoiceNumber, list);
+      }
+      if (p.sessionId) {
+        const list = paymentsBySession.get(p.sessionId) || [];
+        list.push(p);
+        paymentsBySession.set(p.sessionId, list);
+      }
+    });
+
+    const exceptions = [];
+
+    // 1. Check Invoice vs Linked Payment Discrepancies
+    invoices.forEach(inv => {
+      const linkedPayments = paymentsByInvoice.get(inv.invoiceNumber) || paymentsBySession.get(inv.sessionId) || [];
+      const totalPaid = linkedPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+      const diff = Math.round((inv.grandTotal - totalPaid) * 100) / 100;
+
+      if (linkedPayments.length === 0) {
+        exceptions.push({
+          type: 'UNPAID_INVOICE',
+          severity: 'HIGH',
+          title: 'Unpaid Customer Invoice',
+          invoiceNumber: inv.invoiceNumber,
+          sessionId: inv.sessionId,
+          invoicedAmount: inv.grandTotal,
+          collectedAmount: 0,
+          difference: inv.grandTotal,
+          description: `Invoice ${inv.invoiceNumber} (₹${inv.grandTotal.toFixed(2)}) has no recorded settlement payment.`
+        });
+      } else if (diff !== 0) {
+        exceptions.push({
+          type: 'AMOUNT_MISMATCH',
+          severity: 'CRITICAL',
+          title: 'Invoice / Payment Amount Discrepancy',
+          invoiceNumber: inv.invoiceNumber,
+          sessionId: inv.sessionId,
+          invoicedAmount: inv.grandTotal,
+          collectedAmount: totalPaid,
+          difference: diff,
+          description: `Invoice total (₹${inv.grandTotal.toFixed(2)}) does not match collected receipts (₹${totalPaid.toFixed(2)}). Discrepancy: ₹${Math.abs(diff).toFixed(2)}.`
+        });
+      }
+    });
+
+    // 2. Check Orphan / Unlinked Receipts & Zero-value Anomalies
+    payments.forEach(p => {
+      const amt = parseFloat(p.amount) || 0;
+      if (amt === 0) {
+        exceptions.push({
+          type: 'ZERO_VALUE_ANOMALY',
+          severity: 'HIGH',
+          title: 'Zero-Value Receipt Anomaly',
+          receiptId: p.paymentId || p.id,
+          invoiceNumber: p.invoiceNumber,
+          sessionId: p.sessionId,
+          invoicedAmount: 0,
+          collectedAmount: 0,
+          difference: 0,
+          description: `Customer payment receipt ${p.paymentId || p.id} recorded with ₹0.00 cash/UPI amount.`
+        });
+      } else {
+        const hasLinkedInv = invoices.some(i => i.invoiceNumber === p.invoiceNumber || i.sessionId === p.sessionId);
+        if (!hasLinkedInv) {
+          exceptions.push({
+            type: 'ORPHAN_PAYMENT',
+            severity: 'CRITICAL',
+            title: 'Unreconciled Customer Collection',
+            receiptId: p.paymentId || p.id,
+            invoiceNumber: p.invoiceNumber || 'UNLINKED',
+            sessionId: p.sessionId,
+            invoicedAmount: 0,
+            collectedAmount: amt,
+            difference: -amt,
+            description: `Payment receipt ${p.paymentId || p.id} (₹${amt.toFixed(2)}) exists without a matching issued tax invoice.`
+          });
+        }
+      }
+    });
+
+    return exceptions;
+  }
+
+  /**
+   * 4. Accounts Payable (AP) Overview Projection
+   */
+  getApOverview(filters = {}) {
+    const tenantId = this._getTenantId(filters.tenantId);
+    const invoices = supplierInvoiceModel.getAllSupplierInvoices(tenantId);
+    const payments = supplierPaymentModel.getAllSupplierPayments(tenantId);
+    const pos = offlineStore.getCollection('purchase_orders', tenantId) || offlineStore.getCollection('purchase_orders') || [];
+    const grns = offlineStore.getCollection('goods_receipt_notes', tenantId) || offlineStore.getCollection('goods_receipt_notes') || [];
+
+    let totalApOutstanding = 0;
+    let totalApInvoiced = 0;
+    let pendingInvoicesCount = 0;
+    let exceptionInvoicesCount = 0;
+    let approvedPayablesCount = 0;
+    let totalDisbursed = 0;
+
+    invoices.forEach(inv => {
+      totalApInvoiced += parseFloat(inv.grandTotal) || 0;
+      if (inv.status === 'APPROVED' || inv.status === 'PAYMENT_DUE' || inv.status === 'PARTIALLY_PAID') {
+        approvedPayablesCount++;
+        totalApOutstanding += parseFloat(inv.outstandingAmount || inv.grandTotal) || 0;
+      }
+      if (inv.status === 'SUBMITTED' || inv.status === 'DRAFT' || inv.matchStatus === 'PENDING') {
+        pendingInvoicesCount++;
+      }
+      if (inv.matchStatus === 'EXCEPTION' || (inv.matchVariances && inv.matchVariances.length > 0)) {
+        exceptionInvoicesCount++;
+      }
+    });
+
+    payments.forEach(p => {
+      totalDisbursed += parseFloat(p.amount) || 0;
+    });
+
+    return {
+      totalApOutstanding: Math.round(totalApOutstanding * 100) / 100,
+      totalApInvoiced: Math.round(totalApInvoiced * 100) / 100,
+      totalDisbursed: Math.round(totalDisbursed * 100) / 100,
+      pendingInvoicesCount,
+      exceptionInvoicesCount,
+      approvedPayablesCount,
+      totalInvoicesCount: invoices.length,
+      disbursementCount: payments.length,
+      poCount: pos.length,
+      grnCount: grns.length
+    };
+  }
+
+  /**
+   * 5. AP Payment Queue Projection
+   */
+  getApPaymentQueue(filters = {}) {
+    const tenantId = this._getTenantId(filters.tenantId);
+    const invoices = supplierInvoiceModel.getAllSupplierInvoices(tenantId);
+    const approvedInvoices = invoices.filter(inv => inv.status === 'APPROVED' || inv.status === 'PAYMENT_DUE' || inv.status === 'PARTIALLY_PAID');
+
+    return approvedInvoices.map(inv => ({
+      supplierInvoiceId: inv.id,
+      supplierInvoiceNumber: inv.supplierInvoiceNumber,
+      supplierCode: inv.supplierCode,
+      supplierName: inv.supplierName,
+      poNumber: inv.poNumber,
+      invoiceDate: inv.invoiceDate,
+      dueDate: inv.dueDate,
+      grandTotal: inv.grandTotal,
+      paidAmount: inv.paidAmount || 0,
+      outstandingAmount: inv.outstandingAmount !== undefined ? inv.outstandingAmount : inv.grandTotal,
+      status: inv.status
+    }));
+  }
+
+  /**
+   * 6. AP Supplier Payment Ledger Projection
+   */
+  getSupplierPaymentLedger(filters = {}) {
+    const tenantId = this._getTenantId(filters.tenantId);
+    const payments = supplierPaymentModel.getAllSupplierPayments(tenantId);
+    return this.filterRecordsByDate(payments, filters.dateFilter || 'all', 'paymentDate');
   }
 }
 

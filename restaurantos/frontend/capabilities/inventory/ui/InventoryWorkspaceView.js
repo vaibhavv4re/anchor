@@ -52,7 +52,6 @@ export class InventoryWorkspaceView {
   _getCollection(name, tenantId) {
     try {
       const gw = this._getDataGateway();
-      const localList = offlineStore.getCollection(name, tenantId) || offlineStore.getCollection(name) || [];
 
       if (gw && typeof gw.getCachedCollection === 'function') {
         const targetName = name === 'supplier_catalogue' ? 'supplier_catalog' : name;
@@ -62,24 +61,8 @@ export class InventoryWorkspaceView {
           cloudList = gw.getCachedCollection('goods_receipt_notes', tenantId) || gw.getCachedCollection('goods_received_notes', tenantId);
         }
 
-        if (Array.isArray(cloudList) && cloudList.length > 0) {
-          const mergedMap = new Map();
-          cloudList.forEach(item => {
-            const key = item.id || item.grnNumber || item.grn_number || item.poNumber || item.po_number || item.itemCode || item.code;
-            if (key) mergedMap.set(key, item);
-          });
-          localList.forEach(item => {
-            const key = item.id || item.grnNumber || item.grn_number || item.poNumber || item.po_number || item.itemCode || item.code;
-            if (key && !mergedMap.has(key)) mergedMap.set(key, item);
-          });
-
-          const merged = Array.from(mergedMap.values());
-          offlineStore.setCollection(name, merged);
-          if (name === 'goods_receipt_notes') offlineStore.setCollection('goods_received_notes', merged);
-          if (name === 'supplier_catalogue') offlineStore.setCollection('supplier_catalog', merged);
-          return merged;
-        } else if (Array.isArray(localList) && localList.length > 0) {
-          return localList;
+        if (Array.isArray(cloudList)) {
+          return cloudList;
         }
       }
     } catch (e) {
@@ -99,34 +82,6 @@ export class InventoryWorkspaceView {
       const repo = new CategoryRepository({ offlineStore });
       catList = repo.getDefaultCategories(tenantId);
     }
-
-    const items = this._getCollection('inventory', tenantId) || [];
-    const existingCodeMap = new Map();
-
-    catList.forEach(c => {
-      const code = (c.categoryCode || c.category_code || c.code || c.id || '').toUpperCase().trim();
-      if (code) existingCodeMap.set(code, c);
-    });
-
-    items.forEach(item => {
-      const cCode = (item.categoryCode || item.category_code || item.category || '').trim().toUpperCase();
-      if (cCode && !existingCodeMap.has(cCode)) {
-        const humanName = cCode.replace(/^CAT-/, '').replace(/[-_]/g, ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
-        const newCat = {
-          id: `cat-discovered-${cCode.toLowerCase()}`,
-          tenantId,
-          categoryCode: cCode,
-          category_code: cCode,
-          categoryName: humanName,
-          category_name: humanName,
-          productFamilyCode: this._inferProductFamilyCode(cCode),
-          status: 'ACTIVE'
-        };
-        existingCodeMap.set(cCode, newCat);
-        catList.push(newCat);
-      }
-    });
-
     return catList;
   }
 
@@ -179,7 +134,8 @@ export class InventoryWorkspaceView {
 
     try {
       const gw = this._getDataGateway();
-      const isSupabase = gw && gw.cloudAdapter && typeof gw.cloudAdapter.getCollection === 'function';
+      const isOnline = gw ? !!gw.isOnline : true;
+      const isSupabase = gw && isOnline && gw.cloudAdapter && typeof gw.cloudAdapter.getCollection === 'function';
       const tenantId = session ? session.tenantId : 'tenant_h0qc7wf';
 
       if (gw && typeof gw.getCollection === 'function') {
@@ -188,7 +144,6 @@ export class InventoryWorkspaceView {
         await gw.getCollection('suppliers', tenantId);
         await gw.getCollection('inventory_categories', tenantId);
         await gw.getCollection('goods_receipt_notes', tenantId);
-        await gw.getCollection('goods_received_notes', tenantId);
         await gw.getCollection('purchase_orders', tenantId);
       }
 
@@ -238,9 +193,10 @@ export class InventoryWorkspaceView {
           <div class="data-source-diagnostic-bar" style="background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); padding:6px 16px; font-size:0.75rem; display:flex; justify-content:space-between; align-items:center;">
             <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
               <span class="badge ${isSupabase ? 'badge-success' : 'badge-warning'}" style="font-weight:700; font-size:0.7rem; padding:3px 10px;">
-                ${isSupabase ? 'SUPABASE ●' : 'LOCAL_CACHE ⚠️'}
+                SOURCE: ${isSupabase ? 'SUPABASE ●' : 'LOCAL_CACHE ⚠️'}
               </span>
-              <span>Tenant: <strong>${session?.tenantId || 'tenant_h0qc7wf'}</strong></span>
+              <span>CONNECTION: <strong style="color:${isOnline ? '#10b981' : 'var(--status-warning)'};">${isOnline ? 'ONLINE' : 'OFFLINE'}</strong></span>
+              <span>TENANT: <strong>${session?.tenantId || 'tenant_h0qc7wf'}</strong></span>
               <span>User: <strong>${session?.employeeName || 'Inventory Manager'}</strong></span>
               <span>Role: <strong>${session?.roleId || 'role-inventory'}</strong></span>
               <span>Workspace: <strong style="text-transform:uppercase; color:var(--accent-primary);">${session?.workspace || 'inventory'}</strong></span>
@@ -823,7 +779,24 @@ export class InventoryWorkspaceView {
         </div>
       `;
     } else if (tabKey === 'inv-live-stock' || tabKey === 'inv-live-balances') {
-      const activeBalances = balances.filter(b => (!tenantId || b.tenantId === tenantId || b.tenant_id === tenantId));
+      const rawActiveBalances = balances.filter(b => (!tenantId || b.tenantId === tenantId || b.tenant_id === tenantId));
+      const balanceMap = new Map();
+      rawActiveBalances.forEach(b => {
+        const itemCode = b.itemCode || b.item_code;
+        const locationCode = b.locationCode || b.location_code;
+        const key = `${itemCode}_${locationCode}`;
+        if (!balanceMap.has(key)) {
+          balanceMap.set(key, b);
+        } else {
+          const existing = balanceMap.get(key);
+          const existingTime = new Date(existing.lastUpdatedAt || existing.updated_at || existing.postedAt || existing.created_at || 0).getTime();
+          const currentTime = new Date(b.lastUpdatedAt || b.updated_at || b.postedAt || b.created_at || 0).getTime();
+          if (currentTime >= existingTime) {
+            balanceMap.set(key, b);
+          }
+        }
+      });
+      const activeBalances = Array.from(balanceMap.values());
 
       let stockLines = [];
       if (activeBalances.length > 0) {
@@ -1501,12 +1474,20 @@ export class InventoryWorkspaceView {
                   const reorderText = `${reorderVal.toLocaleString()} ${baseUom}`;
                   const isAct = i.active !== false;
 
+                  const catObj = categories.find(c => {
+                    const cCode = (c.categoryCode || c.category_code || c.code || c.id || '').toUpperCase().trim();
+                    return cCode && cCode === String(category).toUpperCase().trim();
+                  });
+                  const categoryDisplay = catObj
+                    ? (catObj.categoryName || catObj.category_name || category)
+                    : `<span class="badge badge-danger" title="Category not found in Category Master" style="background:#ef4444; color:#fff; font-weight:700; font-size:0.75rem; padding:2px 8px; border-radius:4px;">⚠️ ${category || 'NONE'} (Category not found in Category Master)</span>`;
+
                   return `
                     <tr class="row-master-item-click" data-item-code="${code}" style="border-bottom:1px solid var(--border-subtle); cursor:pointer;">
                       <td style="padding:10px; font-weight:700; font-family:monospace; color:var(--accent-primary);">${code}</td>
                       <td style="padding:10px; font-weight:600;">${name}</td>
                       <td style="padding:10px;"><span class="badge badge-info">${type}</span></td>
-                      <td style="padding:10px;">${category}</td>
+                      <td style="padding:10px;">${categoryDisplay}</td>
                       <td style="padding:10px;"><span class="badge badge-secondary">${baseUom}</span></td>
                       <td style="padding:10px;"><span class="badge badge-secondary">${purchaseUom}</span></td>
                       <td style="padding:10px; font-weight:600; font-size:0.8rem;">${convText}</td>
@@ -2441,7 +2422,10 @@ export class InventoryWorkspaceView {
       renderDraftLines();
     });
 
-    mount.querySelector('#btn-trf-commit').addEventListener('click', async () => {
+    mount.querySelector('#btn-trf-commit').addEventListener('click', async (e) => {
+      const btn = e.currentTarget;
+      if (btn.disabled) return;
+
       const fromLocationCode = mount.querySelector('#trf-from-loc').value;
       const toLocationCode = mount.querySelector('#trf-to-loc').value;
       const transferDate = mount.querySelector('#trf-date').value || new Date().toISOString().split('T')[0];
@@ -2456,90 +2440,209 @@ export class InventoryWorkspaceView {
         return;
       }
 
+      // 1. Pre-validation: Verify stock availability & WAC on all lines before any mutation
       for (const line of this.trfDraftLines) {
         const liveSourceAvail = getStockAtLoc(line.itemCode, fromLocationCode);
         if (line.quantity > liveSourceAvail) {
           alert(`❌ Cannot commit transfer! Item "${line.itemName}" has only ${liveSourceAvail} ${line.baseUom} available at ${fromLocationCode}.`);
           return;
         }
-      }
-
-      const transferNo = `TRF-${Date.now().toString().substring(7)}`;
-      const gw = this._getDataGateway();
-
-      const newTransfer = {
-        id: `trf-${Date.now()}`,
-        tenantId,
-        tenant_id: tenantId,
-        transferNo,
-        transfer_no: transferNo,
-        fromLocationCode,
-        from_location_code: fromLocationCode,
-        toLocationCode,
-        to_location_code: toLocationCode,
-        transferDate,
-        transfer_date: transferDate,
-        lines: this.trfDraftLines,
-        status: 'COMPLETED'
-      };
-
-      let stockBreakdownText = `🎉 Stock Transfer ${transferNo} Posted Cleanly!\n\n📍 BEFORE & AFTER STOCK LEVELS:\n`;
-
-      if (gw) {
-        await gw.create('stock_transfers', newTransfer);
-
-        for (const line of this.trfDraftLines) {
-          const fromBal = balances.find(b => (b.itemCode === line.itemCode || b.item_code === line.itemCode) && (b.locationCode === fromLocationCode || b.location_code === fromLocationCode));
-          if (fromBal) {
-            const currentFromQty = parseFloat(fromBal.quantity) || 0;
-            const newFromQty = Math.max(0, currentFromQty - line.quantity);
-            const unitCost = parseFloat(fromBal.unitCost || fromBal.unit_cost) || 0;
-            await gw.update('stock_balances', fromBal.id, {
-              ...fromBal,
-              quantity: newFromQty,
-              valuation: newFromQty * unitCost,
-              lastUpdatedAt: new Date().toISOString()
-            });
-          }
-
-          const toBal = balances.find(b => (b.itemCode === line.itemCode || b.item_code === line.itemCode) && (b.locationCode === toLocationCode || b.location_code === toLocationCode));
-          if (toBal) {
-            const currentToQty = parseFloat(toBal.quantity) || 0;
-            const newToQty = currentToQty + line.quantity;
-            const unitCost = parseFloat(toBal.unitCost || toBal.unit_cost) || 0;
-            await gw.update('stock_balances', toBal.id, {
-              ...toBal,
-              quantity: newToQty,
-              valuation: newToQty * unitCost,
-              lastUpdatedAt: new Date().toISOString()
-            });
-          } else {
-            await gw.create('stock_balances', {
-              id: `sb-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
-              tenantId,
-              tenant_id: tenantId,
-              itemCode: line.itemCode,
-              item_code: line.itemCode,
-              locationCode: toLocationCode,
-              location_code: toLocationCode,
-              quantity: line.quantity,
-              unitCost: 100,
-              unit_cost: 100,
-              valuation: line.quantity * 100,
-              lastUpdatedAt: new Date().toISOString()
-            });
-          }
-
-          stockBreakdownText += `• ${line.itemName} (${line.quantity} ${line.baseUom})\n` +
-            `   Source (${fromLocationCode}): ${line.fromBeforeQty} ➔ ${line.fromAfterQty} ${line.baseUom}\n` +
-            `   Target (${toLocationCode}): ${line.toBeforeQty} ➔ ${line.toAfterQty} ${line.baseUom}\n`;
+        const srcBal = balances.find(b => (b.itemCode === line.itemCode || b.item_code === line.itemCode) && (b.locationCode === fromLocationCode || b.location_code === fromLocationCode));
+        if (!srcBal) {
+          alert(`❌ Source stock balance row missing for "${line.itemName}" at ${fromLocationCode}.`);
+          return;
         }
       }
 
-      alert(stockBreakdownText);
-      this.activeSubView = 'inv-transfers';
-      const targetMount = this.rootMount || document.querySelector('#workspace-root-mount') || mount;
-      this.render(targetMount, session);
+      const gw = this._getDataGateway();
+      if (!gw) {
+        alert('❌ DataGateway is unavailable. Cannot proceed with transfer.');
+        return;
+      }
+
+      // Safeguard 2 — Transfer Idempotency: deterministic transfer ID & check if already posted
+      const transferTimestamp = Date.now();
+      const transferNo = `TRF-${transferTimestamp.toString().substring(7)}`;
+      const transferId = `trf-${transferTimestamp}`;
+
+      const existingTransfers = this._getCollection('stock_transfers', tenantId) || [];
+      if (existingTransfers.some(t => t.transferNo === transferNo || t.transfer_number === transferNo || t.id === transferId)) {
+        alert(`⚠️ Transfer ${transferNo} has already been posted! Aborting duplicate execution.`);
+        return;
+      }
+
+      // Lock UI to prevent duplicate clicks during execution
+      btn.disabled = true;
+      const originalBtnText = btn.textContent;
+      btn.textContent = '⏳ Processing Transfer & Syncing Balances...';
+
+      try {
+        // Safeguard 1: Non-partial commit. Prepare all balance mutations in advance.
+        const balanceMutations = [];
+        let stockBreakdownText = `🎉 Stock Transfer ${transferNo} Posted Cleanly!\n\n📍 BEFORE & AFTER STOCK LEVELS:\n`;
+
+        for (const line of this.trfDraftLines) {
+          const fromBal = balances.find(b => (b.itemCode === line.itemCode || b.item_code === line.itemCode) && (b.locationCode === fromLocationCode || b.location_code === fromLocationCode));
+          const sourceUnitCost = parseFloat(fromBal.unitCost || fromBal.unit_cost) || 0;
+          const currentFromQty = parseFloat(fromBal.quantity) || 0;
+          const newFromQty = Math.max(0, currentFromQty - line.quantity);
+          const newFromValuation = Math.round((newFromQty * sourceUnitCost) * 100) / 100;
+
+          // Source balance mutation plan
+          balanceMutations.push({
+            type: 'UPDATE',
+            collection: 'stock_balances',
+            id: fromBal.id,
+            payload: {
+              id: fromBal.id,
+              tenant_id: tenantId,
+              tenantId,
+              location_code: fromLocationCode,
+              locationCode: fromLocationCode,
+              item_code: line.itemCode,
+              itemCode: line.itemCode,
+              quantity: newFromQty,
+              unit_cost: sourceUnitCost,
+              unitCost: sourceUnitCost,
+              valuation: newFromValuation,
+              data: {
+                ...(fromBal.data || fromBal),
+                quantity: newFromQty,
+                unitCost: sourceUnitCost,
+                unit_cost: sourceUnitCost,
+                valuation: newFromValuation,
+                lastUpdatedAt: new Date().toISOString()
+              }
+            }
+          });
+
+          // Destination balance mutation plan
+          const toBal = balances.find(b => (b.itemCode === line.itemCode || b.item_code === line.itemCode) && (b.locationCode === toLocationCode || b.location_code === toLocationCode));
+          if (toBal) {
+            const currentToQty = parseFloat(toBal.quantity) || 0;
+            const currentToVal = parseFloat(toBal.valuation) || (currentToQty * (parseFloat(toBal.unitCost || toBal.unit_cost) || 0));
+            const newToQty = currentToQty + line.quantity;
+            const transferValuation = line.quantity * sourceUnitCost;
+            const newToValuation = Math.round((currentToVal + transferValuation) * 100) / 100;
+            const newToUnitCost = newToQty > 0 ? (Math.round((newToValuation / newToQty) * 100) / 100) : sourceUnitCost;
+
+            balanceMutations.push({
+              type: 'UPDATE',
+              collection: 'stock_balances',
+              id: toBal.id,
+              payload: {
+                id: toBal.id,
+                tenant_id: tenantId,
+                tenantId,
+                location_code: toLocationCode,
+                locationCode: toLocationCode,
+                item_code: line.itemCode,
+                itemCode: line.itemCode,
+                quantity: newToQty,
+                unit_cost: newToUnitCost,
+                unitCost: newToUnitCost,
+                valuation: newToValuation,
+                data: {
+                  ...(toBal.data || toBal),
+                  quantity: newToQty,
+                  unitCost: newToUnitCost,
+                  unit_cost: newToUnitCost,
+                  valuation: newToValuation,
+                  lastUpdatedAt: new Date().toISOString()
+                }
+              }
+            });
+          } else {
+            const transferValuation = Math.round((line.quantity * sourceUnitCost) * 100) / 100;
+            const newDstId = `sb-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+            balanceMutations.push({
+              type: 'CREATE',
+              collection: 'stock_balances',
+              id: newDstId,
+              payload: {
+                id: newDstId,
+                tenant_id: tenantId,
+                tenantId,
+                location_code: toLocationCode,
+                locationCode: toLocationCode,
+                item_code: line.itemCode,
+                itemCode: line.itemCode,
+                quantity: line.quantity,
+                unit_cost: sourceUnitCost,
+                unitCost: sourceUnitCost,
+                valuation: transferValuation,
+                data: {
+                  id: newDstId,
+                  tenantId,
+                  tenant_id: tenantId,
+                  locationCode: toLocationCode,
+                  location_code: toLocationCode,
+                  itemCode: line.itemCode,
+                  item_code: line.itemCode,
+                  quantity: line.quantity,
+                  unitCost: sourceUnitCost,
+                  unit_cost: sourceUnitCost,
+                  valuation: transferValuation,
+                  lastUpdatedAt: new Date().toISOString()
+                }
+              }
+            });
+          }
+
+          stockBreakdownText += `• ${line.itemName} (${line.quantity} ${line.baseUom} @ ₹${sourceUnitCost})\n` +
+            `   Source (${fromLocationCode}): ${line.fromBeforeQty} ➔ ${line.fromAfterQty} ${line.baseUom}\n` +
+            `   Target (${toLocationCode}): ${line.toBeforeQty} ➔ ${line.toAfterQty} ${line.baseUom}\n`;
+        }
+
+        // Execute all balance mutations first
+        for (const mut of balanceMutations) {
+          if (mut.type === 'UPDATE') {
+            const res = await gw.update(mut.collection, mut.id, mut.payload);
+            if (res && res.success === false) {
+              throw new Error(`Failed updating ${mut.collection}:${mut.id} - ${res.error || 'Unknown error'}`);
+            }
+          } else if (mut.type === 'CREATE') {
+            const res = await gw.create(mut.collection, mut.payload);
+            if (res && res.success === false) {
+              throw new Error(`Failed creating ${mut.collection}:${mut.id} - ${res.error || 'Unknown error'}`);
+            }
+          }
+        }
+
+        // Only after all balance mutations succeed, persist the stock_transfers record as COMPLETED
+        const newTransfer = {
+          id: transferId,
+          tenantId,
+          tenant_id: tenantId,
+          transferNo,
+          transfer_no: transferNo,
+          transferNumber: transferNo,
+          transfer_number: transferNo,
+          fromLocationCode,
+          from_location_code: fromLocationCode,
+          toLocationCode,
+          to_location_code: toLocationCode,
+          transferDate,
+          transfer_date: transferDate,
+          lines: this.trfDraftLines,
+          status: 'COMPLETED'
+        };
+
+        const trfRes = await gw.create('stock_transfers', newTransfer);
+        if (trfRes && trfRes.success === false) {
+          throw new Error(`Transfer balances were updated, but recording transfer audit record failed: ${trfRes.error || 'Unknown error'}`);
+        }
+
+        alert(stockBreakdownText);
+        this.activeSubView = 'inv-transfers';
+        const targetMount = this.rootMount || document.querySelector('#workspace-root-mount') || mount;
+        this.render(targetMount, session);
+      } catch (err) {
+        console.error('[StockTransfer] Commit error:', err);
+        alert(`❌ STOCK TRANSFER TRANSACTION FAILED!\n\n${err.message || err}\n\nBalances were NOT marked completed. Please review Supabase before retrying.`);
+        btn.disabled = false;
+        btn.textContent = originalBtnText;
+      }
     });
   }
 
@@ -2806,6 +2909,9 @@ export class InventoryWorkspaceView {
               lastUpdatedAt: new Date().toISOString()
             });
           } else if (line.adjustmentType === 'INCREASE') {
+            const anyBal = balances.find(b => (b.itemCode === line.itemCode || b.item_code === line.itemCode) && (parseFloat(b.unitCost || b.unit_cost) > 0));
+            const adjUnitCost = anyBal ? (parseFloat(anyBal.unitCost || anyBal.unit_cost) || 0) : 0;
+            const adjValuation = Math.round((line.quantity * adjUnitCost) * 100) / 100;
             await gw.create('stock_balances', {
               id: `sb-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
               tenantId,
@@ -2815,10 +2921,22 @@ export class InventoryWorkspaceView {
               locationCode,
               location_code: locationCode,
               quantity: line.quantity,
-              unitCost: 100,
-              unit_cost: 100,
-              valuation: line.quantity * 100,
-              lastUpdatedAt: new Date().toISOString()
+              unitCost: adjUnitCost,
+              unit_cost: adjUnitCost,
+              valuation: adjValuation,
+              data: {
+                tenantId,
+                tenant_id: tenantId,
+                locationCode,
+                location_code: locationCode,
+                itemCode: line.itemCode,
+                item_code: line.itemCode,
+                quantity: line.quantity,
+                unitCost: adjUnitCost,
+                unit_cost: adjUnitCost,
+                valuation: adjValuation,
+                lastUpdatedAt: new Date().toISOString()
+              }
             });
           }
 
@@ -3551,7 +3669,7 @@ export class InventoryWorkspaceView {
   // --- 8. FULL-SCREEN FORM: CREATE PO ---
 
   renderCreatePoFormScreen(mount, tenantId, items, suppliers, locations, session) {
-    const catalogueList = supplierCatalogueController._getCollection('supplier_catalogue', tenantId);
+    const catalogueList = this._getCollection('supplier_catalogue', tenantId);
     const categories = this._getUnifiedCategories(tenantId);
 
     const defaultDeliveryDate = new Date(Date.now() + 3 * 86400000).toISOString().split('T')[0];
@@ -3716,14 +3834,17 @@ export class InventoryWorkspaceView {
 
     // Helper: get current supplier's available catalogue
     const getAvailableCatalogue = () => {
-      const supCode = selSup.value;
-      return catalogueList.filter(c => (c.supplierCode || c.supplier_code || '').toUpperCase() === supCode.toUpperCase());
+      const supCode = (selSup ? selSup.value : '').toUpperCase().trim();
+      return catalogueList.filter(c => {
+        const cSupCode = (c.supplierCode || c.supplier_code || c.supplier_id || c.data?.supplierCode || c.data?.supplier_code || '').toUpperCase().trim();
+        return cSupCode === supCode;
+      });
     };
 
     // Helper: get selected supplier object
     const getSelectedSupplierObj = () => {
-      const supCode = selSup.value;
-      return suppliers.find(s => (s.supplierCode || s.supplier_code || '').toUpperCase() === supCode.toUpperCase()) || { supplierName: supCode, supplierCode: supCode };
+      const supCode = (selSup ? selSup.value : '').toUpperCase().trim();
+      return suppliers.find(s => (s.supplierCode || s.supplier_code || s.id || '').toUpperCase().trim() === supCode) || { supplierName: supCode, supplierCode: supCode };
     };
 
     // Render Order Items Table
@@ -3967,18 +4088,20 @@ export class InventoryWorkspaceView {
         const catFilter = selCat.value;
 
         const filteredCat = supCat.filter(c => {
-          const itemCode = c.itemCode || c.item_code;
+          const itemCode = c.itemCode || c.item_code || c.data?.itemCode || c.data?.item_code || '';
           const itemObj = items.find(i => (i.itemCode || i.item_code || '').toUpperCase() === (itemCode || '').toUpperCase()) || {};
 
           if (catFilter !== 'ALL') {
-            const itemCatCode = (itemObj.categoryCode || itemObj.category_code || '').toUpperCase();
+            const itemCatCode = (itemObj.categoryCode || itemObj.category_code || c.categoryCode || c.category_code || '').toUpperCase();
             if (itemCatCode !== catFilter.toUpperCase()) return false;
           }
 
           if (query) {
-            const matchCode = itemCode.toLowerCase().includes(query);
-            const matchName = (itemObj.itemName || c.supplierItemName || '').toLowerCase().includes(query);
-            const matchSku = (c.supplierSku || '').toLowerCase().includes(query);
+            const matchCode = (itemCode || '').toLowerCase().includes(query);
+            const itemName = (itemObj.itemName || itemObj.item_name || c.supplierItemName || c.supplier_item_name || c.data?.supplierItemName || '').toLowerCase();
+            const sku = (c.supplierSku || c.supplier_sku || c.data?.supplierSku || '').toLowerCase();
+            const matchName = itemName.includes(query);
+            const matchSku = sku.includes(query);
             if (!matchCode && !matchName && !matchSku) return false;
           }
           return true;
@@ -3990,25 +4113,29 @@ export class InventoryWorkspaceView {
         }
 
         listContainer.innerHTML = filteredCat.map(c => {
-          const itemCode = c.itemCode || c.item_code;
+          const itemCode = c.itemCode || c.item_code || c.data?.itemCode || c.data?.item_code || '';
           const itemObj = items.find(i => (i.itemCode || i.item_code || '').toUpperCase() === (itemCode || '').toUpperCase()) || {};
           const isChecked = selectedItemCodes.has(itemCode);
-          const price = parseFloat(c.unitPrice !== undefined ? c.unitPrice : (c.unit_price || 0));
-          const uom = c.purchaseUom || c.purchase_uom || itemObj.purchaseUom || 'KG';
+          
+          const rawPrice = c.unitPrice !== undefined ? c.unitPrice : (c.unit_price !== undefined ? c.unit_price : (c.current_price !== undefined ? c.current_price : (c.currentPrice !== undefined ? c.currentPrice : (c.cataloguePrice || c.data?.unitPrice || 0))));
+          const price = parseFloat(rawPrice) || 0;
+          const uom = c.purchaseUom || c.purchase_uom || c.packUom || c.pack_uom || itemObj.purchaseUom || itemObj.baseUom || 'KG';
+          const itemName = itemObj.itemName || itemObj.item_name || c.supplierItemName || c.supplier_item_name || c.data?.supplierItemName || itemCode;
+          const sku = c.supplierSku || c.supplier_sku || c.data?.supplierSku || '';
 
           return `
             <label style="display:flex; align-items:center; justify-content:space-between; padding:10px 14px; background:var(--bg-surface-1); border:1px solid var(--border-subtle); border-radius:6px; cursor:pointer; transition:all 0.15s ease;">
               <div style="display:flex; align-items:center; gap:12px;">
                 <input type="checkbox" class="chk-picker-item" value="${itemCode}" ${isChecked ? 'checked' : ''} style="width:18px; height:18px; cursor:pointer; accent-color:var(--accent-primary);" />
                 <div>
-                  <div style="font-weight:700; color:var(--text-main); font-size:0.9rem;">${itemObj.itemName || itemObj.item_name || c.supplierItemName || itemCode}</div>
+                  <div style="font-weight:700; color:var(--text-main); font-size:0.9rem;">${itemName}</div>
                   <div style="font-size:0.75rem; font-family:monospace; color:var(--accent-primary);">
-                    ${itemCode} ${c.supplierSku ? `• SKU: ${c.supplierSku}` : ''}
+                    ${itemCode} ${sku ? `• SKU: ${sku}` : ''}
                   </div>
                 </div>
               </div>
               <div style="font-weight:700; color:var(--status-success); font-size:0.9rem;">
-                ₹${price.toLocaleString('en-IN')} / ${uom}
+                ₹${price.toLocaleString('en-IN', {minimumFractionDigits: 2, maximumFractionDigits: 2})} / ${uom}
               </div>
             </label>
           `;
@@ -4034,7 +4161,7 @@ export class InventoryWorkspaceView {
       renderPickerList();
 
       btnSelectAll.addEventListener('click', () => {
-        supCat.forEach(c => selectedItemCodes.add(c.itemCode || c.item_code));
+        supCat.forEach(c => selectedItemCodes.add(c.itemCode || c.item_code || c.data?.itemCode || c.data?.item_code));
         renderPickerList();
         btnConfirm.textContent = `Add ${selectedItemCodes.size} Items`;
       });
@@ -4047,15 +4174,19 @@ export class InventoryWorkspaceView {
         // Merge selected items into poBasket
         selectedItemCodes.forEach(code => {
           if (!poBasket.some(b => b.itemCode === code)) {
-            const catRecord = supCat.find(c => (c.itemCode || c.item_code) === code) || {};
-            const itemObj = items.find(i => (i.itemCode || i.item_code || '').toUpperCase() === code.toUpperCase()) || {};
-            const price = parseFloat(catRecord.unitPrice !== undefined ? catRecord.unitPrice : (catRecord.unit_price || 0));
-            const uom = catRecord.purchaseUom || catRecord.purchase_uom || itemObj.purchaseUom || 'KG';
+            const catRecord = supCat.find(c => (c.itemCode || c.item_code || c.data?.itemCode || c.data?.item_code) === code) || {};
+            const itemObj = items.find(i => (i.itemCode || i.item_code || '').toUpperCase() === (code || '').toUpperCase()) || {};
+            
+            const rawPrice = catRecord.unitPrice !== undefined ? catRecord.unitPrice : (catRecord.unit_price !== undefined ? catRecord.unit_price : (catRecord.current_price !== undefined ? catRecord.current_price : (catRecord.currentPrice !== undefined ? catRecord.currentPrice : (catRecord.cataloguePrice || 0))));
+            const price = parseFloat(rawPrice) || 0;
+            const uom = catRecord.purchaseUom || catRecord.purchase_uom || catRecord.packUom || catRecord.pack_uom || itemObj.purchaseUom || itemObj.baseUom || 'KG';
+            const itemName = itemObj.itemName || itemObj.item_name || catRecord.supplierItemName || catRecord.supplier_item_name || catRecord.data?.supplierItemName || code;
+            const supplierSku = catRecord.supplierSku || catRecord.supplier_sku || catRecord.data?.supplierSku || '';
 
             poBasket.push({
               itemCode: code,
-              itemName: itemObj.itemName || itemObj.item_name || catRecord.supplierItemName || code,
-              supplierSku: catRecord.supplierSku || catRecord.supplier_sku || '',
+              itemName,
+              supplierSku,
               quantity: 10, // Default PO order quantity
               uom,
               catalogueUnitPrice: price,
@@ -4349,7 +4480,7 @@ export class InventoryWorkspaceView {
   // --- 8B2. GRN DETAIL DRAWER ---
 
   openGRNDetailDrawer(grnId, tenantId, mount, session) {
-    const grns = offlineStore.getCollection('goods_received_notes') || offlineStore.getCollection('goods_receipt_notes') || [];
+    const grns = offlineStore.getCollection('goods_receipt_notes') || offlineStore.getCollection('goods_received_notes') || [];
     const grn = grns.find(g => g.id === grnId || g.grnNumber === grnId || g.grn_number === grnId);
 
     if (!grn) {
@@ -7563,8 +7694,18 @@ export class InventoryWorkspaceView {
     const reorderLevel = item.reorderLevel !== undefined ? item.reorderLevel : (item.reorder_level || 10);
     const active = item.active !== false;
 
-    // Derived Product Family
-    const productFamily = category.startsWith('CAT-') ? `FAM-${category.substring(4)}` : 'FAM-GENERAL';
+    // Resolved Category & Product Family from Category Master
+    const categories = this._getUnifiedCategories(tenantId);
+    const catObj = categories.find(c => {
+      const cCode = (c.categoryCode || c.category_code || c.code || c.id || '').toUpperCase().trim();
+      return cCode && cCode === String(category).toUpperCase().trim();
+    });
+    const categoryDisplay = catObj
+      ? `${catObj.categoryName || catObj.category_name || category} (${category})`
+      : `<span style="color:#ef4444; font-weight:700;">⚠️ ${category || 'NONE'} (Category not found in Category Master)</span>`;
+    const productFamily = catObj
+      ? (catObj.productFamilyName || catObj.product_family_name || catObj.productFamilyCode || this._inferProductFamilyCode(catObj))
+      : '<span style="color:#ef4444; font-weight:700;">Unknown (Unmapped)</span>';
     const changeHistory = Array.isArray(item.changeHistory) ? item.changeHistory : [];
 
     const overlay = document.createElement('div');
@@ -7609,12 +7750,12 @@ export class InventoryWorkspaceView {
               <span class="badge badge-info">${type}</span>
             </div>
             <div style="display:flex; justify-content:space-between;">
-              <span style="color:var(--text-muted);">Category Code:</span>
-              <strong>${category}</strong>
+              <span style="color:var(--text-muted);">Category:</span>
+              <strong>${categoryDisplay}</strong>
             </div>
             <div style="display:flex; justify-content:space-between;">
-              <span style="color:var(--text-muted);">Derived Product Family:</span>
-              <strong style="color:var(--text-muted);">${productFamily}</strong>
+              <span style="color:var(--text-muted);">Product Family:</span>
+              <strong>${productFamily}</strong>
             </div>
           </div>
 
@@ -7770,6 +7911,7 @@ export class InventoryWorkspaceView {
             <div>
               <label style="font-weight:700; display:block; margin-bottom:4px;">Category *</label>
               <select id="inp-edit-item-cat" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);">
+                ${!categories.some(c => (c.categoryCode || c.category_code || '').toUpperCase() === category.toUpperCase()) ? `<option value="${category}" selected disabled style="color:#ef4444;">⚠️ ${category} (Category not found in Category Master)</option>` : ''}
                 ${categories.map(c => {
                   const cCode = c.categoryCode || c.category_code;
                   const cName = c.categoryName || c.category_name;
@@ -7842,6 +7984,20 @@ export class InventoryWorkspaceView {
         return;
       }
 
+      const catObj = categories.find(c => (c.categoryCode || c.category_code || '').toUpperCase() === newCat);
+      const catName = catObj ? (catObj.categoryName || catObj.category_name) : newCat;
+      const pfCode = catObj ? (catObj.productFamilyCode || catObj.product_family_code || this._inferProductFamilyCode(catObj)) : 'FAM-SUPPLIES';
+      const pfName = catObj ? (catObj.productFamilyName || catObj.product_family_name || pfCode) : pfCode;
+
+      const existingData = (item && item.data && typeof item.data === 'object') ? { ...item.data } : {};
+      const updatedData = {
+        ...existingData,
+        categoryCode: newCat,
+        categoryName: catName,
+        productFamilyCode: pfCode,
+        productFamilyName: pfName
+      };
+
       const updates = {
         itemName: newName,
         item_name: newName,
@@ -7849,6 +8005,13 @@ export class InventoryWorkspaceView {
         item_type: newType,
         categoryCode: newCat,
         category_code: newCat,
+        categoryName: catName,
+        category_name: catName,
+        productFamilyCode: pfCode,
+        product_family_code: pfCode,
+        productFamilyName: pfName,
+        product_family_name: pfName,
+        data: updatedData,
         baseUom: newBaseUom,
         base_uom: newBaseUom,
         purchaseUom: newPurchaseUom,

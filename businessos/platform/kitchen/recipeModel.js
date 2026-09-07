@@ -70,24 +70,13 @@ class RecipeModel {
 
   /**
    * Syncs any locally saved recipes and their ingredients to Supabase.
-   * Useful when recipes were drafted while offline or prior to schema mapping.
+   * NOTE: Disabled automatic startup sync to prevent resurrecting deleted cloud records.
+   * Mutations should only be synced via OfflineJournal pending jobs.
    * @param {string|null} tenantId
    */
   syncOfflineRecipesToCloud(tenantId = null) {
-    const list = offlineStore.getCollection('recipes', tenantId) || [];
-    if (!Array.isArray(list) || list.length === 0) return;
-    console.log(`[recipeModel] Syncing ${list.length} local recipes to cloud...`);
-    list.forEach(recipe => {
-      this._syncToCloud('create', recipe);
-      if (recipe.menuItemId && recipe.status === 'APPROVED') {
-        const menuList = offlineStore.getCollection('kitchen_menu_items') || [];
-        const menuItem = menuList.find(m => m.id === recipe.menuItemId || m.itemCode === recipe.menuItemCode);
-        if (menuItem) {
-          menuItem.recipeId = recipe.id;
-          kitchenMenuModel._syncToCloud('update', menuItem);
-        }
-      }
-    });
+    console.log('[recipeModel] Automatic startup cloud sync disabled to enforce Cloud Source-of-Truth.');
+    return;
   }
 
   /**

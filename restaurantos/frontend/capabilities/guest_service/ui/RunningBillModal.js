@@ -245,15 +245,26 @@ export class RunningBillModal {
     const finaliseBtn = this.modalEl.querySelector('#btn-finalise-cashier');
     if (finaliseBtn) {
       finaliseBtn.addEventListener('click', () => {
-        const rev = billRevisionModel.createRevision({
-          sessionId: this.sessionId,
-          tableNumber: proj.tableNumber,
-          tableCode: proj.tableCode,
-          items: proj.itemizedList,
-          subtotal: proj.subtotal,
-          waiterId: proj.waiter ? proj.waiter.id : 'emp-waiter',
-          waiterName: proj.waiter ? proj.waiter.name : 'Staff'
-        });
+        if (!proj.itemizedList || proj.itemizedList.length === 0) {
+          alert('⚠️ Cannot generate bill: There are no billable items recorded for this table session.');
+          return;
+        }
+
+        let rev;
+        try {
+          rev = billRevisionModel.createRevision({
+            sessionId: this.sessionId,
+            tableNumber: proj.tableNumber,
+            tableCode: proj.tableCode,
+            items: proj.itemizedList,
+            subtotal: proj.subtotal,
+            waiterId: proj.waiter ? proj.waiter.id : 'emp-waiter',
+            waiterName: proj.waiter ? proj.waiter.name : 'Staff'
+          });
+        } catch (err) {
+          alert(`⚠️ Bill generation blocked: ${err.message}`);
+          return;
+        }
 
         sessionStateMachine.transitionMilestone(this.sessionId, SessionMilestones.BILL_GENERATED);
         tableStateMachine.transitionTableState(proj.tableNumber, PhysicalTableStates.PAYMENT_PENDING);

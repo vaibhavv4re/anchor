@@ -19,14 +19,18 @@ export class SupabaseDataAdapter {
     const targetTable = this._resolveTable(collection);
     const virtualCollections = [
       'roles', 'sessions', 'table_runtime_states',
-      'stock_transactions', 'stock_requisitions', 'menu_catalog',
+      'stock_requisitions', 'menu_catalog',
       'production_batches', 'devices', 'system_config'
     ];
-    if (!this.client || virtualCollections.includes(targetTable)) return [];
+    if (!this.client || virtualCollections.includes(targetTable)) {
+      return { success: true, data: [] };
+    }
     
     try {
       const res = await this.client.fetchTableData(targetTable);
-      if (!res || !res.success || !Array.isArray(res.data)) return [];
+      if (!res || !res.success || !Array.isArray(res.data)) {
+        return { success: false, error: res?.error || 'FETCH_TABLE_DATA_FAILED', data: null };
+      }
       
       let list = res.data.map(row => {
         let item = (row && row.data) ? { ...row.data, ...row } : { ...row };
@@ -62,6 +66,9 @@ export class SupabaseDataAdapter {
         if (item.recipe_id !== undefined && item.recipeId === undefined) item.recipeId = item.recipe_id;
         if (item.recipe_notes !== undefined && item.recipeNotes === undefined) item.recipeNotes = item.recipe_notes;
         if (item.spiciness_level && !item.spicinessLevel) item.spicinessLevel = item.spiciness_level;
+        if (item.tenant_id && !item.tenantId) item.tenantId = item.tenant_id;
+        if (item.production_area && !item.productionArea) item.productionArea = item.production_area;
+        if (item.routing && !item.productionArea && item.routing === 'BAR') item.productionArea = 'BAR';
 
         // Kitchen domain: recipes
         if (item.recipe_code && !item.recipeCode) item.recipeCode = item.recipe_code;
@@ -85,10 +92,29 @@ export class SupabaseDataAdapter {
         if (collection === 'orders') {
           if (item.order_number && !item.orderNumber) item.orderNumber = item.order_number;
           if (item.table_code && !item.tableCode) item.tableCode = item.table_code;
-          if (item.session_id && !item.sessionId) item.sessionId = item.session_id;
+          if (item.table_id && !item.tableCode) item.tableCode = item.table_id;
+          if (item.data?.tableCode && !item.tableCode) item.tableCode = item.data.tableCode;
+
+          // Multi-layer session ID extraction (backward & forward compatible)
+          const resolvedSessionId = item.sessionId ||
+            item.session_id ||
+            item.data?.sessionId ||
+            item.data?.session_id ||
+            (Array.isArray(item.tickets) && item.tickets[0]?.sessionId) ||
+            (Array.isArray(item.data?.tickets) && item.data.tickets[0]?.sessionId) ||
+            null;
+
+          if (resolvedSessionId) {
+            item.sessionId = resolvedSessionId;
+            item.session_id = resolvedSessionId;
+          }
+
           if (!item.orderId) item.orderId = item.id;
-          if (!item.tableNumber && item.tableCode) {
-            item.tableNumber = parseInt(item.tableCode.replace(/\D/g, '')) || 1;
+          if (!item.tableNumber) {
+            item.tableNumber = item.data?.tableNumber || (item.tableCode ? parseInt(item.tableCode.replace(/\D/g, '')) : null) || 1;
+          }
+          if (!item.waiterId) {
+            item.waiterId = item.waiter_id || item.data?.waiterId || item.data?.waiter_id;
           }
           if (item.data && Array.isArray(item.data.items) && (!item.items || item.items.length === 0)) {
             item.items = item.data.items;
@@ -141,6 +167,19 @@ export class SupabaseDataAdapter {
         if (item.source_location && !item.sourceLocation) item.sourceLocation = item.source_location;
         if (item.destination_location && !item.destinationLocation) item.destinationLocation = item.destination_location;
         
+        // Stock Ledger domain: stock_operations & stock_transactions
+        if (item.operation_id && !item.operationId) item.operationId = item.operation_id;
+        if (item.operation_type && !item.operationType) item.operationType = item.operation_type;
+        if (item.transaction_type && !item.transactionType) item.transactionType = item.transaction_type;
+        if (item.reference_type && !item.referenceType) item.referenceType = item.reference_type;
+        if (item.reference_id && !item.referenceId) item.referenceId = item.reference_id;
+        if (item.reference_line_id && !item.referenceLineId) item.referenceLineId = item.reference_line_id;
+        if (item.reversal_of_operation_id && !item.reversalOfOperationId) item.reversalOfOperationId = item.reversal_of_operation_id;
+        if (item.reversal_reason && !item.reversalReason) item.reversalReason = item.reversal_reason;
+        if (item.occurred_at && !item.occurredAt) item.occurredAt = item.occurred_at;
+        if (item.performed_by && !item.performedBy) item.performedBy = item.performed_by;
+        if (item.total_cost !== undefined && item.totalCost === undefined) item.totalCost = parseFloat(item.total_cost);
+
         // Normalize tenant restaurant name from patchObj or default
         if (collection === 'tenants') {
           item.name = item.name || (item.patchObj?.header ? item.patchObj.header.replace(/^Welcome to\s+/i, '') : 'Anchor Bistro & Cafe');
@@ -151,17 +190,22 @@ export class SupabaseDataAdapter {
       });
 
       if (tenantId) {
-        list = list.filter(item => (!item.tenantId && !item.tenant_id) || item.tenantId === tenantId || item.tenant_id === tenantId);
+        list = list.filter(item => {
+          const t = item.tenantId || item.tenant_id;
+          if (t) return t === tenantId;
+          return collection === 'tenants' || collection === 'system_config';
+        });
       }
-      return list;
+      return { success: true, data: list };
     } catch (e) {
       console.warn(`[SupabaseDataAdapter] Exception fetching collection "${collection}":`, e.message);
-      return [];
+      return { success: false, error: e.message || String(e), data: null };
     }
   }
 
   async getById(collection, id, tenantId = null) {
-    const list = await this.getCollection(collection, tenantId);
+    const res = await this.getCollection(collection, tenantId);
+    const list = (res && res.success && Array.isArray(res.data)) ? res.data : (Array.isArray(res) ? res : []);
     return list.find(item => item.id === id || item.tenant_id === id || item.uuid === id || item.itemCode === id) || null;
   }
 
@@ -193,12 +237,19 @@ export class SupabaseDataAdapter {
     const targetTable = this._resolveTable(collection);
     if (!this.client || targetTable === 'roles' || targetTable === 'sessions') return true;
     try {
-      const filter = targetTable === 'tenants' ? `tenant_id=eq.${id}` : `id=eq.${id}`;
+      const filter = (this.client && typeof this.client.getFilterKey === 'function') ? this.client.getFilterKey(targetTable, id) : (targetTable === 'tenants' ? `tenant_id=eq.${id}` : `id=eq.${id}`);
       const res = await this.client.deleteRecords(targetTable, filter);
       return res.success;
     } catch (e) {
       console.warn(`[SupabaseDataAdapter] Cloud delete Record for ${targetTable} caught:`, e.message);
       return true;
     }
+  }
+
+  async rpc(fnName, params = {}) {
+    if (!this.client || typeof this.client.rpc !== 'function') {
+      return { success: false, error: 'RPC_NOT_SUPPORTED' };
+    }
+    return this.client.rpc(fnName, params);
   }
 }

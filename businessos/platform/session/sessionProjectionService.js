@@ -8,6 +8,8 @@ import { sessionModel } from './sessionModel.js';
 import { orderModel } from '../ordering/orderModel.js';
 import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
+import { tableMasterModel } from '../layout/tableMasterModel.js';
+import { tenantModel } from '../tenant/tenantModel.js';
 
 class SessionProjectionService {
   constructor() {
@@ -177,11 +179,42 @@ class SessionProjectionService {
       });
     });
 
-    const subtotal = orders.reduce((sum, o) => sum + (parseFloat(o.subtotal || o.totalAmount || o.total_amount) || 0), 0);
-    const cgstAmount = Math.round(subtotal * 0.025 * 100) / 100;
-    const sgstAmount = Math.round(subtotal * 0.025 * 100) / 100;
+    // Fallback: if orders list is empty but tickets exist for session, recover itemized list from tickets
+    if (itemizedList.length === 0 && tickets.length > 0) {
+      tickets.forEach(t => {
+        (t.items || []).forEach(item => {
+          const itemPrice = parseFloat(item.price || item.unitPrice || item.sellingPrice || 0);
+          const itemQty = parseInt(item.quantity || item.qty || 1, 10);
+          const lineTotal = parseFloat(item.lineTotal || item.total || (itemPrice * itemQty));
+          itemizedList.push({
+            lineItemId: item.lineItemId || item.itemId || `${t.id}_${item.name}`,
+            itemId: item.itemId,
+            name: item.name || item.itemName || 'Dish',
+            price: itemPrice,
+            quantity: itemQty,
+            lineTotal,
+            orderId: t.orderId || t.id,
+            status: item.itemStatus || t.status || 'CONFIRMED'
+          });
+        });
+      });
+    }
+
+    const primaryTenant = tenantModel.getPrimaryTenant() || {};
+    const cgstPercent = primaryTenant.cgstPercent !== undefined ? primaryTenant.cgstPercent : 2.5;
+    const sgstPercent = primaryTenant.sgstPercent !== undefined ? primaryTenant.sgstPercent : 2.5;
+    const isServiceChargeEnabled = primaryTenant.isServiceChargeEnabled !== false;
+    const serviceChargePercent = (isServiceChargeEnabled && primaryTenant.serviceChargePercent) ? parseFloat(primaryTenant.serviceChargePercent) : 5.0;
+
+    const calculatedSubtotal = itemizedList.reduce((sum, it) => sum + (parseFloat(it.lineTotal) || 0), 0);
+    const ordersSubtotal = orders.reduce((sum, o) => sum + (parseFloat(o.subtotal || o.totalAmount || o.total_amount) || 0), 0);
+    const subtotal = calculatedSubtotal > 0 ? calculatedSubtotal : ordersSubtotal;
+
+    const cgstAmount = Math.round(subtotal * (cgstPercent / 100) * 100) / 100;
+    const sgstAmount = Math.round(subtotal * (sgstPercent / 100) * 100) / 100;
+    const serviceChargeAmount = isServiceChargeEnabled ? Math.round(subtotal * (serviceChargePercent / 100) * 100) / 100 : 0;
     const taxAmount = cgstAmount + sgstAmount;
-    const grandTotal = subtotal + taxAmount;
+    const grandTotal = Math.round((subtotal + taxAmount + serviceChargeAmount) * 100) / 100;
 
     const guestNotes = session.guestNotes || session.notes || '';
     const dietaryTags = session.dietaryTags || [];
@@ -205,11 +238,16 @@ class SessionProjectionService {
       guestScript = `Order confirmed and queued in kitchen.`;
     }
 
+    const master = tableMasterModel.getTableMaster(session.tableCode || session.table_code || session.tableNumber);
+    const canonicalTableCode = session.tableCode || session.table_code || (master ? master.tableCode : `T-${String(session.tableNumber || 1).padStart(2, '0')}`);
+    const canonicalTableNum = session.tableNumber || (master ? master.tableNumber : null);
+
     return {
       sessionId: session.id || session.sessionId,
-      tableId: session.tableId || `tbl_${session.tableNumber}`,
-      tableNumber: session.tableNumber,
-      tableCode: session.tableCode || `T-${String(session.tableNumber || 1).padStart(2, '0')}`,
+      tableId: session.tableId || (master ? master.id : `tbl_${canonicalTableNum || 1}`),
+      tableNumber: canonicalTableNum,
+      tableCode: canonicalTableCode,
+      table_code: canonicalTableCode,
       guestCount: session.guestCount || 2,
       waiter: {
         id: session.assignedWaiterId,
@@ -232,6 +270,7 @@ class SessionProjectionService {
       subtotal,
       cgstAmount,
       sgstAmount,
+      serviceChargeAmount,
       taxAmount,
       grandTotal,
       billStatus: session.status === 'BILL_GENERATED' ? 'GENERATED' : (session.status === 'PAYMENT_RECEIVED' || session.status === 'CLOSED' ? 'PAID' : 'NONE'),

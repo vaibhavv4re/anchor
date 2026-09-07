@@ -15,8 +15,7 @@ export const PRODUCT_FAMILIES_REGISTRY = {
   'FAM-PACKAGED': { code: 'FAM-PACKAGED', name: 'Canned & Packaged Foods', icon: '🥫', description: 'Canned ingredients, packaged food products' },
   'FAM-BEVERAGES': { code: 'FAM-BEVERAGES', name: 'Beverages', icon: '🍹', description: 'Bar & non-alcoholic beverage ingredients/products' },
   'FAM-PREPS': { code: 'FAM-PREPS', name: 'Semi-Finished Preparations', icon: '🧂', description: 'Masalas, gravy bases, dips, stocks, sauces' },
-  'FAM-PACKAGING': { code: 'FAM-PACKAGING', name: 'Packaging', icon: '📦', description: 'Takeaway containers, boxes, bags, foil, cups' },
-  'FAM-CONSUMABLES': { code: 'FAM-CONSUMABLES', name: 'Consumables', icon: '🧻', description: 'Tissues, napkins, POS rolls, operating disposables' },
+  'FAM-SUPPLIES': { code: 'FAM-SUPPLIES', name: 'Packaging & Supplies', icon: '📦', description: 'Takeaway boxes, bags, cutlery, packaging, hygiene & operating supplies' },
   'FAM-HOUSEKEEPING': { code: 'FAM-HOUSEKEEPING', name: 'Cleaning & Housekeeping', icon: '🧹', description: 'Detergents, sanitizers, cleaning chemicals' },
   'FAM-ASSETS': { code: 'FAM-ASSETS', name: 'Operating Assets', icon: '🪑', description: 'Glasses, mugs, equipment, utensils' },
   'FAM-SERVICES': { code: 'FAM-SERVICES', name: 'Services', icon: '🧾', description: 'Delivery charges, service fees, non-stock items' }

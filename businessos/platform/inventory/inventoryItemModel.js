@@ -443,26 +443,30 @@ class InventoryItemModel {
 
   getAllItems(tenantId = null) {
     const targetTenantId = this._getTenantId(tenantId);
-    let store = [];
+    let store = null;
 
     if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.dataGateway) {
       const cached = window.__APP__.platform.dataGateway.getCachedCollection('inventory', targetTenantId);
-      if (Array.isArray(cached) && cached.length > 0) store = cached;
+      if (Array.isArray(cached)) store = cached;
     }
 
-    if (store.length === 0) {
+    if (!Array.isArray(store)) {
       store = offlineStore.getCollection('inventory', targetTenantId) || [];
     }
 
     if (!Array.isArray(store) || store.length === 0) {
-      store = offlineStore.getCollection('inventory_items', targetTenantId) || [];
+      const itemsCol = offlineStore.getCollection('inventory_items', targetTenantId) || [];
+      if (Array.isArray(itemsCol) && itemsCol.length > 0) store = itemsCol;
     }
 
-    if (!Array.isArray(store) || store.length === 0) {
+    // Only seed canonical items if DataGateway is absent and offlineStore is completely uninitialized
+    if ((!Array.isArray(store) || store.length === 0) && (!typeof window !== 'undefined' || !window.__APP__ || !window.__APP__.platform || !window.__APP__.platform.dataGateway)) {
       store = this._getCanonicalSeedItems();
       offlineStore.setCollection('inventory_items', store);
       offlineStore.setCollection('inventory', store);
     }
+
+    if (!Array.isArray(store)) store = [];
 
     // Normalize items for consistent property access (itemName/name, itemCode/sku/id, currentUnitCost/unitValuation)
     const normalized = store.map(i => ({

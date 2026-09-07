@@ -22,7 +22,7 @@ export const PhysicalTableStates = Object.freeze({
 });
 
 const AllowedTransitions = {
-  [PhysicalTableStates.AVAILABLE]: [PhysicalTableStates.RESERVED, PhysicalTableStates.OCCUPIED, PhysicalTableStates.OUT_OF_SERVICE],
+  [PhysicalTableStates.AVAILABLE]: [PhysicalTableStates.RESERVED, PhysicalTableStates.OCCUPIED, PhysicalTableStates.CLEANING, PhysicalTableStates.OUT_OF_SERVICE],
   [PhysicalTableStates.RESERVED]: [PhysicalTableStates.OCCUPIED, PhysicalTableStates.AVAILABLE, PhysicalTableStates.OUT_OF_SERVICE],
   [PhysicalTableStates.OCCUPIED]: [PhysicalTableStates.ORDER_IN_PROGRESS, PhysicalTableStates.PAYMENT_PENDING, PhysicalTableStates.CLEANING, PhysicalTableStates.AVAILABLE],
   [PhysicalTableStates.ORDER_IN_PROGRESS]: [PhysicalTableStates.PAYMENT_PENDING, PhysicalTableStates.CLEANING, PhysicalTableStates.AVAILABLE],

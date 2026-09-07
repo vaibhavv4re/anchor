@@ -635,12 +635,13 @@ export class DataControlCenterView {
               <tr style="background:var(--bg-surface-2); text-align:left;"><th style="padding:10px;">Category Code</th><th style="padding:10px;">Category Name</th><th style="padding:10px;">Department</th></tr>
             </thead>
             <tbody>
-              <tr style="border-bottom:1px solid var(--border-subtle);"><td style="padding:10px; font-weight:700; font-family:monospace;">CAT-MEAT</td><td style="padding:10px; font-weight:600;">Poultry & Meat</td><td style="padding:10px;">KITCHEN</td></tr>
-              <tr style="border-bottom:1px solid var(--border-subtle);"><td style="padding:10px; font-weight:700; font-family:monospace;">CAT-SEAFOOD</td><td style="padding:10px; font-weight:600;">Fresh Seafood</td><td style="padding:10px;">KITCHEN</td></tr>
-              <tr style="border-bottom:1px solid var(--border-subtle);"><td style="padding:10px; font-weight:700; font-family:monospace;">CAT-PRODUCE</td><td style="padding:10px; font-weight:600;">Vegetables & Herbs</td><td style="padding:10px;">KITCHEN</td></tr>
-              <tr style="border-bottom:1px solid var(--border-subtle);"><td style="padding:10px; font-weight:700; font-family:monospace;">CAT-DAIRY</td><td style="padding:10px; font-weight:600;">Dairy & Cheese</td><td style="padding:10px;">KITCHEN</td></tr>
-              <tr style="border-bottom:1px solid var(--border-subtle);"><td style="padding:10px; font-weight:700; font-family:monospace;">CAT-BAR</td><td style="padding:10px; font-weight:600;">Spirits & Beverages</td><td style="padding:10px;">BAR</td></tr>
-              <tr style="border-bottom:1px solid var(--border-subtle);"><td style="padding:10px; font-weight:700; font-family:monospace;">CAT-SEMI</td><td style="padding:10px; font-weight:600;">Semi-Finished Preps</td><td style="padding:10px;">PRODUCTION</td></tr>
+              <tr style="border-bottom:1px solid var(--border-subtle);"><td style="padding:10px; font-weight:700; font-family:monospace;">CAT-CHICKEN</td><td style="padding:10px; font-weight:600;">Chicken</td><td style="padding:10px;">Meat & Poultry</td></tr>
+              <tr style="border-bottom:1px solid var(--border-subtle);"><td style="padding:10px; font-weight:700; font-family:monospace;">CAT-MUTTON</td><td style="padding:10px; font-weight:600;">Mutton & Lamb</td><td style="padding:10px;">Meat & Poultry</td></tr>
+              <tr style="border-bottom:1px solid var(--border-subtle);"><td style="padding:10px; font-weight:700; font-family:monospace;">CAT-FISH</td><td style="padding:10px; font-weight:600;">Fish & Finfish</td><td style="padding:10px;">Seafood</td></tr>
+              <tr style="border-bottom:1px solid var(--border-subtle);"><td style="padding:10px; font-weight:700; font-family:monospace;">CAT-VEG</td><td style="padding:10px; font-weight:600;">Fresh Vegetables</td><td style="padding:10px;">Fruits & Vegetables</td></tr>
+              <tr style="border-bottom:1px solid var(--border-subtle);"><td style="padding:10px; font-weight:700; font-family:monospace;">CAT-BUTTER</td><td style="padding:10px; font-weight:600;">Butter & Ghee</td><td style="padding:10px;">Dairy & Fats</td></tr>
+              <tr style="border-bottom:1px solid var(--border-subtle);"><td style="padding:10px; font-weight:700; font-family:monospace;">CAT-BEV-ALC</td><td style="padding:10px; font-weight:600;">Spirits & Beer</td><td style="padding:10px;">Beverages</td></tr>
+              <tr style="border-bottom:1px solid var(--border-subtle);"><td style="padding:10px; font-weight:700; font-family:monospace;">CAT-MASALA-BASE</td><td style="padding:10px; font-weight:600;">Signature Gravies & Masalas</td><td style="padding:10px;">Semi-Finished Preparations</td></tr>
             </tbody>
           </table>
         </div>
@@ -772,7 +773,7 @@ export class DataControlCenterView {
             <div style="display:flex; flex-direction:column; gap:10px; font-size:0.85rem;">
               <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-subtle); padding-bottom:6px;">
                 <span style="color:var(--text-muted);">Category Code:</span>
-                <strong>${item.category_code || 'CAT-GEN'}</strong>
+                <strong>${item.category_code || 'CAT-VEG'}</strong>
               </div>
               <div style="display:flex; justify-content:space-between; border-bottom:1px solid var(--border-subtle); padding-bottom:6px;">
                 <span style="color:var(--text-muted);">Base UOM:</span>
@@ -930,7 +931,7 @@ export class DataControlCenterView {
   }
 
   handleDownloadTemplate() {
-    const tpl = 'item_code,item_name,item_type,category_code,base_uom,purchase_uom,conversion_factor,default_location_code,preferred_supplier_code,last_purchase_price\nRM0101,"Chicken Boneless",Raw Material,CAT-MEAT,KG,KG,1,LOC-CHILL,SUP-001,280.00\n';
+    const tpl = 'item_code,item_name,item_type,category_code,base_uom,purchase_uom,conversion_factor,default_location_code,preferred_supplier_code,last_purchase_price\nRM0101,"Chicken Boneless",Raw Material,CAT-CHICKEN,KG,KG,1,LOC-CHILL,SUP-001,280.00\n';
     this._downloadCsv(tpl, 'inventory_master_template.csv');
   }
 

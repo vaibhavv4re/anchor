@@ -7,6 +7,8 @@
 import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
 import { productionRoutingEngine } from './productionRoutingEngine.js';
+import { inventoryConsumptionService } from '../inventory/inventoryConsumptionService.js';
+import { tableMasterModel } from '../layout/tableMasterModel.js';
 
 class OrderModel {
   constructor() {
@@ -40,15 +42,63 @@ class OrderModel {
    * @param {Object} data { sessionId, tableNumber, waiterId, items, subtotal, tenantId, orderNumber, notes }
    * @returns {Object} Confirmed order record
    */
-  createOrder({ sessionId, tableNumber, waiterId, items, subtotal, tenantId = null, orderNumber = null, notes = '' }) {
+  createOrder({ sessionId, tableNumber, tableCode: inputTableCode = null, waiterId, items, subtotal, tenantId = null, orderNumber = null, notes = '' }) {
     const session = typeof sessionStorage !== 'undefined' ? JSON.parse(sessionStorage.getItem('ros_session') || '{}') : {};
     const targetTenantId = tenantId || session.tenantId || 'tenant_h0qc7wf';
     const correlationId = 'CID-' + Math.floor(10000 + Math.random() * 90000);
     const orderId = 'ord_' + Math.random().toString(36).substring(2, 9);
     const now = new Date();
     const formattedOrderNo = orderNumber || `ORD-${now.getFullYear()}-${String(Math.floor(1000 + Math.random() * 9000))}`;
-    const tableNum = parseInt(tableNumber) || 1;
-    const tableCode = `T-${String(tableNum).padStart(2, '0')}`;
+
+    // Resolve table details & waiter identity: If sessionId is present, the table session is authoritative
+    let resolvedTableCode = null;
+    let resolvedTableNum = null;
+    let sessionWaiterId = null;
+
+    if (sessionId) {
+      const activeSessions = offlineStore.getCollection('table_sessions', targetTenantId) || offlineStore.getCollection('table_sessions') || [];
+      const foundSession = activeSessions.find(s => (s.id === sessionId || s.sessionId === sessionId));
+      if (foundSession) {
+        resolvedTableCode = foundSession.tableCode || foundSession.table_code;
+        resolvedTableNum = foundSession.tableNumber || foundSession.table_number;
+        sessionWaiterId = foundSession.assignedWaiterId || foundSession.assigned_waiter_id;
+      }
+    }
+
+    // Fall back to passed arguments if not resolved from session
+    if (!resolvedTableCode) resolvedTableCode = inputTableCode;
+    if (!resolvedTableNum && tableNumber) resolvedTableNum = parseInt(tableNumber);
+
+    // Cross-check tableMasterModel for canonical tableCode (e.g. Table 9 -> AC-T-03)
+    const master = tableMasterModel.getTableMaster(resolvedTableCode || resolvedTableNum);
+    if (master) {
+      if (!resolvedTableCode || (resolvedTableCode.startsWith('T-') && master.tableCode && !master.tableCode.startsWith('T-'))) {
+        resolvedTableCode = master.tableCode;
+      }
+      if (!resolvedTableNum) resolvedTableNum = master.tableNumber;
+    }
+
+    const tableNum = resolvedTableNum || (resolvedTableCode ? parseInt(String(resolvedTableCode).replace(/\D+/g, '')) : null) || 1;
+    const finalTableCode = resolvedTableCode || `T-${String(tableNum).padStart(2, '0')}`;
+    const finalTableId = finalTableCode;
+    const actorId = waiterId || session.employeeId || 'emp-waiter';
+    const finalWaiterId = sessionWaiterId || actorId;
+
+    const mappedItems = (items || []).map((it, idx) => ({
+      lineItemId: `line_${orderId}_${idx + 1}`,
+      itemId: it.itemId || it.id || it.itemCode,
+      itemCode: it.itemCode || it.itemId || it.id,
+      name: it.name || it.itemName || 'Menu Item',
+      itemName: it.name || it.itemName || 'Menu Item',
+      price: parseFloat(it.price || it.sellingPrice) || 0,
+      quantity: parseFloat(it.quantity) || 1,
+      recipeId: it.recipeId || null,
+      routing: it.routing || 'KITCHEN_LINE',
+      category: it.category || 'FOOD',
+      selectedModifiers: it.selectedModifiers || [],
+      notes: it.notes || '',
+      itemStatus: 'QUEUED' // QUEUED -> PREPARING -> READY -> SERVED
+    }));
 
     const orderRecord = {
       id: orderId,
@@ -60,24 +110,14 @@ class OrderModel {
       sessionId,
       session_id: sessionId,
       tableNumber: tableNum,
-      tableCode,
-      table_code: tableCode,
-      waiterId: waiterId || session.employeeId || 'emp-waiter',
-      items: (items || []).map((it, idx) => ({
-        lineItemId: `line_${orderId}_${idx + 1}`,
-        itemId: it.itemId || it.id || it.itemCode,
-        itemCode: it.itemCode || it.itemId || it.id,
-        name: it.name || it.itemName || 'Menu Item',
-        itemName: it.name || it.itemName || 'Menu Item',
-        price: parseFloat(it.price || it.sellingPrice) || 0,
-        quantity: parseFloat(it.quantity) || 1,
-        recipeId: it.recipeId || null,
-        routing: it.routing || 'KITCHEN_LINE',
-        category: it.category || 'FOOD',
-        selectedModifiers: it.selectedModifiers || [],
-        notes: it.notes || '',
-        itemStatus: 'QUEUED' // QUEUED -> PREPARING -> READY -> SERVED
-      })),
+      table_number: tableNum,
+      tableCode: finalTableCode,
+      table_code: finalTableCode,
+      tableId: finalTableId,
+      table_id: finalTableId,
+      waiterId: finalWaiterId,
+      actorId,
+      items: mappedItems,
       subtotal: parseFloat(subtotal) || 0,
       totalAmount: parseFloat(subtotal) || 0,
       total_amount: parseFloat(subtotal) || 0,
@@ -85,6 +125,24 @@ class OrderModel {
       status: 'CONFIRMED',
       tickets: [], // Will be populated by productionRoutingEngine with KOT/BOT objects
       notes: notes || '',
+      data: {
+        sessionId,
+        session_id: sessionId,
+        tableNumber: tableNum,
+        table_number: tableNum,
+        tableCode: finalTableCode,
+        table_code: finalTableCode,
+        tableId: finalTableId,
+        table_id: finalTableId,
+        waiterId: finalWaiterId,
+        actorId,
+        orderNumber: formattedOrderNo,
+        order_number: formattedOrderNo,
+        orderStatus: 'CONFIRMED',
+        status: 'CONFIRMED',
+        items: mappedItems,
+        tickets: []
+      },
       createdAt: now.toISOString(),
       updatedAt: now.toISOString(),
       correlationId
@@ -166,8 +224,14 @@ class OrderModel {
    * @returns {Array<Object>}
    */
   getOrdersForSession(sessionId, tenantId = null) {
+    if (!sessionId) return [];
     const orders = this.getOrders(tenantId);
-    return orders.filter(o => o.sessionId === sessionId || o.session_id === sessionId);
+    return orders.filter(o => {
+      const directId = o.sessionId || o.session_id || o.data?.sessionId || o.data?.session_id;
+      if (directId === sessionId) return true;
+      const tickets = Array.isArray(o.tickets) ? o.tickets : (o.data?.tickets || []);
+      return tickets.some(t => (t.sessionId === sessionId || t.session_id === sessionId));
+    });
   }
 
   /**
@@ -282,6 +346,131 @@ class OrderModel {
    */
   updateItemStatusInTicket(ticketId, itemId, status, tenantId = null) {
     return productionRoutingEngine.updateTicketItemStatus(ticketId, itemId, status, tenantId);
+  }
+
+  /**
+   * Void an individual item in an order. If item was in READY status, reverses consumption.
+   */
+  async voidOrderItem(orderId, lineItemId, reason = 'ORDER_ITEM_VOIDED', tenantId = null) {
+    const order = this.getOrder(orderId, tenantId);
+    if (!order) return null;
+
+    const targetTenantId = tenantId || order.tenantId || 'tenant_h0qc7wf';
+    const now = new Date().toISOString();
+
+    // 1. Find line item in order.items
+    const item = (order.items || []).find(i => i.lineItemId === lineItemId || i.itemId === lineItemId);
+    let wasReady = item && (item.itemStatus === 'READY' || item.status === 'READY');
+    if (!wasReady) {
+      (order.tickets || []).forEach(t => {
+        (t.items || []).forEach(ti => {
+          if (ti.lineItemId === lineItemId || ti.itemId === lineItemId) {
+            if (ti.itemStatus === 'READY' || ti.status === 'READY') {
+              wasReady = true;
+            }
+          }
+        });
+      });
+    }
+
+    if (item) {
+      item.itemStatus = 'VOIDED';
+      item.status = 'VOIDED';
+      item.voidReason = reason;
+      item.voidedAt = now;
+    }
+
+    // 2. Also find in tickets
+    (order.tickets || []).forEach(t => {
+      (t.items || []).forEach(ti => {
+        if (ti.lineItemId === lineItemId || ti.itemId === lineItemId) {
+          ti.itemStatus = 'VOIDED';
+          ti.status = 'VOIDED';
+          ti.voidReason = reason;
+          ti.voidedAt = now;
+        }
+      });
+    });
+
+    order.updatedAt = now;
+    const dg = this._getDataGateway();
+    if (dg) {
+      dg.update('orders', order.id, order).catch(e => console.warn('[orderModel] Cloud void item sync error:', e.message));
+    }
+
+    // 3. Reverse inventory consumption if the item was already prepared/READY
+    if (wasReady) {
+      await inventoryConsumptionService.reverseConsumptionForOrderLine({
+        tenantId: targetTenantId,
+        orderId: order.orderId || order.id,
+        orderLineId: lineItemId,
+        reason,
+        occurredAt: now,
+        performedBy: 'System'
+      });
+    }
+
+    platformEventBus.publish('order:item:voided', { orderId, lineItemId, reason, tenantId: targetTenantId });
+    return order;
+  }
+
+  /**
+   * Cancel entire order. Reverses consumption for all items that were in READY status.
+   */
+  async cancelOrder(orderId, reason = 'ORDER_CANCELLED', tenantId = null) {
+    const order = this.getOrder(orderId, tenantId);
+    if (!order) return null;
+
+    const targetTenantId = tenantId || order.tenantId || 'tenant_h0qc7wf';
+    const now = new Date().toISOString();
+
+    order.orderStatus = 'CANCELLED';
+    order.status = 'CANCELLED';
+    order.cancelReason = reason;
+    order.cancelledAt = now;
+    order.updatedAt = now;
+
+    // Collect all items that were in READY status
+    const readyItems = [];
+    (order.items || []).forEach(i => {
+      if (i.itemStatus === 'READY' || i.status === 'READY') {
+        readyItems.push(i);
+      }
+      i.itemStatus = 'CANCELLED';
+      i.status = 'CANCELLED';
+    });
+
+    (order.tickets || []).forEach(t => {
+      t.status = 'CANCELLED';
+      t.updatedAt = now;
+      (t.items || []).forEach(ti => {
+        if ((ti.itemStatus === 'READY' || ti.status === 'READY') && !readyItems.some(x => (x.lineItemId || x.itemId) === (ti.lineItemId || ti.itemId))) {
+          readyItems.push(ti);
+        }
+        ti.itemStatus = 'CANCELLED';
+        ti.status = 'CANCELLED';
+      });
+    });
+
+    const dg = this._getDataGateway();
+    if (dg) {
+      dg.update('orders', order.id, order).catch(e => console.warn('[orderModel] Cloud order cancel sync error:', e.message));
+    }
+
+    // Reverse consumption for each ready item
+    for (const rItem of readyItems) {
+      await inventoryConsumptionService.reverseConsumptionForOrderLine({
+        tenantId: targetTenantId,
+        orderId: order.orderId || order.id,
+        orderLineId: rItem.lineItemId || rItem.itemId,
+        reason,
+        occurredAt: now,
+        performedBy: 'System'
+      });
+    }
+
+    platformEventBus.publish('order:cancelled', { orderId, reason, tenantId: targetTenantId });
+    return order;
   }
 
   _broadcastChange(type, data) {

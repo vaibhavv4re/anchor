@@ -1,5 +1,6 @@
 import { offlineStore as globalOfflineStore } from '../../../../../businessos/platform/offline_store/offlineStore.js';
 import { orderModel } from '../../../../../businessos/platform/ordering/orderModel.js';
+import { platformEventBus } from '../../../../../businessos/platform/events/platformEvents.js';
 
 /**
  * Capability 1.3 - Kitchen & Chef Workspace: Tab 1 - 🏠 Dashboard
@@ -13,6 +14,7 @@ export class KitchenDashboardView {
     this.container = null;
     this.dataGateway = deps.dataGateway || (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform ? window.__APP__.platform.dataGateway : null);
     this.offlineStore = deps.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : globalOfflineStore);
+    this.eventBus = deps.platformEventBus || deps.eventBus || (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform ? window.__APP__.platform.eventBus : null) || platformEventBus;
     this.onNavigate = deps.onNavigate || (() => {});
     this.onLaunchKDS = deps.onLaunchKDS || (() => {});
   }
@@ -31,9 +33,21 @@ export class KitchenDashboardView {
   }
 
   render() {
-    this.container = document.createElement('div');
+    this.container = typeof document !== 'undefined' ? document.createElement('div') : { className: '', appendChild: () => {} };
     this.container.className = 'kitchen-dashboard-container animate-fade-in';
     this.updateContent();
+
+    if (!this._subscribedEvents) {
+      this._subscribedEvents = true;
+      if (this.eventBus && typeof this.eventBus.subscribe === 'function') {
+        this.eventBus.subscribe('stock:balance:updated', () => {
+          if (this.container && (typeof document === 'undefined' || !document.body || document.body.contains(this.container))) {
+            this.updateContent();
+          }
+        });
+      }
+    }
+
     return this.container;
   }
 
@@ -47,16 +61,18 @@ export class KitchenDashboardView {
 
     // Calculate Low Stock items (currentQty <= reorderLevel)
     const lowStockAlerts = items.filter(item => {
-      const itemBalances = balances.filter(b => b.itemCode === item.itemCode && (!tenantId || b.tenantId === tenantId));
+      const iCode = item.itemCode || item.item_code;
+      const itemBalances = balances.filter(b => (b.itemCode || b.item_code) === iCode && (!tenantId || b.tenantId === tenantId || b.tenant_id === tenantId));
       const currentQty = itemBalances.length
-        ? itemBalances.reduce((sum, b) => sum + (parseFloat(b.quantity) || 0), 0)
+        ? itemBalances.reduce((sum, b) => sum + (parseFloat(b.quantity !== undefined ? b.quantity : (b.data?.quantity || 0)) || 0), 0)
         : (item.currentStock !== undefined ? item.currentStock : (item.openingStock !== undefined ? item.openingStock : 0));
-      const reorder = parseFloat(item.reorderLevel) || 0;
+      const reorder = parseFloat(item.reorderLevel || item.reorder_level) || 0;
       return reorder > 0 && currentQty <= reorder;
     }).map(item => {
-      const itemBalances = balances.filter(b => b.itemCode === item.itemCode && (!tenantId || b.tenantId === tenantId));
+      const iCode = item.itemCode || item.item_code;
+      const itemBalances = balances.filter(b => (b.itemCode || b.item_code) === iCode && (!tenantId || b.tenantId === tenantId || b.tenant_id === tenantId));
       const currentQty = itemBalances.length
-        ? itemBalances.reduce((sum, b) => sum + (parseFloat(b.quantity) || 0), 0)
+        ? itemBalances.reduce((sum, b) => sum + (parseFloat(b.quantity !== undefined ? b.quantity : (b.data?.quantity || 0)) || 0), 0)
         : (item.currentStock !== undefined ? item.currentStock : (item.openingStock !== undefined ? item.openingStock : 0));
       return {
         ...item,

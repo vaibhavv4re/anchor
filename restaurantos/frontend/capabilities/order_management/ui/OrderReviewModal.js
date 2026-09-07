@@ -7,11 +7,13 @@
 import { orderModel } from '../../../../../businessos/platform/ordering/orderModel.js';
 import { authEngine } from '../../../../../businessos/platform/authentication/authEngine.js';
 import { sessionStateMachine, SessionMilestones } from '../../../../../businessos/platform/session/sessionStateMachine.js';
+import { sessionModel } from '../../../../../businessos/platform/session/sessionModel.js';
 
 export class OrderReviewModal {
-  constructor({ sessionId, tableNumber, draftItems, onClose, onOrderConfirmed }) {
+  constructor({ sessionId, tableNumber, tableCode = null, draftItems, onClose, onOrderConfirmed }) {
     this.sessionId = sessionId;
     this.tableNumber = tableNumber;
+    this.tableCode = tableCode;
     this.draftItems = draftItems;
     this.onClose = onClose;
     this.onOrderConfirmed = onOrderConfirmed;
@@ -85,15 +87,20 @@ export class OrderReviewModal {
     });
 
     this.modalEl.querySelector('#btn-confirm-order-action').addEventListener('click', () => {
+      const activeSession = this.sessionId ? sessionModel.getSession(this.sessionId) : null;
+      const sessionWaiterId = activeSession?.assignedWaiterId || activeSession?.assigned_waiter_id;
       const currentAuth = authEngine.getCurrentSession();
-      const waiterId = currentAuth ? currentAuth.employeeId : 'emp-rahul';
+      const actorId = currentAuth ? currentAuth.employeeId : 'emp-waiter';
+      const waiterId = sessionWaiterId || actorId;
       const subtotal = this.draftItems.reduce((acc, it) => acc + (it.price * it.quantity), 0);
 
       // 1. Create Confirmed Order
       const confirmedOrder = orderModel.createOrder({
         sessionId: this.sessionId,
         tableNumber: this.tableNumber,
+        tableCode: this.tableCode,
         waiterId,
+        actorId,
         items: this.draftItems,
         subtotal
       });

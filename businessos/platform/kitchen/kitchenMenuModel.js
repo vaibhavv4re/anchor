@@ -12,6 +12,24 @@
 import { offlineStore } from '../offline_store/offlineStore.js';
 import { ACTUAL_ANCHOR_MENU } from '../../../restaurantos/frontend/capabilities/kitchen/data/actualMenuData.js';
 
+export const BAR_CATEGORIES = new Set([
+  'BLENDED SCOTCH WHISKY', 'MILD BEER', 'COCKTAILS', 'MOCKTAILS',
+  'DOMESTIC WHISKY', 'VODKA', 'HOUSE WINES', 'PREMIUM WHISKY',
+  'STRONG BEER', 'BEVERAGE', 'BRANDY', 'GIN', 'RUM',
+  'SINGLE MALT SCOTCH WHISKY', 'TEQUILA', 'BREEZER', 'BEVERAGES', 'BAR', 'BEERS'
+]);
+
+export function isBarMenuItem(item) {
+  if (!item) return false;
+  const routing = (item.routing || '').toUpperCase();
+  const prodArea = (item.productionArea || item.production_area || '').toUpperCase();
+  const cat = (item.category || '').toUpperCase();
+  if (routing === 'BAR' || prodArea === 'BAR') return true;
+  if (BAR_CATEGORIES.has(cat)) return true;
+  if (cat.includes('WHISKY') || cat.includes('BEER') || cat.includes('WINE') || cat.includes('COCKTAIL')) return true;
+  return false;
+}
+
 class KitchenMenuModel {
   /**
    * Lazily resolve DataGateway from global app graph.
@@ -53,7 +71,18 @@ class KitchenMenuModel {
 
     return rawList.filter(item => {
       // Filter by tenant if provided
-      if (tenantId && item.tenantId && item.tenantId !== tenantId) return false;
+      if (tenantId) {
+        const itemTenant = item.tenantId || item.tenant_id;
+        if (itemTenant && itemTenant !== tenantId) return false;
+      }
+
+      // Domain partition (KITCHEN vs BAR)
+      const isBar = isBarMenuItem(item);
+      if (filters.domain === 'KITCHEN' || filters.workspace === 'KITCHEN' || filters.excludeBar) {
+        if (isBar) return false;
+      } else if (filters.domain === 'BAR' || filters.workspace === 'BAR') {
+        if (!isBar) return false;
+      }
 
       // Filter out ARCHIVED unless explicitly requested
       const lifecycle = item.lifecycleStatus || 'ACTIVE';
@@ -204,8 +233,8 @@ class KitchenMenuModel {
       availabilityStatus: itemData.availabilityStatus || (existing ? existing.availabilityStatus : 'AVAILABLE'),
       lifecycleStatus: itemData.lifecycleStatus || (existing ? existing.lifecycleStatus : 'ACTIVE'),
       recipeId: itemData.recipeId || (existing ? existing.recipeId : null),
-      routing: itemData.routing || (existing ? existing.routing : 'KITCHEN_LINE'),
-      productionArea: itemData.productionArea || (existing ? existing.productionArea : 'BAR'),
+      routing: itemData.routing || (existing ? existing.routing : (isBarMenuItem(itemData) ? 'BAR' : 'KITCHEN_LINE')),
+      productionArea: itemData.productionArea || (existing ? existing.productionArea : (isBarMenuItem(itemData) ? 'BAR' : 'KITCHEN')),
       recipeNotes: itemData.recipeNotes || (existing ? existing.recipeNotes : ''),
       spicinessLevel: itemData.spicinessLevel || (existing ? existing.spicinessLevel : 'MEDIUM'),
       region: itemData.region || (existing ? existing.region : 'Coastal India'),
@@ -425,10 +454,11 @@ class KitchenMenuModel {
   /**
    * Compute menu overview summary KPIs
    * @param {string|null} tenantId 
+   * @param {Object} filters
    * @returns {{ totalItems: number, activeItems: number, soldOutItems: number, pausedItems: number, withoutRecipeItems: number, categories: Array<string> }}
    */
-  getStats(tenantId = null) {
-    const list = this.getAll(tenantId, { showArchived: false });
+  getStats(tenantId = null, filters = {}) {
+    const list = this.getAll(tenantId, { ...filters, showArchived: false });
     const totalItems = list.length;
     const activeItems = list.filter(i => (i.availabilityStatus || 'AVAILABLE') === 'AVAILABLE').length;
     const soldOutItems = list.filter(i => i.availabilityStatus === 'SOLD_OUT').length;
@@ -450,10 +480,11 @@ class KitchenMenuModel {
   /**
    * Compute Recipe Linkage stats (K-03 preparation)
    * @param {string|null} tenantId 
+   * @param {Object} filters
    * @returns {{ total: number, linkedCount: number, missingCount: number }}
    */
-  getRecipeLinkageStats(tenantId = null) {
-    const list = this.getAll(tenantId, { showArchived: false });
+  getRecipeLinkageStats(tenantId = null, filters = {}) {
+    const list = this.getAll(tenantId, { ...filters, showArchived: false });
     const total = list.length;
     const linkedCount = list.filter(i => Boolean(i.recipeId)).length;
     const missingCount = total - linkedCount;

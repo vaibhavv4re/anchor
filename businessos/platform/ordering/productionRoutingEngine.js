@@ -10,6 +10,7 @@ import { orderModel } from './orderModel.js';
 import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
 import { resolvedBomEngine } from './resolvedBomEngine.js';
+import { inventoryConsumptionService } from '../inventory/inventoryConsumptionService.js';
 
 class ProductionRoutingEngine {
   constructor() {
@@ -157,8 +158,8 @@ class ProductionRoutingEngine {
         dg.update('orders', order.id, order).catch(e => console.warn('[productionRoutingEngine] Cloud order tickets sync error:', e.message));
       }
 
-      // 4. Automatic Inventory Recipe BOM Deduction
-      this._deductOrderRecipeBOM(order, targetTenantId);
+      // 4. Model B Architecture: Stock deduction does NOT occur on order:confirmed.
+      // Items remain QUEUED. Consumption is triggered when Chef marks KOT items READY in KDS.
     }
 
     return createdTickets;
@@ -329,11 +330,12 @@ class ProductionRoutingEngine {
       const items = ticket.items || [];
       const item = items.find((it, idx) => it.lineItemId === lineItemIdOrIndex || it.itemId === lineItemIdOrIndex || idx === lineItemIdOrIndex || String(idx) === String(lineItemIdOrIndex));
       if (item) {
+        const prevStatus = item.itemStatus || item.status;
         item.itemStatus = newStatus;
         item.status = newStatus;
         if (newStatus === 'READY') item.readyAt = now;
         if (newStatus === 'SERVED') item.servedAt = now;
-        updatedItem = item;
+        updatedItem = { ...item, prevStatus };
       }
       ticket.status = this._computeTicketStatus(ticket);
       ticket.updatedAt = now;
@@ -343,36 +345,119 @@ class ProductionRoutingEngine {
 
     // 2. Update embedded ticket in parent order
     const orders = orderModel.getOrders(targetTenantId);
-    for (const order of orders) {
-      const orderTickets = Array.isArray(order.tickets) ? order.tickets : (order.data?.tickets || []);
+    const targetOrderId = updatedTicket?.orderId || ticketId;
+    const targetOrderNum = updatedTicket?.orderNumber;
+
+    let targetOrder = orders.find(o => 
+      (targetOrderId && (o.id === targetOrderId || o.orderId === targetOrderId)) ||
+      (targetOrderNum && (o.orderNumber === targetOrderNum || o.order_number === targetOrderNum))
+    );
+
+    if (!targetOrder) {
+      targetOrder = orders.find(o => {
+        const oTickets = Array.isArray(o.tickets) ? o.tickets : (o.data?.tickets || []);
+        return oTickets.some(t => t.ticketId === ticketId || t.id === ticketId);
+      });
+    }
+
+    if (targetOrder) {
+      const orderTickets = Array.isArray(targetOrder.tickets) ? [...targetOrder.tickets] : [...(targetOrder.data?.tickets || [])];
       const matchIdx = orderTickets.findIndex(t => t.ticketId === ticketId || t.id === ticketId);
+
       if (matchIdx >= 0) {
         const ticket = orderTickets[matchIdx];
         const items = ticket.items || [];
         const item = items.find((it, idx) => it.lineItemId === lineItemIdOrIndex || it.itemId === lineItemIdOrIndex || idx === lineItemIdOrIndex || String(idx) === String(lineItemIdOrIndex));
         if (item) {
+          const prevStatus = item.itemStatus || item.status;
           item.itemStatus = newStatus;
           item.status = newStatus;
           if (newStatus === 'READY') item.readyAt = now;
           if (newStatus === 'SERVED') item.servedAt = now;
-          if (!updatedItem) updatedItem = item;
+          if (!updatedItem) updatedItem = { ...item, prevStatus };
         }
         ticket.status = this._computeTicketStatus(ticket);
         ticket.updatedAt = now;
-        order.tickets = orderTickets;
-        order.data = { ...(order.data || {}), tickets: orderTickets };
-        order.updatedAt = now;
         if (!updatedTicket) updatedTicket = ticket;
+      } else if (updatedTicket) {
+        orderTickets.push(updatedTicket);
+      }
 
-        const dg = this._getDataGateway();
-        if (dg) {
-          dg.update('orders', order.id, order).catch(e => console.warn('[productionRoutingEngine] Item status cloud sync error:', e.message));
-        }
-        break;
+      // Synchronize matching item in order.items
+      const orderItem = (targetOrder.items || []).find(i => 
+        (updatedItem && updatedItem.lineItemId && i.lineItemId === updatedItem.lineItemId) ||
+        (updatedItem && (updatedItem.itemId || updatedItem.itemCode) && (i.itemId === (updatedItem.itemId || updatedItem.itemCode) || i.itemCode === (updatedItem.itemId || updatedItem.itemCode))) ||
+        (i.lineItemId === lineItemIdOrIndex || i.itemId === lineItemIdOrIndex)
+      );
+      if (orderItem) {
+        orderItem.itemStatus = newStatus;
+        orderItem.status = newStatus;
+      }
+
+      const sId = targetOrder.sessionId || targetOrder.session_id || targetOrder.data?.sessionId || targetOrder.data?.session_id || updatedTicket?.sessionId;
+      if (sId) {
+        targetOrder.sessionId = sId;
+        targetOrder.session_id = sId;
+      }
+      targetOrder.tickets = orderTickets;
+      targetOrder.status = this._computeOrderStatus(targetOrder);
+      targetOrder.orderStatus = targetOrder.status;
+      targetOrder.data = {
+        ...(targetOrder.data || {}),
+        sessionId: sId,
+        session_id: sId,
+        tableNumber: targetOrder.tableNumber || targetOrder.table_number || targetOrder.data?.tableNumber,
+        table_number: targetOrder.tableNumber || targetOrder.table_number || targetOrder.data?.table_number,
+        tableCode: targetOrder.tableCode || targetOrder.table_code || targetOrder.data?.tableCode,
+        table_code: targetOrder.tableCode || targetOrder.table_code || targetOrder.data?.table_code,
+        tableId: targetOrder.tableId || targetOrder.table_id || targetOrder.data?.tableId,
+        table_id: targetOrder.tableId || targetOrder.table_id || targetOrder.data?.table_id,
+        waiterId: targetOrder.waiterId || targetOrder.waiter_id || targetOrder.data?.waiterId,
+        orderNumber: targetOrder.orderNumber || targetOrder.order_number || targetOrder.data?.orderNumber,
+        order_number: targetOrder.orderNumber || targetOrder.order_number || targetOrder.data?.order_number,
+        tickets: orderTickets,
+        items: targetOrder.items,
+        status: targetOrder.status,
+        orderStatus: targetOrder.status
+      };
+      targetOrder.updatedAt = now;
+
+      offlineStore.setCollection('orders', orders);
+
+      const dg = this._getDataGateway();
+      if (dg) {
+        dg.update('orders', targetOrder.id || targetOrder.orderId, targetOrder).catch(e => console.warn('[productionRoutingEngine] Item status cloud sync error:', e.message));
       }
     }
 
     if (updatedTicket) {
+      if (updatedItem) {
+        const prevStatus = updatedItem.prevStatus;
+        if (newStatus === 'READY' && prevStatus !== 'READY') {
+          inventoryConsumptionService.consumeForOrderLine({
+            tenantId: targetTenantId,
+            orderId: updatedTicket.orderId || updatedTicket.id,
+            orderLineId: updatedItem.lineItemId || updatedItem.itemId || lineItemIdOrIndex,
+            item: updatedItem,
+            occurredAt: now,
+            performedBy: 'Chef'
+          }).catch(err => {
+            console.error('[productionRoutingEngine] Error during sale consumption for item READY:', err);
+          });
+        } else if (newStatus === 'PREPARING' && prevStatus === 'READY') {
+          inventoryConsumptionService.reverseConsumptionForOrderLine({
+            tenantId: targetTenantId,
+            orderId: updatedTicket.orderId || updatedTicket.id,
+            orderLineId: updatedItem.lineItemId || updatedItem.itemId || lineItemIdOrIndex,
+            reason: 'KDS_UNDO_READY',
+            occurredAt: now,
+            performedBy: 'Chef'
+          }).catch(err => {
+            console.error('[productionRoutingEngine] Error during sale reversal on KDS Undo:', err);
+          });
+        }
+      }
+
       this._broadcastChange('TICKET_ITEM_UPDATE', updatedTicket);
 
       platformEventBus.publish('ticket:item_status_changed', {
@@ -410,13 +495,20 @@ class ProductionRoutingEngine {
     const tIdx = tickets.findIndex(t => t.ticketId === ticketId || t.id === ticketId);
     let updatedTicket = null;
 
+    let itemsToDeduct = [];
     if (tIdx >= 0) {
       tickets[tIdx].status = newStatus;
       tickets[tIdx].updatedAt = now;
       (tickets[tIdx].items || []).forEach(it => {
+        const prevItemStatus = it.itemStatus || it.status;
         it.itemStatus = newStatus;
         it.status = newStatus;
-        if (newStatus === 'READY') it.readyAt = now;
+        if (newStatus === 'READY') {
+          it.readyAt = now;
+          if (prevItemStatus !== 'READY') {
+            itemsToDeduct.push(it);
+          }
+        }
         if (newStatus === 'SERVED') it.servedAt = now;
       });
       updatedTicket = tickets[tIdx];
@@ -425,32 +517,109 @@ class ProductionRoutingEngine {
 
     // 2. Update embedded ticket in parent order
     const orders = orderModel.getOrders(targetTenantId);
-    for (const order of orders) {
-      const orderTickets = Array.isArray(order.tickets) ? order.tickets : (order.data?.tickets || []);
+    const targetOrderId = updatedTicket?.orderId || ticketId;
+    const targetOrderNum = updatedTicket?.orderNumber;
+
+    let targetOrder = orders.find(o => 
+      (targetOrderId && (o.id === targetOrderId || o.orderId === targetOrderId)) ||
+      (targetOrderNum && (o.orderNumber === targetOrderNum || o.order_number === targetOrderNum))
+    );
+
+    if (!targetOrder) {
+      targetOrder = orders.find(o => {
+        const oTickets = Array.isArray(o.tickets) ? o.tickets : (o.data?.tickets || []);
+        return oTickets.some(t => t.ticketId === ticketId || t.id === ticketId);
+      });
+    }
+
+    if (targetOrder) {
+      const orderTickets = Array.isArray(targetOrder.tickets) ? [...targetOrder.tickets] : [...(targetOrder.data?.tickets || [])];
       const matchIdx = orderTickets.findIndex(t => t.ticketId === ticketId || t.id === ticketId);
+
       if (matchIdx >= 0) {
         orderTickets[matchIdx].status = newStatus;
         orderTickets[matchIdx].updatedAt = now;
         (orderTickets[matchIdx].items || []).forEach(it => {
+          const prevItemStatus = it.itemStatus || it.status;
           it.itemStatus = newStatus;
           it.status = newStatus;
-          if (newStatus === 'READY') it.readyAt = now;
+          if (newStatus === 'READY') {
+            it.readyAt = now;
+            if (prevItemStatus !== 'READY' && !itemsToDeduct.some(x => (x.lineItemId || x.itemId) === (it.lineItemId || it.itemId))) {
+              itemsToDeduct.push(it);
+            }
+          }
           if (newStatus === 'SERVED') it.servedAt = now;
         });
-        order.tickets = orderTickets;
-        order.data = { ...(order.data || {}), tickets: orderTickets };
-        order.updatedAt = now;
-        updatedTicket = orderTickets[matchIdx];
+        if (!updatedTicket) updatedTicket = orderTickets[matchIdx];
+      } else if (updatedTicket) {
+        orderTickets.push(updatedTicket);
+      }
 
-        const dg = this._getDataGateway();
-        if (dg) {
-          dg.update('orders', order.id, order).catch(e => console.warn('[productionRoutingEngine] Ticket status cloud sync error:', e.message));
+      // Synchronize matching items in targetOrder.items
+      (updatedTicket?.items || []).forEach(it => {
+        const orderItem = (targetOrder.items || []).find(i => 
+          (it.lineItemId && i.lineItemId === it.lineItemId) ||
+          ((it.itemId || it.itemCode) && (i.itemId === (it.itemId || it.itemCode) || i.itemCode === (it.itemId || it.itemCode)))
+        );
+        if (orderItem) {
+          orderItem.itemStatus = newStatus;
+          orderItem.status = newStatus;
         }
-        break;
+      });
+
+      const sId2 = targetOrder.sessionId || targetOrder.session_id || targetOrder.data?.sessionId || targetOrder.data?.session_id || updatedTicket?.sessionId;
+      if (sId2) {
+        targetOrder.sessionId = sId2;
+        targetOrder.session_id = sId2;
+      }
+      targetOrder.tickets = orderTickets;
+      targetOrder.status = this._computeOrderStatus(targetOrder);
+      targetOrder.orderStatus = targetOrder.status;
+      targetOrder.data = {
+        ...(targetOrder.data || {}),
+        sessionId: sId2,
+        session_id: sId2,
+        tableNumber: targetOrder.tableNumber || targetOrder.table_number || targetOrder.data?.tableNumber,
+        table_number: targetOrder.tableNumber || targetOrder.table_number || targetOrder.data?.table_number,
+        tableCode: targetOrder.tableCode || targetOrder.table_code || targetOrder.data?.tableCode,
+        table_code: targetOrder.tableCode || targetOrder.table_code || targetOrder.data?.table_code,
+        tableId: targetOrder.tableId || targetOrder.table_id || targetOrder.data?.tableId,
+        table_id: targetOrder.tableId || targetOrder.table_id || targetOrder.data?.table_id,
+        waiterId: targetOrder.waiterId || targetOrder.waiter_id || targetOrder.data?.waiterId,
+        orderNumber: targetOrder.orderNumber || targetOrder.order_number || targetOrder.data?.orderNumber,
+        order_number: targetOrder.orderNumber || targetOrder.order_number || targetOrder.data?.order_number,
+        tickets: orderTickets,
+        items: targetOrder.items,
+        status: targetOrder.status,
+        orderStatus: targetOrder.status
+      };
+      targetOrder.updatedAt = now;
+
+      offlineStore.setCollection('orders', orders);
+
+      const dg = this._getDataGateway();
+      if (dg) {
+        dg.update('orders', targetOrder.id || targetOrder.orderId, targetOrder).catch(e => console.warn('[productionRoutingEngine] Ticket status cloud sync error:', e.message));
       }
     }
 
     if (updatedTicket) {
+      if (itemsToDeduct.length > 0) {
+        itemsToDeduct.forEach(it => {
+          inventoryConsumptionService.consumeForOrderLine({
+            tenantId: targetTenantId,
+            orderId: updatedTicket.orderId || updatedTicket.id,
+            orderLineId: it.lineItemId || it.itemId,
+            item: it,
+            occurredAt: now,
+            performedBy: 'Chef'
+          }).catch(err => {
+            console.error('[productionRoutingEngine] Error during ticket sale consumption:', err);
+          });
+        });
+      }
+
       this._broadcastChange('TICKET_ITEM_UPDATE', updatedTicket);
 
       platformEventBus.publish('ticket:status_changed', {
@@ -461,6 +630,31 @@ class ProductionRoutingEngine {
     }
 
     return updatedTicket;
+  }
+
+  _computeTicketStatus(ticket) {
+    const items = ticket?.items || [];
+    if (!items.length) return ticket?.status || 'QUEUED';
+    const statuses = items.map(it => it.itemStatus || it.status || 'QUEUED');
+    if (statuses.every(s => s === 'SERVED')) return 'SERVED';
+    if (statuses.every(s => s === 'READY' || s === 'SERVED')) return 'READY';
+    if (statuses.some(s => s === 'READY' || s === 'SERVED')) return 'PARTIALLY_READY';
+    if (statuses.some(s => s === 'PREPARING')) return 'PREPARING';
+    return 'QUEUED';
+  }
+
+  _computeOrderStatus(order) {
+    const allItems = (order?.items && order.items.length > 0)
+      ? order.items
+      : (order?.tickets || []).flatMap(t => t.items || []);
+    
+    if (!allItems.length) return order?.status || order?.orderStatus || 'CONFIRMED';
+    const statuses = allItems.map(it => it.itemStatus || it.status || 'QUEUED');
+    if (statuses.every(s => s === 'SERVED')) return 'SERVED';
+    if (statuses.every(s => s === 'READY' || s === 'SERVED')) return 'READY';
+    if (statuses.some(s => s === 'READY' || s === 'SERVED')) return 'PARTIALLY_READY';
+    if (statuses.some(s => s === 'PREPARING')) return 'IN_PRODUCTION';
+    return 'CONFIRMED';
   }
 
   _broadcastChange(type, data) {

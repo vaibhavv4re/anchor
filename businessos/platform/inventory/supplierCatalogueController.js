@@ -50,10 +50,12 @@ export class SupplierCatalogueController {
    */
   getDefaultCatalogue() {
     return [
-      { supplierCode: 'SUP-001', itemCode: 'RM0309', supplierSku: 'ON-50', supplierItemName: 'Fresh Farm Onion', purchaseUom: 'BAG', packQuantity: 50, packUom: 'KG', unitPrice: 2000, gstRate: 5, moq: 1, leadTimeDays: 2, preferred: true, active: true },
-      { supplierCode: 'SUP-001', itemCode: 'RM0310', supplierSku: 'TOM-25', supplierItemName: 'Fresh Farm Tomato', purchaseUom: 'CRATE', packQuantity: 25, packUom: 'KG', unitPrice: 1250, gstRate: 5, moq: 1, leadTimeDays: 2, preferred: true, active: true },
-      { supplierCode: 'SUP-002', itemCode: 'RM0202', supplierSku: 'SUR-10', supplierItemName: 'Coastal Surmai Fish', purchaseUom: 'BOX', packQuantity: 10, packUom: 'KG', unitPrice: 9500, gstRate: 5, moq: 1, leadTimeDays: 1, preferred: true, active: true },
-      { supplierCode: 'SUP-003', itemCode: 'BAR-RUM-WHT', supplierSku: 'WR-750', supplierItemName: 'White Rum Premium', purchaseUom: 'BOTTLE_750ML', packQuantity: 750, packUom: 'ML', unitPrice: 1200, gstRate: null, moq: 1, leadTimeDays: 1, preferred: true, active: true }
+      { supplierCode: 'SUP-101', itemCode: 'RM0101', supplierSku: 'SUP-101-RM0101', supplierItemName: 'Chicken Boneless (Thigh & Breast)', purchaseUom: 'KG', packQuantity: 1, packUom: 'KG', unitPrice: 280, current_price: 280, gstRate: 5, moq: 1, leadTimeDays: 2, preferred: true, active: true },
+      { supplierCode: 'SUP-101', itemCode: 'RM0309', supplierSku: 'ON-50', supplierItemName: 'Fresh Farm Onion', purchaseUom: 'BAG', packQuantity: 50, packUom: 'KG', unitPrice: 2000, current_price: 2000, gstRate: 5, moq: 1, leadTimeDays: 2, preferred: true, active: true },
+      { supplierCode: 'SUP-101', itemCode: 'RM0310', supplierSku: 'TOM-25', supplierItemName: 'Fresh Farm Tomato', purchaseUom: 'CRATE', packQuantity: 25, packUom: 'KG', unitPrice: 1250, current_price: 1250, gstRate: 5, moq: 1, leadTimeDays: 2, preferred: true, active: true },
+      { supplierCode: 'SUP-102', itemCode: 'RM0102', supplierSku: 'SUP-102-RM0102', supplierItemName: 'Whole Chicken (Curry Cut)', purchaseUom: 'KG', packQuantity: 1, packUom: 'KG', unitPrice: 260, current_price: 260, gstRate: 5, moq: 1, leadTimeDays: 2, preferred: true, active: true },
+      { supplierCode: 'SUP-104', itemCode: 'RM0202', supplierSku: 'SUR-10', supplierItemName: 'Coastal Surmai Fish', purchaseUom: 'BOX', packQuantity: 10, packUom: 'KG', unitPrice: 9500, current_price: 9500, gstRate: 5, moq: 1, leadTimeDays: 1, preferred: true, active: true },
+      { supplierCode: 'SUP-105', itemCode: 'BAR-RUM-WHT', supplierSku: 'WR-750', supplierItemName: 'White Rum Premium', purchaseUom: 'BOTTLE_750ML', packQuantity: 750, packUom: 'ML', unitPrice: 1200, current_price: 1200, gstRate: null, moq: 1, leadTimeDays: 1, preferred: true, active: true }
     ];
   }
 

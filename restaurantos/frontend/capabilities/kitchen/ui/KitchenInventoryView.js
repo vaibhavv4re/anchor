@@ -1,4 +1,5 @@
 import { offlineStore as globalOfflineStore } from '../../../../../businessos/platform/offline_store/offlineStore.js';
+import { platformEventBus } from '../../../../../businessos/platform/events/platformEvents.js';
 
 /**
  * KitchenInventoryView.js
@@ -15,6 +16,7 @@ export class KitchenInventoryView {
   constructor(deps = {}) {
     this.dataGateway = deps.dataGateway || (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform ? window.__APP__.platform.dataGateway : null);
     this.offlineStore = deps.offlineStore || (typeof offlineStore !== 'undefined' ? offlineStore : globalOfflineStore);
+    this.eventBus = deps.platformEventBus || deps.eventBus || (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform ? window.__APP__.platform.eventBus : null) || platformEventBus;
 
     this.activeTab = 'OVERVIEW'; // 'OVERVIEW' | 'AVAILABLE' | 'LOW_STOCK' | 'REQUESTS'
     this.searchQuery = '';
@@ -45,18 +47,16 @@ export class KitchenInventoryView {
     this._session = session;
     const tenantId = session ? session.tenantId : null;
 
-    if (!this._subscribedEvents && typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.eventBus) {
+    if (!this._subscribedEvents) {
       this._subscribedEvents = true;
       const refresh = () => {
-        if (this._container && document.body.contains(this._container)) {
+        if (this._container && (typeof document === 'undefined' || !document.body || document.body.contains(this._container))) {
           this.render(this._container, this._session);
         }
       };
-      window.__APP__.platform.eventBus.subscribe('stock:balance:updated', refresh);
-      window.__APP__.platform.eventBus.subscribe('inventory:updated', refresh);
-      window.__APP__.platform.eventBus.subscribe('STOCK_BALANCE_UPDATED', refresh);
-      window.__APP__.platform.eventBus.subscribe('INVENTORY_TRANSFERRED', refresh);
-      window.__APP__.platform.eventBus.subscribe('GRN_RECEIPT_POSTED', refresh);
+      if (this.eventBus && typeof this.eventBus.subscribe === 'function') {
+        this.eventBus.subscribe('stock:balance:updated', refresh);
+      }
     }
 
     const renderHTML = () => {
@@ -128,9 +128,13 @@ export class KitchenInventoryView {
       const baseUom = item.baseUom || item.base_uom || 'KG';
       const itemType = (item.itemType || item.item_type || '').toUpperCase();
 
-      const itemBals = balances.filter(b => String(b.itemCode || b.item_code || b.itemId || b.id) === code && (!tenantId || b.tenantId === tenantId));
+      const itemBals = balances.filter(b => {
+        const iMatch = String(b.itemCode || b.item_code || b.itemId || b.id) === code;
+        const tMatch = !tenantId || b.tenantId === tenantId || b.tenant_id === tenantId;
+        return iMatch && tMatch;
+      });
       const currentStock = itemBals.length
-        ? itemBals.reduce((sum, b) => sum + (parseFloat(b.quantity) || 0), 0)
+        ? itemBals.reduce((sum, b) => sum + (parseFloat(b.quantity !== undefined ? b.quantity : (b.data?.quantity || 0)) || 0), 0)
         : (item.currentStock !== undefined ? item.currentStock : (item.openingStock !== undefined ? item.openingStock : 0));
 
       const reorderLevel = parseFloat(item.reorderLevel || item.reorder_level) || 0;

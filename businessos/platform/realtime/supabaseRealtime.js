@@ -21,13 +21,72 @@ export class SupabaseRealtime {
     this.ws = null;
     this.heartbeatTimer = null;
     this.pollTimer = null;
+    this.reconnectTimer = null;
     this.broadcastChannel = null;
     this.lastOrdersHash = '';
+    this.lastStockBalancesHash = '';
     this.refCounter = 1;
 
+    this._initNetworkListeners();
     this._initBroadcastChannel();
     this._initWebSocket();
     this._initDeltaPolling();
+  }
+
+  _initNetworkListeners() {
+    if (typeof window === 'undefined') return;
+
+    window.addEventListener('online', async () => {
+      console.log('🌐 [SupabaseRealtime] Network restored (ONLINE). Re-enabling cloud sync & delta polling...');
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+      if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.dataGateway) {
+        const dg = window.__APP__.platform.dataGateway;
+        dg.setOnlineState(true);
+        try {
+          await dg.hydrateCollections([
+            'inventory', 'suppliers', 'purchase_orders', 'goods_receipt_notes',
+            'inventory_categories', 'inventory_uoms', 'orders', 'table_sessions',
+            'bill_revisions', 'invoices', 'payments'
+          ], 'tenant_h0qc7wf');
+          console.log('☁️ [SupabaseRealtime] Full cloud refresh completed on reconnect.');
+        } catch (e) {
+          console.warn('⚠️ [SupabaseRealtime] Cloud refresh warning on reconnect:', e.message);
+        }
+      }
+      this._initWebSocket();
+      this._initDeltaPolling();
+    });
+
+    window.addEventListener('offline', () => {
+      console.log('📡 [SupabaseRealtime] Network disconnected (OFFLINE). Pausing delta polling & WebSocket...');
+      if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.dataGateway) {
+        window.__APP__.platform.dataGateway.setOnlineState(false);
+      }
+      if (this.pollTimer) {
+        clearInterval(this.pollTimer);
+        this.pollTimer = null;
+      }
+      if (this.reconnectTimer) {
+        clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = null;
+      }
+      if (this.heartbeatTimer) {
+        clearInterval(this.heartbeatTimer);
+        this.heartbeatTimer = null;
+      }
+      if (this.ws) {
+        try {
+          this.ws.onclose = null;
+          this.ws.onerror = null;
+          this.ws.close();
+        } catch (_) {}
+        this.ws = null;
+      }
+      this.isConnected = false;
+    });
   }
 
   setEventBus(eventBus) {
@@ -80,6 +139,34 @@ export class SupabaseRealtime {
   _initWebSocket() {
     if (typeof WebSocket === 'undefined') return;
 
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = null;
+    }
+
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      console.log('[SupabaseRealtime] Offline — WebSocket initialization skipped.');
+      if (this.ws) {
+        try {
+          this.ws.onclose = null;
+          this.ws.onerror = null;
+          this.ws.close();
+        } catch (_) {}
+        this.ws = null;
+      }
+      this.isConnected = false;
+      return;
+    }
+
+    if (this.ws) {
+      try {
+        this.ws.onclose = null;
+        this.ws.onerror = null;
+        this.ws.close();
+      } catch (_) {}
+      this.ws = null;
+    }
+
     try {
       const wsHost = this.baseUrl.replace(/^http/, 'ws');
       const wsUrl = `${wsHost}/realtime/v1/websocket?apikey=${this.anonKey}&vsn=1.0.0`;
@@ -91,7 +178,7 @@ export class SupabaseRealtime {
         console.log('⚡ [SupabaseRealtime] WebSocket connected to Supabase Realtime Engine.');
 
         // Join Postgres Changes channel for all operational and financial tables
-        const tablesToSubscribe = ['orders', 'table_sessions', 'bill_revisions', 'invoices', 'payments'];
+        const tablesToSubscribe = ['orders', 'table_sessions', 'bill_revisions', 'invoices', 'payments', 'stock_balances'];
         tablesToSubscribe.forEach(tbl => {
           this._sendWsMessage({
             topic: `realtime:public:${tbl}`,
@@ -139,9 +226,24 @@ export class SupabaseRealtime {
 
       this.ws.onclose = () => {
         this.isConnected = false;
-        if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
-        // Attempt reconnection after 5 seconds
-        setTimeout(() => this._initWebSocket(), 5000);
+        if (this.heartbeatTimer) {
+          clearInterval(this.heartbeatTimer);
+          this.heartbeatTimer = null;
+        }
+
+        // GUARD: If browser is offline, do NOT schedule a reconnect attempt!
+        if (typeof navigator !== 'undefined' && !navigator.onLine) {
+          console.log('[SupabaseRealtime] Network disconnected (OFFLINE). WebSocket onclose ignored.');
+          return;
+        }
+
+        // Attempt reconnection after 5 seconds ONLY IF ONLINE
+        if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
+        this.reconnectTimer = setTimeout(() => {
+          if (typeof navigator !== 'undefined' && navigator.onLine) {
+            this._initWebSocket();
+          }
+        }, 5000);
       };
 
       this.ws.onerror = () => {
@@ -166,6 +268,9 @@ export class SupabaseRealtime {
 
     if (this.pollTimer) clearInterval(this.pollTimer);
     this.pollTimer = setInterval(async () => {
+      if (typeof navigator !== 'undefined' && !navigator.onLine) {
+        return; // Skip polling tick when offline
+      }
       try {
         const session = typeof sessionStorage !== 'undefined' ? JSON.parse(sessionStorage.getItem('ros_session') || '{}') : {};
         const tenantId = session.tenantId || 'tenant_h0qc7wf';
@@ -248,8 +353,81 @@ export class SupabaseRealtime {
             }
           }
         }
+
+        // 7. Delta poll stock_balances (Safety-net recovery for missed realtime events)
+        const sbResp = await fetch(`${this.baseUrl}/rest/v1/stock_balances?select=*`, { headers });
+        if (sbResp.ok) {
+          const cloudBalances = await sbResp.json();
+          if (Array.isArray(cloudBalances)) {
+            const sbHash = JSON.stringify(cloudBalances.map(b => `${b.id}_${b.quantity}_${b.updated_at || ''}`));
+            if (sbHash !== this.lastStockBalancesHash) {
+              this.lastStockBalancesHash = sbHash;
+              this._syncCloudStockBalances(cloudBalances, tenantId);
+            }
+          }
+        }
       } catch (_) {}
     }, 2000);
+  }
+
+  /**
+   * Ingests updated stock balances into DataGateway localAdapter & offlineStore,
+   * then fires a single platform notification. Zero UI delta calculations.
+   */
+  _syncCloudStockBalances(cloudBalances, tenantId) {
+    const localBals = offlineStore.getCollection('stock_balances', tenantId) || [];
+    const balMap = new Map();
+    localBals.forEach(b => {
+      const key = `${b.itemCode || b.item_code}_${b.locationCode || b.location_code}`;
+      balMap.set(key, b);
+    });
+
+    let hasChanges = false;
+    cloudBalances.forEach(raw => {
+      const p = (raw && raw.data) ? { ...raw.data, ...raw } : { ...raw };
+      if (!p.id) p.id = raw.id;
+      const iCode = p.itemCode || p.item_code || raw.item_code;
+      const lCode = p.locationCode || p.location_code || raw.location_code;
+      const key = `${iCode}_${lCode}`;
+      const qty = parseFloat(raw.quantity !== undefined ? raw.quantity : (p.quantity || 0));
+
+      const existing = balMap.get(key);
+      const prevQty = existing ? parseFloat(existing.quantity !== undefined ? existing.quantity : (existing.data?.quantity || 0)) : null;
+
+      if (!existing || prevQty !== qty) {
+        hasChanges = true;
+        const updated = {
+          ...(existing || {}),
+          ...p,
+          id: p.id || raw.id,
+          tenantId: tenantId || p.tenantId || raw.tenant_id,
+          tenant_id: tenantId || p.tenant_id || raw.tenant_id,
+          itemCode: iCode,
+          item_code: iCode,
+          locationCode: lCode,
+          location_code: lCode,
+          quantity: qty,
+          currentStock: qty,
+          unitCost: parseFloat(p.unitCost || raw.unit_cost || 0),
+          unit_cost: parseFloat(p.unitCost || raw.unit_cost || 0),
+          valuation: parseFloat((qty * parseFloat(p.unitCost || raw.unit_cost || 0)).toFixed(2)),
+          updatedAt: raw.updated_at || new Date().toISOString(),
+          updated_at: raw.updated_at || new Date().toISOString()
+        };
+        balMap.set(key, updated);
+      }
+    });
+
+    if (hasChanges) {
+      const updatedList = Array.from(balMap.values());
+      offlineStore.setCollection('stock_balances', updatedList);
+
+      if (typeof window !== 'undefined' && window.__APP__?.platform?.dataGateway?.localAdapter?.setCollection) {
+        window.__APP__.platform.dataGateway.localAdapter.setCollection('stock_balances', updatedList);
+      }
+
+      this.eventBus.publish('stock:balance:updated', { source: 'realtime_sync' });
+    }
   }
 
   _syncCloudOfflineJournal(cloudJournal, tenantId) {
@@ -541,6 +719,8 @@ export class SupabaseRealtime {
       this._syncCloudInvoices([newRecord], tId);
     } else if (table === 'payments' && newRecord) {
       this._syncCloudPayments([newRecord], tId);
+    } else if (table === 'stock_balances' && newRecord) {
+      this._syncCloudStockBalances([newRecord], tId);
     }
 
     if (!isFromBroadcast) {

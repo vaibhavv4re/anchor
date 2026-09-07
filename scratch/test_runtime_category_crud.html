@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Runtime Category CRUD Test</title>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #0f172a; color: #f8fafc; padding: 24px; }
+    .box { background: #1e293b; border-radius: 8px; padding: 20px; max-width: 800px; margin: 0 auto; }
+    h1 { font-size: 1.3rem; margin-top: 0; color: #6366f1; }
+    pre { background: #090d16; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 0.85rem; }
+    .status-pass { color: #10b981; font-weight: bold; }
+    .status-fail { color: #ef4444; font-weight: bold; }
+  </style>
+</head>
+<body>
+  <div class="box">
+    <h1>🧪 Runtime Category CRUD Gate Test</h1>
+    <p>Testing: CategoryRepository ➔ DataGateway ➔ SupabaseDataAdapter ➔ supabaseClient ➔ PostgREST ➔ PostgreSQL inventory_categories</p>
+    <div id="status">Running test...</div>
+    <pre id="logs"></pre>
+    <div id="test-result" style="font-size: 1.4rem; margin-top: 16px;"></div>
+  </div>
+
+  <script type="module">
+    import { CategoryRepository } from '/businessos/platform/repositories/categoryRepository.js';
+    import { DataGateway } from '/businessos/platform/data/dataGateway.js';
+    import { SupabaseDataAdapter } from '/businessos/platform/data/adapters/supabaseDataAdapter.js';
+    import { supabaseClient } from '/businessos/platform/cloud/supabaseClient.js';
+    import { offlineStore } from '/businessos/platform/offline_store/offlineStore.js';
+
+    const logsEl = document.getElementById('logs');
+    const statusEl = document.getElementById('status');
+    const resultEl = document.getElementById('test-result');
+
+    function log(msg) {
+      console.log(msg);
+      logsEl.textContent += msg + '\n';
+    }
+
+    async function runTest() {
+      const tenantId = 'tenant_h0qc7wf';
+      const testCode = 'CAT-TAX-TEST';
+      const testId = 'cat-tax-test-' + Date.now();
+
+      try {
+        log('1. Initializing DataGateway with live SupabaseDataAdapter...');
+        const cloudAdapter = new SupabaseDataAdapter(supabaseClient);
+        const dataGateway = new DataGateway({ cloudAdapter, isOnline: true });
+        const categoryRepo = new CategoryRepository({ dataGateway, offlineStore });
+        log('✓ Composition graph assembled.');
+
+        // Clean up any stale test record first
+        log('\n2. Pre-cleanup: ensuring CAT-TAX-TEST does not exist in Supabase...');
+        const cleanupHeaders = {
+          'apikey': supabaseClient.apiKey,
+          'Authorization': `Bearer ${supabaseClient.apiKey}`
+        };
+        await fetch(`${supabaseClient.baseUrl}/inventory_categories?category_code=eq.${testCode}&tenant_id=eq.${tenantId}`, {
+          method: 'DELETE',
+          headers: cleanupHeaders
+        });
+        log('✓ Pre-cleanup completed.');
+
+        log('\n3. Creating disposable category via categoryRepo.create()...');
+        const session = { tenantId, employeeName: 'Runtime Test Runner' };
+        const testPayload = {
+          id: testId,
+          tenantId,
+          categoryCode: testCode,
+          categoryName: 'Taxonomy Runtime Test Category',
+          productFamilyCode: 'FAM-MEAT',
+          productFamilyName: 'Meat & Poultry',
+          defaultUom: 'KG',
+          status: 'ACTIVE',
+          description: 'Disposable runtime verification category'
+        };
+
+        const createdLocal = categoryRepo.create(testPayload, session);
+        log(`✓ categoryRepo.create returned: ${createdLocal.categoryCode} (${createdLocal.id})`);
+
+        // Wait 1.5 seconds for network I/O
+        log('  Waiting 1500ms for Supabase PostgREST sync...');
+        await new Promise(r => setTimeout(r, 1500));
+
+        log('\n4. Verifying Supabase record directly via PostgREST GET...');
+        const verifyUrl = `${supabaseClient.baseUrl}/inventory_categories?category_code=eq.${testCode}&tenant_id=eq.${tenantId}`;
+        const verifyResp = await fetch(verifyUrl, {
+          headers: cleanupHeaders
+        });
+
+        if (!verifyResp.ok) {
+          throw new Error(`Supabase GET returned HTTP ${verifyResp.status}: ${await verifyResp.text()}`);
+        }
+
+        const verifyData = await verifyResp.json();
+        log(`✓ Supabase returned ${verifyData.length} row(s) for ${testCode}`);
+
+        if (verifyData.length === 0) {
+          throw new Error(`Record ${testCode} was not found in Supabase inventory_categories table.`);
+        }
+
+        const row = verifyData[0];
+        log(`  Supabase Columns in row: ${Object.keys(row).join(', ')}`);
+        log(`  category_code: ${row.category_code}`);
+        log(`  category_name: ${row.category_name}`);
+        log(`  category_type: ${row.category_type}`);
+        log(`  data: ${JSON.stringify(row.data)}`);
+
+        // Strict Assertions
+        if (row.category_code !== testCode) throw new Error(`category_code mismatch: ${row.category_code} !== ${testCode}`);
+        if (row.category_name !== 'Taxonomy Runtime Test Category') throw new Error(`category_name mismatch: ${row.category_name}`);
+        if (!row.data || typeof row.data !== 'object') throw new Error(`row.data JSONB missing or not an object`);
+        if (row.data.productFamilyCode !== 'FAM-MEAT') throw new Error(`data.productFamilyCode mismatch: ${row.data.productFamilyCode}`);
+        if (row.data.productFamilyName !== 'Meat & Poultry') throw new Error(`data.productFamilyName mismatch: ${row.data.productFamilyName}`);
+        if (row.data.defaultUom !== 'KG') throw new Error(`data.defaultUom mismatch: ${row.data.defaultUom}`);
+        if (row.data.status !== 'ACTIVE') throw new Error(`data.status mismatch: ${row.data.status}`);
+
+        // Check that no invalid columns were sent as top-level properties
+        if (row.product_family_code !== undefined) {
+          throw new Error(`product_family_code found as top-level column! PostgREST should not have this column.`);
+        }
+
+        log('\n✅ Supabase record verified 100% compliant with PostgreSQL schema and packed data JSONB!');
+
+        log('\n5. Cleaning up disposable record from Supabase...');
+        const delResp = await fetch(`${supabaseClient.baseUrl}/inventory_categories?category_code=eq.${testCode}&tenant_id=eq.${tenantId}`, {
+          method: 'DELETE',
+          headers: cleanupHeaders
+        });
+        log(`✓ Delete request status: ${delResp.status} ${delResp.statusText}`);
+
+        // Verify clean deletion
+        const checkDel = await fetch(verifyUrl, { headers: cleanupHeaders });
+        const checkDelData = await checkDel.json();
+        if (checkDelData.length === 0) {
+          log('✓ Confirmed CAT-TAX-TEST cleanly removed from Supabase.');
+        } else {
+          log('⚠️ Warning: Record still present after delete.');
+        }
+
+        statusEl.innerHTML = '<span class="status-pass">TEST COMPLETED SUCCESSFULLY</span>';
+        resultEl.innerHTML = '<span class="status-pass">✅ RUNTIME CRUD GATE PASSED</span>';
+      } catch (err) {
+        console.error(err);
+        log(`\n❌ TEST ERROR: ${err.message || err}`);
+        statusEl.innerHTML = '<span class="status-fail">TEST FAILED</span>';
+        resultEl.innerHTML = `<span class="status-fail">❌ FAILED: ${err.message || err}</span>`;
+      }
+    }
+
+    runTest();
+  </script>
+</body>
+</html>

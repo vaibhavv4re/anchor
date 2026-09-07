@@ -23,54 +23,18 @@ class PurchasingModel {
     if (!offlineStore.getCollection('purchase_requests')) {
       offlineStore.setCollection('purchase_requests', []);
     }
-
     if (!offlineStore.getCollection('purchase_orders')) {
-      const initialPOs = [
-        {
-          id: 'PO-2026-0042',
-          poNumber: 'PO-2026-0042',
-          supplierId: 'supp_abc_foods',
-          supplierName: 'ABC Foods & Meat Supplies',
-          status: 'SENT', // DRAFT | APPROVED | SENT | PARTIALLY_RECEIVED | RECEIVED | CLOSED
-          items: [
-            { inventoryItemId: 'invitem_chicken', itemName: 'Fresh Chicken Breast', orderedQty: 50.0, receivedQty: 0.0, unit: 'KG', agreedUnitPrice: 420.00, lineTotal: 21000.00 }
-          ],
-          subtotal: 21000.00,
-          taxAmount: 0.00,
-          grandTotal: 21000.00,
-          createdBy: 'Jitu (Store Manager)',
-          approvedBy: 'Sachin (Owner)',
-          tenantId: 'tenant_h0qc7wf',
-          createdAt: '2026-08-25T09:00:00.000Z'
-        }
-      ];
-      offlineStore.setCollection('purchase_orders', initialPOs);
+      offlineStore.setCollection('purchase_orders', []);
     }
-
     if (!offlineStore.getCollection('goods_received_notes')) {
       offlineStore.setCollection('goods_received_notes', []);
     }
-
-    if (!offlineStore.getCollection('supplier_invoices')) {
-      const initialInvoices = [
-        {
-          id: 'SUPINV-2026-1001',
-          invoiceNumber: 'INV-ABC-9842',
-          supplierId: 'supp_abc_foods',
-          supplierName: 'ABC Foods & Meat Supplies',
-          poId: 'PO-2026-0042',
-          grnId: 'GRN-2026-0001',
-          invoiceAmount: 19950.00,
-          matchingStatus: 'MATCHED', // MATCHED | QUANTITY_VARIANCE | PRICE_VARIANCE
-          dueDate: '2026-09-10',
-          paymentStatus: 'UNPAID',
-          tenantId: 'tenant_h0qc7wf',
-          createdAt: '2026-08-26T11:00:00.000Z'
-        }
-      ];
-      offlineStore.setCollection('supplier_invoices', initialInvoices);
+    if (!offlineStore.getCollection('goods_receipt_notes')) {
+      offlineStore.setCollection('goods_receipt_notes', []);
     }
-
+    if (!offlineStore.getCollection('supplier_invoices')) {
+      offlineStore.setCollection('supplier_invoices', []);
+    }
     if (!offlineStore.getCollection('supplier_payments')) {
       offlineStore.setCollection('supplier_payments', []);
     }
@@ -481,10 +445,11 @@ class PurchasingModel {
           existingBal.valuation = newVal;
           existingBal.lastUpdatedAt = new Date().toISOString();
 
-          offlineStore.setCollection('stock_balances', balances);
           const gw = this._getDataGateway();
           if (gw && typeof gw.update === 'function') {
             gw.update('stock_balances', existingBal.id, existingBal);
+          } else {
+            offlineStore.setCollection('stock_balances', balances);
           }
         } else {
           const newBal = {
@@ -501,11 +466,12 @@ class PurchasingModel {
             valuation: acceptedQty * actualInvoicePrice,
             lastUpdatedAt: new Date().toISOString()
           };
-          balances.unshift(newBal);
-          offlineStore.setCollection('stock_balances', balances);
           const gw = this._getDataGateway();
           if (gw && typeof gw.create === 'function') {
             gw.create('stock_balances', newBal);
+          } else {
+            balances.unshift(newBal);
+            offlineStore.setCollection('stock_balances', balances);
           }
         }
       }
@@ -665,7 +631,7 @@ class PurchasingModel {
   getPurchasingTraceability(poId, tenantId = null) {
     const targetTenantId = this._getTenantId(tenantId);
     const pos = offlineStore.getCollection('purchase_orders') || [];
-    const grns = offlineStore.getCollection('goods_received_notes') || [];
+    const grns = offlineStore.getCollection('goods_receipt_notes') || offlineStore.getCollection('goods_received_notes') || [];
     const invoices = offlineStore.getCollection('supplier_invoices') || [];
     const payments = offlineStore.getCollection('supplier_payments') || [];
     const prs = offlineStore.getCollection('purchase_requests') || [];

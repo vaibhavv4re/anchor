@@ -34,7 +34,22 @@ export class OfflineDataAdapter {
     if (!this.store) return null;
     const tenantId = session ? session.tenantId : '';
     const list = this.store.getCollection(collection) || [];
-    const idx = list.findIndex(item => (item.id === id || item.uuid === id || item.code === id || item.itemCode === id || item.categoryCode === id || item.supplierCode === id || item.uomCode === id || item.locationCode === id || item.poNumber === id || item.grnNumber === id || item.transferNo === id || item.issueNo === id || item.adjustmentNo === id || item.countNo === id || item.tableCode === id || item.employeeCode === id || item.tenantId === id) && (!tenantId || item.tenantId === tenantId || item.tenant_id === tenantId));
+    const patchItemCode = patch ? (patch.itemCode || patch.item_code) : null;
+    const patchLocCode = patch ? (patch.locationCode || patch.location_code) : null;
+
+    const idx = list.findIndex(item => {
+      const tenantMatch = !tenantId || item.tenantId === tenantId || item.tenant_id === tenantId;
+      if (!tenantMatch) return false;
+
+      if (collection === 'stock_balances' && patchItemCode && patchLocCode) {
+        const exItem = item.itemCode || item.item_code;
+        const exLoc = item.locationCode || item.location_code;
+        if (exItem === patchItemCode && exLoc === patchLocCode) return true;
+      }
+
+      return (item.id === id || item.uuid === id || item.code === id || item.itemCode === id || item.categoryCode === id || item.supplierCode === id || item.uomCode === id || item.locationCode === id || item.poNumber === id || item.grnNumber === id || item.transferNo === id || item.issueNo === id || item.adjustmentNo === id || item.countNo === id || item.tableCode === id || item.employeeCode === id || item.tenantId === id);
+    });
+
     if (idx !== -1) {
       const updated = { ...list[idx], ...patch };
       list[idx] = updated;

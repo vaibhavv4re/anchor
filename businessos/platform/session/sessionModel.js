@@ -247,7 +247,7 @@ class SessionModel {
         dg.update('table_sessions', sessionId, sessionToUpdate).catch(e => console.warn('[sessionModel] Cloud table_sessions update error:', e.message));
       }
 
-      // Also update linked orders in localStore if status is updated
+      // Also update linked orders in localStore and Supabase if status is updated
       if (updates.status) {
         const localOrders = offlineStore.getCollection('orders', tenantId) || [];
         let ordersChanged = false;
@@ -255,6 +255,9 @@ class SessionModel {
           if (o.sessionId === sessionId || o.session_id === sessionId || o.id === sessionId) {
             localOrders[idx] = { ...o, status: updates.status, orderStatus: updates.status };
             ordersChanged = true;
+            if (dg && typeof dg.update === 'function') {
+              dg.update('orders', o.id || o.orderId, localOrders[idx]).catch(e => console.warn('[sessionModel] Cloud order status update error:', e.message));
+            }
           }
         });
         if (ordersChanged) {

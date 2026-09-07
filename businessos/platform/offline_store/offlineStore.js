@@ -68,8 +68,30 @@ class OfflineStore {
    * @param {number} maxItems 
    */
   appendItem(collection, item, maxItems = 50) {
-    const list = this.getCollection(collection) || [];
-    list.push(item);
+    let list = this.getCollection(collection) || [];
+    if (!Array.isArray(list)) list = [];
+
+    const itemId = item ? (item.id || item.uuid || item.grnNumber || item.poNumber || item.movementId || item.code) : null;
+    const itemCode = item ? (item.itemCode || item.item_code) : null;
+    const locCode = item ? (item.locationCode || item.location_code) : null;
+
+    const existingIdx = list.findIndex(existing => {
+      if (!existing) return false;
+      const exId = existing.id || existing.uuid || existing.grnNumber || existing.poNumber || existing.movementId || existing.code;
+      if (itemId && exId && itemId === exId) return true;
+      if (collection === 'stock_balances' && itemCode && locCode) {
+        const exItem = existing.itemCode || existing.item_code;
+        const exLoc = existing.locationCode || existing.location_code;
+        if (exItem === itemCode && exLoc === locCode) return true;
+      }
+      return false;
+    });
+
+    if (existingIdx !== -1) {
+      list[existingIdx] = { ...list[existingIdx], ...item };
+    } else {
+      list.push(item);
+    }
 
     const logCaps = {
       timeline_ledger: 50,
@@ -86,7 +108,7 @@ class OfflineStore {
 
     const cap = logCaps[collection] || maxItems;
     let finalData = list;
-    if (Array.isArray(list) && list.length > cap) {
+    if (Array.isArray(list) && list.length > cap && !['stock_balances', 'inventory', 'suppliers', 'supplier_catalog'].includes(collection)) {
       finalData = list.slice(-cap);
     }
 

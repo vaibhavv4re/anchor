@@ -20,13 +20,14 @@ export class KitchenMenuView {
     this.onNavigate = deps.onNavigate || (() => {});
     this._session = null; // set at render time
 
-    // Filters for Catalog tab
+    // Filters for Catalog tab (strictly Kitchen Food domain)
     this.filters = {
       searchQuery: '',
       category: 'ALL',
       dietaryType: 'ALL',
       availabilityStatus: 'ALL',
-      showArchived: false
+      showArchived: false,
+      domain: 'KITCHEN'
     };
 
     // Modal state for Add/Edit
@@ -69,8 +70,8 @@ export class KitchenMenuView {
     const session = this._session || JSON.parse(sessionStorage.getItem('ros_session') || '{}');
     const tenantId = session.tenantId || null;
 
-    const stats = kitchenMenuModel.getStats(tenantId);
-    const linkageStats = kitchenMenuModel.getRecipeLinkageStats(tenantId);
+    const stats = kitchenMenuModel.getStats(tenantId, { domain: 'KITCHEN' });
+    const linkageStats = kitchenMenuModel.getRecipeLinkageStats(tenantId, { domain: 'KITCHEN' });
 
     this.container.innerHTML = `
       <div style="display:flex; flex-direction:column; gap:var(--space-lg);">
@@ -185,7 +186,7 @@ export class KitchenMenuView {
               ${stats.categories.length ? stats.categories.map(cat => `
                 <div style="padding:10px; background:var(--bg-surface-2); border-radius:6px; display:flex; justify-content:space-between; align-items:center;">
                   <span style="font-weight:600;">${cat}</span>
-                  <span class="badge badge-info">${kitchenMenuModel.getAll(null, { category: cat }).length} items</span>
+                  <span class="badge badge-info">${kitchenMenuModel.getAll(tenantId, { category: cat, domain: 'KITCHEN' }).length} items</span>
                 </div>
               `).join('') : '<div style="color:var(--text-muted);">No categories available. Load or import menu items.</div>'}
             </div>
@@ -414,7 +415,7 @@ export class KitchenMenuView {
 
   // 4. ⚡ AVAILABILITY LINE CONTROL TAB
   renderAvailabilityTab(tenantId) {
-    const items = kitchenMenuModel.getAll(tenantId, { showArchived: false });
+    const items = kitchenMenuModel.getAll(tenantId, { showArchived: false, domain: 'KITCHEN' });
 
     return `
       <div style="display:flex; flex-direction:column; gap:var(--space-lg);">
@@ -469,7 +470,7 @@ export class KitchenMenuView {
 
   // 5. 🔗 RECIPE STATUS TAB (K-03 Preparation)
   renderRecipeStatusTab(linkageStats, tenantId) {
-    const items = kitchenMenuModel.getAll(tenantId, { showArchived: false });
+    const items = kitchenMenuModel.getAll(tenantId, { showArchived: false, domain: 'KITCHEN' });
 
     return `
       <div style="display:flex; flex-direction:column; gap:var(--space-lg);">

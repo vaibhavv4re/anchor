@@ -11,7 +11,9 @@ export const PlatformEventTypes = Object.freeze({
   CONFIG_UPDATED: 'platform:config:updated',
   DEVICE_REGISTERED: 'platform:device:registered',
   NOTIFICATION_EMITTED: 'platform:notification:emitted',
-  AUDIT_LOGGED: 'platform:audit:logged'
+  AUDIT_LOGGED: 'platform:audit:logged',
+  CONNECTIVITY_CHANGED: 'platform:connectivity:changed',
+  SYNC_STATUS_CHANGED: 'platform:sync:status_changed'
 });
 
 class PlatformEventBus {
