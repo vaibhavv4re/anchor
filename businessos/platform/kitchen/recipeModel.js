@@ -124,7 +124,7 @@ class RecipeModel {
   getActiveRecipeForMenuItem(menuItemId, variantId = null) {
     const list = offlineStore.getCollection('recipes') || [];
     const approved = list.filter(r => {
-      if (r.menuItemId !== menuItemId || r.status !== 'APPROVED') return false;
+      if (r.menuItemId !== menuItemId || (r.status !== 'APPROVED' && r.status !== 'PUBLISHED')) return false;
       if (variantId) return r.variantId === variantId;
       return !r.variantId;
     });
@@ -247,6 +247,7 @@ class RecipeModel {
     const masterItems = inventoryItemModel.getAllItems(tenantId) || [];
     const rawMasterInv = offlineStore.getCollection('inventory', tenantId) || [];
     const allMasterInv = [...masterItems, ...rawMasterInv];
+    const supplierCatalog = offlineStore.getCollection('supplier_catalog', tenantId) || offlineStore.getCollection('supplier_catalogue', tenantId) || [];
     const ingredients = recipe.ingredients || [];
     let totalCost = 0;
 
@@ -259,9 +260,26 @@ class RecipeModel {
         (i.id && line.inventoryItemId && String(i.id).toLowerCase() === String(line.inventoryItemId).toLowerCase())
       );
 
-      const unitCost = masterItem
-        ? (parseFloat(masterItem.lastPurchasePrice || masterItem.unitValuation || masterItem.unit_valuation) || 0)
+      let unitCost = masterItem
+        ? (parseFloat(masterItem.currentUnitCost || masterItem.weightedAverageCost || masterItem.lastPurchasePrice || masterItem.unitValuation || masterItem.unit_valuation || masterItem.cost) || 0)
         : (parseFloat(line.unitCost) || 0);
+
+      // Fallback 1: Lookup in supplier catalog if master inventory unit valuation is 0
+      if (unitCost <= 0 && line.inventoryItemCode && supplierCatalog.length > 0) {
+        const catEntry = supplierCatalog.find(c => 
+          (c.item_code && String(c.item_code).toUpperCase() === String(line.inventoryItemCode).toUpperCase()) ||
+          (c.itemCode && String(c.itemCode).toUpperCase() === String(line.inventoryItemCode).toUpperCase()) ||
+          (c.supplier_sku && String(c.supplier_sku).toUpperCase().includes(String(line.inventoryItemCode).toUpperCase()))
+        );
+        if (catEntry) {
+          unitCost = parseFloat(catEntry.current_price || catEntry.last_purchase_price || catEntry.cataloguePrice || catEntry.unit_price || catEntry.unitPrice || 0);
+        }
+      }
+
+      // Fallback 2: Retain existing line.unitCost entered by user/picker rather than zeroing out
+      if (unitCost <= 0 && parseFloat(line.unitCost) > 0) {
+        unitCost = parseFloat(line.unitCost);
+      }
 
       const itemType = masterItem ? (masterItem.itemType || masterItem.item_type || 'Raw Material') : (line.itemType || 'Raw Material');
       const itemName = masterItem ? (masterItem.itemName || masterItem.item_name) : (line.inventoryItemName || 'Unknown Ingredient');
@@ -360,7 +378,7 @@ class RecipeModel {
    * @returns {Object}
    */
   publishRecipe(recipeId, approvedBy = 'Manager') {
-    const recipe = this.approveRecipe(recipeId);
+    const recipe = this.approveRecipe(recipeId, { skipCloudSync: true });
     recipe.status = 'PUBLISHED';
     recipe.approvedBy = approvedBy;
     recipe.publishedAt = new Date().toISOString();
@@ -405,9 +423,10 @@ class RecipeModel {
    * Approve a Recipe (Locking revision & creating cost snapshot)
    * Link approved recipe back to menuItem.recipeId
    * @param {string} recipeId 
+   * @param {Object} options
    * @returns {Object}
    */
-  approveRecipe(recipeId) {
+  approveRecipe(recipeId, options = {}) {
     const list = offlineStore.getCollection('recipes') || [];
     const recipe = list.find(r => r.id === recipeId);
     if (!recipe) throw new Error(`Recipe ${recipeId} not found.`);
@@ -462,7 +481,9 @@ class RecipeModel {
     }
 
     offlineStore.setCollection('recipes', list);
-    this._syncToCloud('update', recipe);
+    if (!options.skipCloudSync) {
+      this._syncToCloud('update', recipe);
+    }
     return recipe;
   }
 

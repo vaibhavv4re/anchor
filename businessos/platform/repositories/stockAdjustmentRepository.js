@@ -53,7 +53,25 @@ export class StockAdjustmentRepository {
     const locCode = data.locationCode;
     const reason = data.reasonCode || 'SPOILAGE';
 
-    const validReasons = ['SPOILAGE', 'EXPIRY', 'DAMAGE', 'BREAKAGE', 'STOCK_AUDIT_CORRECTION', 'OTHER_APPROVED'];
+    // Role Governance: Ensure non-managerial roles cannot post stock adjustments
+    if (session && session.role) {
+      const normalizedRole = String(session.role).toUpperCase().replace(/\s+/g, '_');
+      if (normalizedRole === 'BARTENDER') {
+        return { success: false, error: '❌ Unauthorized: Bartenders are not permitted to approve or post stock adjustments.' };
+      }
+    }
+
+    const validReasons = [
+      'SPOILAGE',
+      'EXPIRY',
+      'DAMAGE',
+      'BREAKAGE',
+      'SPILLAGE',
+      'OVERPOUR',
+      'STOCK_AUDIT_CORRECTION',
+      'WASTE_DISPOSAL',
+      'OTHER_APPROVED'
+    ];
     if (!validReasons.includes(reason)) {
       return { success: false, error: `❌ Invalid adjustment reason code "${reason}". Allowed reasons: ${validReasons.join(', ')}.` };
     }
@@ -76,6 +94,9 @@ export class StockAdjustmentRepository {
       id: 'adj-' + Math.random().toString(36).substring(2, 7),
       adjustmentNo: adjNo,
       postingId,
+      operationId: data.operationId || `op-adj-${postingId}`,
+      referenceType: data.referenceType || 'STOCK_ADJUSTMENT',
+      referenceId: data.referenceId || adjNo,
       tenantId,
       locationCode: locCode,
       reasonCode: reason,
@@ -83,7 +104,7 @@ export class StockAdjustmentRepository {
       notes: data.notes || '',
       lines: data.lines || [],
       status: 'COMPLETED',
-      postedBy: session ? session.employeeName : 'Inventory Manager',
+      postedBy: session ? (session.employeeName || session.name || 'Inventory Manager') : 'Inventory Manager',
       postedAt: new Date().toISOString()
     };
 
@@ -93,9 +114,36 @@ export class StockAdjustmentRepository {
       const netQty = isDecrease ? -qty : qty;
       const uom = line.baseUom || 'KG';
       const masterItem = (invRepo ? invRepo.getByCode(line.itemCode, tenantId) : null) || {};
-      const unitCost = parseFloat(masterItem.unitValuation) || parseFloat(masterItem.lastPurchasePrice) || 0;
+      const unitCost = parseFloat(masterItem.unitValuation) || parseFloat(masterItem.lastPurchasePrice) || parseFloat(line.unitCost) || 0;
       const val = netQty * unitCost;
 
+      // 1. Authoritative Cloud Ledger: stock_transactions (PostgreSQL / Supabase)
+      const cloudTxn = {
+        id: `txn-${postingId}-${idx}`,
+        tenantId,
+        operationId: adjRecord.operationId,
+        transactionType: isDecrease ? 'ADJUSTMENT_OUT' : 'ADJUSTMENT_IN',
+        status: 'POSTED',
+        referenceType: adjRecord.referenceType,
+        referenceId: adjRecord.referenceId,
+        referenceLineId: `line-${idx + 1}`,
+        itemCode: line.itemCode,
+        itemName: line.itemName || masterItem.itemName || line.itemCode,
+        locationCode: locCode,
+        quantity: netQty,
+        uom,
+        unitCost,
+        totalCost: val,
+        performedBy: adjRecord.postedBy,
+        notes: line.notes || data.notes || null,
+        occurredAt: new Date().toISOString()
+      };
+
+      if (this.dataGateway && typeof this.dataGateway.create === 'function') {
+        this.dataGateway.create('stock_transactions', cloudTxn, session);
+      }
+
+      // 2. Offline / Local Cache Projection: stock_ledger (non-authoritative cache)
       const ledgerEntry = {
         ledgerId: `LEDGER-${new Date().toISOString().slice(0, 10)}-ADJ-${idx + 1}`,
         tenantId,
@@ -112,18 +160,20 @@ export class StockAdjustmentRepository {
         postedBy: adjRecord.postedBy,
         timestamp: new Date().toISOString()
       };
+      ledgerList.push(ledgerEntry);
 
-      if (this.dataGateway && typeof this.dataGateway.create === 'function') {
-        this.dataGateway.create('stock_ledger', ledgerEntry, session);
-      } else {
-        ledgerList.push(ledgerEntry);
-      }
-
-      let balIdx = balanceList.findIndex(b => b.itemCode === line.itemCode && b.locationCode === locCode && (!tenantId || b.tenantId === tenantId));
+      let balIdx = balanceList.findIndex(b => 
+        (b.itemCode === line.itemCode || b.item_code === line.itemCode) && 
+        (b.locationCode === locCode || b.location_code === locCode) && 
+        (!tenantId || b.tenantId === tenantId || b.tenant_id === tenantId)
+      );
       if (balIdx !== -1) {
+        const curQty = parseFloat(balanceList[balIdx].quantity) || 0;
         const updatedBal = {
           ...balanceList[balIdx],
-          quantity: (parseFloat(balanceList[balIdx].quantity) || 0) + netQty,
+          itemCode: line.itemCode,
+          locationCode: locCode,
+          quantity: Math.max(0, Math.round((curQty + netQty) * 1000) / 1000),
           valuation: Math.max(0, (parseFloat(balanceList[balIdx].valuation) || 0) + val),
           lastUpdatedAt: new Date().toISOString()
         };

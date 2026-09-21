@@ -135,6 +135,25 @@ class KitchenMenuModel {
    */
   deduplicateMenuItems() {
     const list = offlineStore.getCollection('kitchen_menu_items') || [];
+    if (!list || list.length <= 1) return 0;
+
+    // Fast check: only proceed if duplicates actually exist
+    const seen = new Set();
+    let hasDupes = false;
+    for (let i = 0; i < list.length; i++) {
+      const item = list[i];
+      const name = (item.itemName || item.name || '').toLowerCase().trim();
+      const cat = (item.category || '').toLowerCase().trim();
+      if (!name) continue;
+      const key = `${cat}_${name}`;
+      if (seen.has(key)) {
+        hasDupes = true;
+        break;
+      }
+      seen.add(key);
+    }
+    if (!hasDupes) return 0;
+
     const map = new Map();
     const uniqueList = [];
     let removedCount = 0;
@@ -173,9 +192,8 @@ class KitchenMenuModel {
 
     if (removedCount > 0) {
       offlineStore.setCollection('kitchen_menu_items', uniqueList);
-      if (typeof platformEventBus !== 'undefined') {
-        platformEventBus.publish('data:changed', { collection: 'kitchen_menu_items' });
-      }
+      // NOTE: Do NOT publish 'data:changed' here! deduplicateMenuItems() is called
+      // by getAll() on every read. Publishing here triggers infinite re-render loops.
     }
     return removedCount;
   }

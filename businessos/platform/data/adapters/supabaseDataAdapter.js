@@ -69,6 +69,15 @@ export class SupabaseDataAdapter {
         if (item.tenant_id && !item.tenantId) item.tenantId = item.tenant_id;
         if (item.production_area && !item.productionArea) item.productionArea = item.production_area;
         if (item.routing && !item.productionArea && item.routing === 'BAR') item.productionArea = 'BAR';
+        if (item.data && typeof item.data === 'object') {
+          if (Array.isArray(item.data.variants) && (!item.variants || item.variants.length === 0)) {
+            item.variants = item.data.variants;
+          }
+          if (item.data.recipeId && !item.recipeId) {
+            item.recipeId = item.data.recipeId;
+          }
+        }
+        if (row.recipe_id && !item.recipeId) item.recipeId = row.recipe_id;
 
         // Kitchen domain: recipes
         if (item.recipe_code && !item.recipeCode) item.recipeCode = item.recipe_code;
@@ -80,6 +89,23 @@ export class SupabaseDataAdapter {
         if (item.portion_count !== undefined && item.portionCount === undefined) item.portionCount = parseInt(item.portion_count);
         if (item.total_cost !== undefined && item.totalCost === undefined) item.totalCost = parseFloat(item.total_cost);
         if (item.cost_per_portion !== undefined && item.costPerPortion === undefined) item.costPerPortion = parseFloat(item.cost_per_portion);
+        if (item.data && typeof item.data === 'object') {
+          if (item.data.variantId && !item.variantId) item.variantId = item.data.variantId;
+          if (item.data.variant_id && !item.variantId) item.variantId = item.data.variant_id;
+          if (item.data.variantName && !item.variantName) item.variantName = item.data.variantName;
+          if (item.data.variant_name && !item.variantName) item.variantName = item.data.variant_name;
+          if (item.data.glassware && !item.glassware) item.glassware = item.data.glassware;
+          if (item.data.revision && !item.revision) item.revision = item.data.revision;
+          if (item.data.revisionNumber && !item.revision) item.revision = item.data.revisionNumber;
+          if (Array.isArray(item.data.ingredients) && (!item.ingredients || item.ingredients.length === 0)) {
+            item.ingredients = item.data.ingredients;
+          }
+        }
+        // Top-level status always governs over stale embedded data.status
+        if (row.status) {
+          item.status = row.status;
+          if (item.data && typeof item.data === 'object') item.data.status = row.status;
+        }
 
         // Kitchen domain: recipe_ingredients
         if (item.inventory_item_code && !item.inventoryItemCode) item.inventoryItemCode = item.inventory_item_code;

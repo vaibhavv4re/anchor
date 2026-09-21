@@ -22,11 +22,13 @@ import { StockAdjustmentRepository } from './repositories/stockAdjustmentReposit
 import { StockCountRepository } from './repositories/stockCountRepository.js';
 import { StockIssueRepository } from './repositories/stockIssueRepository.js';
 import { StockTransferRepository } from './repositories/stockTransferRepository.js';
+import { StockOpeningRepository } from './repositories/stockOpeningRepository.js';
 import { StorageLocationRepository } from './repositories/storageLocationRepository.js';
 import { SupplierRepository } from './repositories/supplierRepository.js';
 import { TableRepository } from './repositories/tableRepository.js';
 import { TenantRepository } from './repositories/tenantRepository.js';
 import { UomRepository } from './repositories/uomRepository.js';
+import { BarReconciliationService, barReconciliationService } from './bar/barReconciliationService.js';
 
 /**
  * PlatformContainer composition root.
@@ -143,6 +145,11 @@ export class PlatformContainer {
       inventoryRepository: inventory
     });
 
+    const stockOpening = customRepos.stockOpening || new StockOpeningRepository({
+      ...commonDeps,
+      inventoryRepository: inventory
+    });
+
     const stockIssue = customRepos.stockIssue || new StockIssueRepository({
       ...commonDeps,
       inventoryRepository: inventory
@@ -180,9 +187,17 @@ export class PlatformContainer {
       purchaseOrder,
       goodsReceipt,
       stockTransfer,
+      stockOpening,
       stockIssue,
       stockAdjustment,
       stockCount,
+      barReconciliation: new BarReconciliationService({
+        stockAdjustmentRepository: stockAdjustment,
+        stockCountRepository: stockCount,
+        dataGateway: this.dataGateway,
+        offlineStore: this.services.offlineStore,
+        platformEventBus: this.eventBus
+      }),
       table,
       staff,
       tenant

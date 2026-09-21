@@ -468,23 +468,39 @@ class InventoryItemModel {
 
     if (!Array.isArray(store)) store = [];
 
+    const supplierCatalog = offlineStore.getCollection('supplier_catalog') || offlineStore.getCollection('supplier_catalogue') || [];
+
     // Normalize items for consistent property access (itemName/name, itemCode/sku/id, currentUnitCost/unitValuation)
-    const normalized = store.map(i => ({
-      id: i.id || i.uuid || i.itemCode || i.item_code,
-      sku: i.sku || i.itemCode || i.item_code || i.id,
-      itemCode: i.itemCode || i.item_code || i.sku || i.id,
-      name: i.name || i.itemName || i.item_name || 'Untitled Item',
-      itemName: i.itemName || i.item_name || i.name || 'Untitled Item',
-      category: i.category || i.categoryName || i.category_name || 'RAW_MATERIAL',
-      baseUnit: i.baseUnit || i.baseUom || i.base_uom || 'KG',
-      purchaseUnit: i.purchaseUnit || i.purchase_unit || i.baseUnit || 'KG',
-      currentUnitCost: parseFloat(i.currentUnitCost || i.unitValuation || i.unit_valuation || i.lastPurchasePrice || 0),
-      weightedAverageCost: parseFloat(i.currentUnitCost || i.unitValuation || i.unit_valuation || i.lastPurchasePrice || 0),
-      reorderLevel: parseFloat(i.reorderLevel || i.reorder_level || 10),
-      reorderQuantity: parseFloat(i.reorderQuantity || i.reorder_quantity || 20),
-      active: i.active !== undefined ? i.active : true,
-      tenantId: i.tenantId || i.tenant_id || targetTenantId
-    }));
+    const normalized = store.map(i => {
+      const code = i.itemCode || i.item_code || i.sku || i.id;
+      let cost = parseFloat(i.currentUnitCost || i.unitValuation || i.unit_valuation || i.lastPurchasePrice || i.wacCost || i.cost || 0);
+      if (cost <= 0 && supplierCatalog.length > 0) {
+        const catEntry = supplierCatalog.find(c => 
+          (c.item_code && code && String(c.item_code).toUpperCase() === String(code).toUpperCase()) ||
+          (c.itemCode && code && String(c.itemCode).toUpperCase() === String(code).toUpperCase()) ||
+          (c.supplier_sku && code && String(c.supplier_sku).toUpperCase().includes(String(code).toUpperCase()))
+        );
+        if (catEntry) {
+          cost = parseFloat(catEntry.current_price || catEntry.last_purchase_price || catEntry.cataloguePrice || catEntry.unit_price || catEntry.unitPrice || 0);
+        }
+      }
+      return {
+        id: i.id || i.uuid || i.itemCode || i.item_code,
+        sku: i.sku || i.itemCode || i.item_code || i.id,
+        itemCode: code,
+        name: i.name || i.itemName || i.item_name || 'Untitled Item',
+        itemName: i.itemName || i.item_name || i.name || 'Untitled Item',
+        category: i.category || i.categoryName || i.category_name || 'RAW_MATERIAL',
+        baseUnit: i.baseUnit || i.baseUom || i.base_uom || 'KG',
+        purchaseUnit: i.purchaseUnit || i.purchase_unit || i.baseUnit || 'KG',
+        currentUnitCost: cost,
+        weightedAverageCost: cost,
+        reorderLevel: parseFloat(i.reorderLevel || i.reorder_level || 10),
+        reorderQuantity: parseFloat(i.reorderQuantity || i.reorder_quantity || 20),
+        active: i.active !== undefined ? i.active : true,
+        tenantId: i.tenantId || i.tenant_id || targetTenantId
+      };
+    });
 
     return normalized.filter(i => !targetTenantId || i.tenantId === targetTenantId || i.tenant_id === targetTenantId);
   }

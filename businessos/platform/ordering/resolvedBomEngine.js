@@ -49,14 +49,35 @@ class ResolvedBomEngine {
     // Fallback: Check recipeModel recipes collection
     let recipe = null;
     if (!bomHeader) {
+      const targetRecipeId = lineItem.recipeId || menuItem?.recipeId;
       recipe = recipes.find(r => 
-        r.status === 'APPROVED' && (
-          r.menuItemId === itemId || r.menuItemCode === itemId || r.id === menuItem?.recipeId
+        (r.status === 'APPROVED' || r.status === 'PUBLISHED') && (
+          (targetRecipeId && (r.id === targetRecipeId || r.recipeId === targetRecipeId || r.recipeCode === targetRecipeId)) ||
+          r.menuItemId === itemId || 
+          r.menu_item_id === itemId ||
+          r.menuItemCode === itemId ||
+          r.menu_item_code === itemId
         )
-      ) || recipes[0];
+      ) || null;
       if (recipe) activeBomVersionId = recipe.version || recipe.recipeVersion || 'v1.0';
     } else {
       activeBomVersionId = bomHeader.version || 'v1.0';
+    }
+
+    // Guard: Bar direct items must never fall back into generic Kitchen BOM resolution
+    const itemCodeUpper = String(itemId || '').toUpperCase().trim();
+    if ((itemCodeUpper.startsWith('RC-BAR-') || itemCodeUpper.startsWith('BAR')) && !bomHeader && !recipe) {
+      return {
+        orderLineId: lineItem.lineItemId || lineItem.itemId,
+        menuItemId: itemId,
+        variantId: variantId || 'default',
+        variantName: variantObj ? variantObj.variantName : 'Standard',
+        quantity: orderQty,
+        bomVersionId: 'v1.0',
+        deductionDisabled: true,
+        warningCode: 'BAR_DIRECT_ITEM_BYPASS_KITCHEN_BOM',
+        consumption: []
+      };
     }
 
     // Step A: Process Variant / Base Ingredients

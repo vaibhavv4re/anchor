@@ -584,8 +584,13 @@ export function formatRecordForTable(entityName, job) {
       total_cost: parseFloat(p.totalCost || p.total_cost) || 0,
       cost_per_portion: parseFloat(p.costPerPortion || p.cost_per_portion) || 0,
       cost_snapshot_at_approval: p.costSnapshotAtApproval || p.cost_snapshot_at_approval || null,
-      instructions: p.instructions || '',
-      data: p
+      data: {
+        ...p,
+        variantId: p.variantId || p.variant_id || null,
+        variantName: p.variantName || p.variant_name || null,
+        ingredients: p.ingredients || [],
+        status: p.status || 'DRAFT'
+      }
     };
   }
 
@@ -797,6 +802,34 @@ export function formatPatchForTable(entityName, patch) {
     copyIfPresent('supplierCode', 'supplier_code');
     copyIfPresent('status', 'status');
     copyIfPresent('totalReceivedValue', 'total_received_value', v => parseFloat(v) || 0);
+  } else if (entityName === 'kitchen_menu_items') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('itemCode', 'item_code');
+    copyIfPresent('itemName', 'item_name');
+    copyIfPresent('category', 'category');
+    copyIfPresent('description', 'description');
+    copyIfPresent('sellingPrice', 'selling_price', v => parseFloat(v) || 0);
+    copyIfPresent('taxProfile', 'tax_profile');
+    copyIfPresent('dietaryType', 'dietary_type');
+    copyIfPresent('portionSize', 'portion_size');
+    copyIfPresent('availabilityStatus', 'availability_status');
+    copyIfPresent('lifecycleStatus', 'lifecycle_status');
+    copyIfPresent('recipeId', 'recipe_id');
+    copyIfPresent('routing', 'routing');
+    copyIfPresent('recipeNotes', 'recipe_notes');
+    copyIfPresent('spicinessLevel', 'spiciness_level');
+    copyIfPresent('region', 'region');
+    result.updated_at = new Date().toISOString();
+    const rawData = p.data || p;
+    const unnested = (rawData && rawData.data && typeof rawData.data === 'object') ? { ...rawData.data, ...rawData } : { ...rawData };
+    delete unnested.data;
+    result.data = {
+      ...unnested,
+      ...(result.recipe_id !== undefined ? { recipeId: result.recipe_id } : {}),
+      ...(result.availability_status !== undefined ? { availabilityStatus: result.availability_status } : {}),
+      ...(result.lifecycle_status !== undefined ? { lifecycleStatus: result.lifecycle_status } : {})
+    };
   } else if (entityName === 'recipes') {
     copyIfPresent('id', 'id');
     copyIfPresent('tenantId', 'tenant_id');
@@ -808,8 +841,27 @@ export function formatPatchForTable(entityName, patch) {
     copyIfPresent('yieldQuantity', 'yield_quantity', v => parseFloat(v) || 1);
     copyIfPresent('yieldUom', 'yield_uom');
     copyIfPresent('portionCount', 'portion_count', v => parseInt(v) || 1);
+    copyIfPresent('prepTimeMinutes', 'prep_time_minutes', v => parseInt(v) || 15);
+    copyIfPresent('cookTimeMinutes', 'cook_time_minutes', v => parseInt(v) || 15);
     copyIfPresent('totalCost', 'total_cost', v => parseFloat(v) || 0);
     copyIfPresent('costPerPortion', 'cost_per_portion', v => parseFloat(v) || 0);
+    copyIfPresent('costSnapshotAtApproval', 'cost_snapshot_at_approval');
+    copyIfPresent('instructions', 'instructions');
+    result.updated_at = new Date().toISOString();
+    const rawData = p.data || p;
+    const unnested = (rawData && rawData.data && typeof rawData.data === 'object') ? { ...rawData.data, ...rawData } : { ...rawData };
+    delete unnested.data;
+    result.data = {
+      ...unnested,
+      ...(result.status !== undefined ? { status: result.status } : {}),
+      ...(result.total_cost !== undefined ? { totalCost: result.total_cost } : {}),
+      ...(result.cost_per_portion !== undefined ? { costPerPortion: result.cost_per_portion } : {}),
+      ...(p.variantId ? { variantId: p.variantId } : {}),
+      ...(p.variantName ? { variantName: p.variantName } : {}),
+      ...(p.ingredients ? { ingredients: p.ingredients } : {}),
+      ...(p.glassware ? { glassware: p.glassware } : {}),
+      ...(p.instructions ? { instructions: p.instructions } : {})
+    };
   } else if (entityName === 'stock_balances') {
     copyIfPresent('id', 'id');
     copyIfPresent('tenantId', 'tenant_id');

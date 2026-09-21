@@ -98,7 +98,6 @@ class OfflineStore {
       audit: 50,
       stock_ledger: 50,
       notifications: 30,
-      recipes: 20,
       orders: 30,
       bill_revisions: 30,
       table_sessions: 30,
@@ -108,7 +107,7 @@ class OfflineStore {
 
     const cap = logCaps[collection] || maxItems;
     let finalData = list;
-    if (Array.isArray(list) && list.length > cap && !['stock_balances', 'inventory', 'suppliers', 'supplier_catalog'].includes(collection)) {
+    if (Array.isArray(list) && list.length > cap && !['stock_balances', 'inventory', 'suppliers', 'supplier_catalog', 'recipes', 'kitchen_menu_items'].includes(collection)) {
       finalData = list.slice(-cap);
     }
 
@@ -120,7 +119,7 @@ class OfflineStore {
    * Emergency Storage Cleanup: Trims oversized append-only log collections when localStorage hits quota limits.
    */
   _purgeStaleLogs() {
-    const logCollections = ['timeline_ledger', 'audit', 'stock_ledger', 'notifications', 'session_audit_logs', 'bill_revisions', 'orders', 'recipes', 'table_sessions', 'invoices', 'payments'];
+    const logCollections = ['timeline_ledger', 'audit', 'stock_ledger', 'notifications', 'session_audit_logs', 'bill_revisions', 'orders', 'table_sessions', 'invoices', 'payments'];
     logCollections.forEach(col => {
       try {
         const raw = localStorage.getItem(this.prefix + col);

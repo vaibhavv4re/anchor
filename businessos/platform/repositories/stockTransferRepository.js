@@ -1,10 +1,11 @@
 import { attachStandardMetadata } from '../metadata/entityMetadata.js';
+import { platformEventBus } from '../events/platformEvents.js';
 
 /**
  * StockTransferRepository domain persistence abstraction.
  *
  * Atomic & Idempotent Paired Ledger Posting Engine (TRANSFER_OUT & TRANSFER_IN).
- * Supports constructor dependency injection (DataGateway, OfflineStore, OfflineJournal, AuditLogger, InventoryRepository)
+ * Supports constructor dependency injection (DataGateway, OfflineStore, OfflineJournal, AuditLogger, InventoryRepository, EventBus)
  * while remaining fully backward-compatible with legacy global platform instances.
  */
 export class StockTransferRepository {
@@ -15,6 +16,7 @@ export class StockTransferRepository {
     this.auditLogger = deps.auditLogger || null;
     this.entityMetadata = deps.entityMetadata || { attachStandardMetadata };
     this.inventoryRepository = deps.inventoryRepository || (typeof inventoryRepository !== 'undefined' ? inventoryRepository : null);
+    this.eventBus = deps.eventBus || deps.platformEventBus || null;
   }
 
   getAll(tenantId = null) {
@@ -68,7 +70,7 @@ export class StockTransferRepository {
     // 1. Negative Stock Enforcement
     for (const line of data.lines) {
       const reqQty = parseFloat(line.quantity) || 0;
-      const srcBal = balanceList.find(b => b.itemCode === line.itemCode && b.locationCode === fromLoc && (!tenantId || b.tenantId === tenantId));
+      const srcBal = balanceList.find(b => (b.itemCode === line.itemCode || b.item_code === line.itemCode) && (b.locationCode === fromLoc || b.location_code === fromLoc) && (!tenantId || b.tenantId === tenantId || b.tenant_id === tenantId));
       const availQty = srcBal ? (parseFloat(srcBal.quantity) || 0) : 0;
       const masterItem = invRepo ? invRepo.getByCode(line.itemCode, tenantId) : null;
       const allowNeg = masterItem ? !!masterItem.allowNegativeStock : false;
@@ -98,15 +100,58 @@ export class StockTransferRepository {
       postedAt: new Date().toISOString()
     };
 
+    const syncPromises = [];
+
     // 2. Atomic Paired Ledger Posting: TRANSFER_OUT (-Qty) & TRANSFER_IN (+Qty)
     trfRecord.lines.forEach((line, idx) => {
       const qty = parseFloat(line.quantity) || 0;
       const uom = line.baseUom || 'KG';
       const masterItem = (invRepo ? invRepo.getByCode(line.itemCode, tenantId) : null) || {};
-      const unitCost = parseFloat(masterItem.unitValuation) || parseFloat(masterItem.lastPurchasePrice) || 0;
+      const unitCost = parseFloat(masterItem.unitValuation) || parseFloat(masterItem.lastPurchasePrice) || parseFloat(line.unitCost) || 0;
       const val = qty * unitCost;
 
-      // OUT Entry
+      // Paired Transactions for Immutable stock_transactions (Supabase / PostgreSQL)
+      const outTxn = {
+        id: `txn-${postingId}-out-${idx}`,
+        tenantId,
+        operationId: groupId,
+        transactionType: 'TRANSFER_OUT',
+        status: 'POSTED',
+        referenceType: 'STOCK_TRANSFER',
+        referenceId: trfNo,
+        referenceLineId: `line-${idx + 1}`,
+        itemCode: line.itemCode,
+        itemName: line.itemName || masterItem.itemName || line.itemCode,
+        locationCode: fromLoc,
+        quantity: -qty,
+        uom,
+        unitCost,
+        totalCost: -val,
+        performedBy: trfRecord.postedBy,
+        occurredAt: new Date().toISOString()
+      };
+
+      const inTxn = {
+        id: `txn-${postingId}-in-${idx}`,
+        tenantId,
+        operationId: groupId,
+        transactionType: 'TRANSFER_IN',
+        status: 'POSTED',
+        referenceType: 'STOCK_TRANSFER',
+        referenceId: trfNo,
+        referenceLineId: `line-${idx + 1}`,
+        itemCode: line.itemCode,
+        itemName: line.itemName || masterItem.itemName || line.itemCode,
+        locationCode: toLoc,
+        quantity: qty,
+        uom,
+        unitCost,
+        totalCost: val,
+        performedBy: trfRecord.postedBy,
+        occurredAt: new Date().toISOString()
+      };
+
+      // Paired Ledger for stock_ledger (Local cache / Offline store backward compatibility)
       const outLedger = {
         ledgerId: `LEDGER-${new Date().toISOString().slice(0, 10)}-TRFOUT-${idx + 1}`,
         tenantId,
@@ -124,7 +169,6 @@ export class StockTransferRepository {
         timestamp: new Date().toISOString()
       };
 
-      // IN Entry
       const inLedger = {
         ledgerId: `LEDGER-${new Date().toISOString().slice(0, 10)}-TRFIN-${idx + 1}`,
         tenantId,
@@ -143,6 +187,8 @@ export class StockTransferRepository {
       };
 
       if (this.dataGateway && typeof this.dataGateway.create === 'function') {
+        syncPromises.push(this.dataGateway.create('stock_transactions', outTxn, session));
+        syncPromises.push(this.dataGateway.create('stock_transactions', inTxn, session));
         this.dataGateway.create('stock_ledger', outLedger, session);
         this.dataGateway.create('stock_ledger', inLedger, session);
       } else {
@@ -150,8 +196,13 @@ export class StockTransferRepository {
         ledgerList.push(inLedger);
       }
 
+      if (store) {
+        store.appendItem('stock_transactions', outTxn);
+        store.appendItem('stock_transactions', inTxn);
+      }
+
       // Update Source Balance
-      let srcIdx = balanceList.findIndex(b => b.itemCode === line.itemCode && b.locationCode === fromLoc && (!tenantId || b.tenantId === tenantId));
+      let srcIdx = balanceList.findIndex(b => (b.itemCode === line.itemCode || b.item_code === line.itemCode) && (b.locationCode === fromLoc || b.location_code === fromLoc) && (!tenantId || b.tenantId === tenantId || b.tenant_id === tenantId));
       if (srcIdx !== -1) {
         const updatedSrc = {
           ...balanceList[srcIdx],
@@ -160,14 +211,14 @@ export class StockTransferRepository {
           lastUpdatedAt: new Date().toISOString()
         };
         if (this.dataGateway && typeof this.dataGateway.update === 'function') {
-          this.dataGateway.update('stock_balances', balanceList[srcIdx].id || balanceList[srcIdx].itemCode, updatedSrc, session);
+          syncPromises.push(this.dataGateway.update('stock_balances', balanceList[srcIdx].id || balanceList[srcIdx].itemCode, updatedSrc, session));
         } else {
           balanceList[srcIdx] = updatedSrc;
         }
       }
 
       // Update Destination Balance
-      let dstIdx = balanceList.findIndex(b => b.itemCode === line.itemCode && b.locationCode === toLoc && (!tenantId || b.tenantId === tenantId));
+      let dstIdx = balanceList.findIndex(b => (b.itemCode === line.itemCode || b.item_code === line.itemCode) && (b.locationCode === toLoc || b.location_code === toLoc) && (!tenantId || b.tenantId === tenantId || b.tenant_id === tenantId));
       if (dstIdx !== -1) {
         const updatedDst = {
           ...balanceList[dstIdx],
@@ -176,23 +227,32 @@ export class StockTransferRepository {
           lastUpdatedAt: new Date().toISOString()
         };
         if (this.dataGateway && typeof this.dataGateway.update === 'function') {
-          this.dataGateway.update('stock_balances', balanceList[dstIdx].id || balanceList[dstIdx].itemCode, updatedDst, session);
+          syncPromises.push(this.dataGateway.update('stock_balances', balanceList[dstIdx].id || balanceList[dstIdx].itemCode, updatedDst, session));
         } else {
           balanceList[dstIdx] = updatedDst;
         }
       } else {
         const newDst = {
-          id: 'bal-' + Math.random().toString(36).substring(2, 7),
+          id: 'sb-' + Math.random().toString(36).substring(2, 9),
           tenantId,
           itemCode: line.itemCode,
           locationCode: toLoc,
           quantity: qty,
           baseUom: uom,
+          unitCost,
           valuation: val,
-          lastUpdatedAt: new Date().toISOString()
+          lastUpdatedAt: new Date().toISOString(),
+          data: {
+            itemCode: line.itemCode,
+            locationCode: toLoc,
+            quantity: qty,
+            unitCost,
+            valuation: val,
+            tenantId
+          }
         };
         if (this.dataGateway && typeof this.dataGateway.create === 'function') {
-          this.dataGateway.create('stock_balances', newDst, session);
+          syncPromises.push(this.dataGateway.create('stock_balances', newDst, session));
         } else {
           balanceList.push(newDst);
         }
@@ -210,15 +270,16 @@ export class StockTransferRepository {
     }
 
     if (this.dataGateway && typeof this.dataGateway.create === 'function') {
-      this.dataGateway.create('stock_transfers', trfRecord, session);
+      syncPromises.push(this.dataGateway.create('stock_transfers', trfRecord, session));
     } else if (store) {
       store.appendItem('stock_transfers', trfRecord);
     }
 
     // Broadcast Real-time Stock Balance & Transfer Events across all Workspaces
-    if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.eventBus) {
-      window.__APP__.platform.eventBus.publish('stock:balance:updated', { tenantId, transferNo: trfNo, fromLoc, toLoc });
-      window.__APP__.platform.eventBus.publish('inventory:updated', { tenantId, transferNo: trfNo });
+    const bus = this.eventBus || (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.eventBus) || platformEventBus;
+    if (bus && typeof bus.publish === 'function') {
+      bus.publish('stock:balance:updated', { tenantId, transferNo: trfNo, fromLoc, toLoc, lines: trfRecord.lines });
+      bus.publish('inventory:updated', { tenantId, transferNo: trfNo });
     }
 
     const actor = session ? session.employeeName : 'Admin';
@@ -229,6 +290,9 @@ export class StockTransferRepository {
       logAudit(actor, actionMsg, tenantId);
     }
 
-    return { success: true, transfer: trfRecord, idempotentRetry: false };
+    trfRecord.syncPromise = Promise.all(syncPromises);
+
+    return { success: true, transfer: trfRecord, syncPromise: trfRecord.syncPromise, idempotentRetry: false };
   }
 }
+

@@ -432,28 +432,34 @@ class ProductionRoutingEngine {
 
     if (updatedTicket) {
       if (updatedItem) {
-        const prevStatus = updatedItem.prevStatus;
-        if (newStatus === 'READY' && prevStatus !== 'READY') {
+        const isBarTicket = updatedTicket.ticketType === 'BOT' || updatedTicket.destination === 'BAR';
+        const actor = isBarTicket ? 'Bartender' : 'Chef';
+
+        const prevItemStatus = updatedItem.prevStatus;
+
+        // Deduct on READY (normal flow) and also on a direct SERVED transition (waiter serve-all without
+        // bartender READY). Operation-id idempotency in the consumption service prevents double deduction.
+        if ((newStatus === 'READY' || newStatus === 'SERVED') && prevItemStatus !== 'READY' && prevItemStatus !== 'SERVED') {
           inventoryConsumptionService.consumeForOrderLine({
             tenantId: targetTenantId,
             orderId: updatedTicket.orderId || updatedTicket.id,
             orderLineId: updatedItem.lineItemId || updatedItem.itemId || lineItemIdOrIndex,
             item: updatedItem,
             occurredAt: now,
-            performedBy: 'Chef'
+            performedBy: actor
           }).catch(err => {
             console.error('[productionRoutingEngine] Error during sale consumption for item READY:', err);
           });
-        } else if (newStatus === 'PREPARING' && prevStatus === 'READY') {
+        } else if (newStatus === 'PREPARING' && prevItemStatus === 'READY') {
           inventoryConsumptionService.reverseConsumptionForOrderLine({
             tenantId: targetTenantId,
             orderId: updatedTicket.orderId || updatedTicket.id,
             orderLineId: updatedItem.lineItemId || updatedItem.itemId || lineItemIdOrIndex,
-            reason: 'KDS_UNDO_READY',
+            reason: isBarTicket ? 'BDS_UNDO_READY' : 'KDS_UNDO_READY',
             occurredAt: now,
-            performedBy: 'Chef'
+            performedBy: actor
           }).catch(err => {
-            console.error('[productionRoutingEngine] Error during sale reversal on KDS Undo:', err);
+            console.error('[productionRoutingEngine] Error during sale reversal on Undo:', err);
           });
         }
       }
@@ -496,6 +502,7 @@ class ProductionRoutingEngine {
     let updatedTicket = null;
 
     let itemsToDeduct = [];
+    let itemsToReverse = [];
     if (tIdx >= 0) {
       tickets[tIdx].status = newStatus;
       tickets[tIdx].updatedAt = now;
@@ -503,13 +510,15 @@ class ProductionRoutingEngine {
         const prevItemStatus = it.itemStatus || it.status;
         it.itemStatus = newStatus;
         it.status = newStatus;
-        if (newStatus === 'READY') {
-          it.readyAt = now;
-          if (prevItemStatus !== 'READY') {
-            itemsToDeduct.push(it);
-          }
-        }
+        if (newStatus === 'READY') it.readyAt = now;
         if (newStatus === 'SERVED') it.servedAt = now;
+        // Deduct on first entry into READY or SERVED (direct SERVED must not escape consumption)
+        if ((newStatus === 'READY' || newStatus === 'SERVED') && prevItemStatus !== 'READY' && prevItemStatus !== 'SERVED') {
+          itemsToDeduct.push(it);
+        }
+        if (newStatus === 'PREPARING' && prevItemStatus === 'READY') {
+          itemsToReverse.push(it);
+        }
       });
       updatedTicket = tickets[tIdx];
       offlineStore.setCollection('tickets', tickets);
@@ -543,13 +552,14 @@ class ProductionRoutingEngine {
           const prevItemStatus = it.itemStatus || it.status;
           it.itemStatus = newStatus;
           it.status = newStatus;
-          if (newStatus === 'READY') {
-            it.readyAt = now;
-            if (prevItemStatus !== 'READY' && !itemsToDeduct.some(x => (x.lineItemId || x.itemId) === (it.lineItemId || it.itemId))) {
-              itemsToDeduct.push(it);
-            }
-          }
+          if (newStatus === 'READY') it.readyAt = now;
           if (newStatus === 'SERVED') it.servedAt = now;
+          if ((newStatus === 'READY' || newStatus === 'SERVED') && prevItemStatus !== 'READY' && prevItemStatus !== 'SERVED' && !itemsToDeduct.some(x => (x.lineItemId || x.itemId) === (it.lineItemId || it.itemId))) {
+            itemsToDeduct.push(it);
+          }
+          if (newStatus === 'PREPARING' && prevItemStatus === 'READY' && !itemsToReverse.some(x => (x.lineItemId || x.itemId) === (it.lineItemId || it.itemId))) {
+            itemsToReverse.push(it);
+          }
         });
         if (!updatedTicket) updatedTicket = orderTickets[matchIdx];
       } else if (updatedTicket) {
@@ -605,6 +615,9 @@ class ProductionRoutingEngine {
     }
 
     if (updatedTicket) {
+      const isBarTicket = updatedTicket.ticketType === 'BOT' || updatedTicket.destination === 'BAR';
+      const actor = isBarTicket ? 'Bartender' : 'Chef';
+
       if (itemsToDeduct.length > 0) {
         itemsToDeduct.forEach(it => {
           inventoryConsumptionService.consumeForOrderLine({
@@ -613,9 +626,24 @@ class ProductionRoutingEngine {
             orderLineId: it.lineItemId || it.itemId,
             item: it,
             occurredAt: now,
-            performedBy: 'Chef'
+            performedBy: actor
           }).catch(err => {
             console.error('[productionRoutingEngine] Error during ticket sale consumption:', err);
+          });
+        });
+      }
+
+      if (itemsToReverse.length > 0) {
+        itemsToReverse.forEach(it => {
+          inventoryConsumptionService.reverseConsumptionForOrderLine({
+            tenantId: targetTenantId,
+            orderId: updatedTicket.orderId || updatedTicket.id,
+            orderLineId: it.lineItemId || it.itemId,
+            reason: isBarTicket ? 'BDS_UNDO_READY' : 'KDS_UNDO_READY',
+            occurredAt: now,
+            performedBy: actor
+          }).catch(err => {
+            console.error('[productionRoutingEngine] Error during ticket sale reversal:', err);
           });
         });
       }

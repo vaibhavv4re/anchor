@@ -23,8 +23,10 @@ import { inventoryProjectionService } from '../../../../../businessos/platform/i
 import { BarMenuImporter, ANCHOR_HARBOUR_64_MENU_ITEMS } from '../../../../../businessos/platform/kitchen/barMenuImporter.js';
 import { barConsumptionModel } from '../../../../../businessos/platform/kitchen/barConsumptionModel.js';
 import { modifierGroupModel } from '../../../../../businessos/platform/kitchen/modifierGroupModel.js';
+import { offlineStore } from '../../../../../businessos/platform/offline_store/offlineStore.js';
 import { platformEventBus } from '../../../../../businessos/platform/events/platformEvents.js';
 import { BarDisplaySystemView } from './BarDisplaySystemView.js';
+import { BarInventoryView } from './BarInventoryView.js';
 
 export class BarWorkspaceView {
   constructor(deps = {}) {
@@ -33,15 +35,24 @@ export class BarWorkspaceView {
     this.activeTab = 'today'; // 'today' | 'menu' | 'recipes' | 'production' | 'bds' | 'inventory' | 'controls'
     this.selectedRecipeId = null;
     this.activeBdsView = null;
+    this.barInventoryView = new BarInventoryView({
+      platformEventBus: deps.platformEventBus || platformEventBus,
+      dataGateway: deps.dataGateway || null,
+      offlineStore: deps.offlineStore || null
+    });
     this.importerViewActive = false;
     this.importPreviewData = null;
     this.importerFilterTab = 'all'; // 'all' | 'ready' | 'attention'
     this.editingItemId = null;
     this.editingRecipeId = null;
     this.recipeEditingTarget = null; // { menuItemId, variantId, variantName, itemName }
+    this.currentRecipeEditorState = null; // In-memory active recipe editor state
     this.recipePickerModalActive = false;
+    this.masterPickerFilterTab = 'BAR'; // 'BAR' | 'MIXER' | 'ALL'
+    this.masterPickerSearchQuery = '';
     this.recipeFilterTab = 'all'; // 'all' | 'published' | 'draft' | 'missing'
     this.platformEventBus = deps.platformEventBus || platformEventBus;
+    this.unsubscribeEvents = [];
   }
 
   render(mountEl, sessionUser = null) {
@@ -61,17 +72,59 @@ export class BarWorkspaceView {
   }
 
   subscribePlatformEvents() {
-    const refresh = () => {
-      if (this.container && document.body.contains(this.container)) {
-        this.updateContent();
+    // 1. Clean up any existing listeners before creating new subscriptions
+    if (Array.isArray(this.unsubscribeEvents)) {
+      this.unsubscribeEvents.forEach(unsub => {
+        if (typeof unsub === 'function') unsub();
+      });
+      this.unsubscribeEvents = [];
+    }
+
+    // 2. Debounced refresh (coalesces burst updates, ignores updates if BDS view is active)
+    let debounceTimer = null;
+    const debouncedRefresh = () => {
+      if (this.activeBdsView) return; // Never overwrite container while BDS is active
+      if (debounceTimer) clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        if (this.container && document.body && document.body.contains(this.container) && !this.activeBdsView) {
+          this.updateContent();
+        }
+      }, 100);
+    };
+
+    const onDataChanged = (payload) => {
+      if (this.activeBdsView) return;
+      if (!payload || !payload.collection) {
+        debouncedRefresh();
+        return;
+      }
+      const relevantCollections = [
+        'recipes',
+        'recipe_ingredients',
+        'kitchen_menu_items',
+        'orders',
+        'inventory',
+        'inventory_items',
+        'stock_balances',
+        'production_batches',
+        'bar_consumption_definitions'
+      ];
+      if (relevantCollections.includes(payload.collection)) {
+        debouncedRefresh();
       }
     };
-    this.unsubscribeEvents = [
-      platformEventBus.subscribe('bot:created', refresh),
-      platformEventBus.subscribe('bot:status_changed', refresh),
-      platformEventBus.subscribe('ticket:status_changed', refresh),
-      platformEventBus.subscribe('data:changed', refresh)
-    ];
+
+    const bus = this.platformEventBus || platformEventBus;
+    if (bus && typeof bus.subscribe === 'function') {
+      this.unsubscribeEvents = [
+        bus.subscribe('bot:created', debouncedRefresh),
+        bus.subscribe('bot:status_changed', debouncedRefresh),
+        bus.subscribe('ticket:status_changed', debouncedRefresh),
+        bus.subscribe('data:changed', onDataChanged),
+        bus.subscribe('stock:balance:updated', debouncedRefresh),
+        bus.subscribe('stock:updated', debouncedRefresh)
+      ];
+    }
   }
 
   getBarTickets() {
@@ -106,12 +159,26 @@ export class BarWorkspaceView {
   }
 
   getBarInventoryItems() {
+    if (this.barInventoryView && typeof this.barInventoryView.getEnrichedBarInventory === 'function') {
+      return this.barInventoryView.getEnrichedBarInventory('tenant_h0qc7wf') || [];
+    }
     const allItems = inventoryItemModel.getAllItems() || [];
-    return allItems.filter(i => i.department === 'BAR' || i.category === 'BAR' || i.category === 'BEVERAGE' || i.area === 'BAR' || i.baseUnit === 'ML');
+    return allItems.filter(i => {
+      const cat = String(i.categoryCode || i.category || '').toUpperCase();
+      const dept = String(i.department || '').toUpperCase();
+      const code = String(i.itemCode || i.item_code || i.id || '').toUpperCase();
+      return cat.includes('BEV') || cat.includes('BAR') || dept.includes('BAR') || code.startsWith('BAR');
+    });
   }
 
   updateContent(sessionUser = null) {
     if (!this.container) return;
+
+    // BDS is currently occupying the container in fullscreen mode.
+    // Do not overwrite container innerHTML with workspace HTML!
+    if (this.activeBdsView) {
+      return;
+    }
 
     if (this.editingRecipeId || this.recipeEditingTarget) {
       this.container.innerHTML = this.renderDedicatedRecipeEditorView();
@@ -589,7 +656,7 @@ export class BarWorkspaceView {
           badgeClass = 'badge-warning';
           actionRequiredCount++;
         } else {
-          statusTag = '⚠️ RECIPE MISSING';
+          statusTag = '⚠️ Recipe Missing — Inventory Auto-Deduction Disabled';
           badgeClass = 'badge-danger';
           actionRequiredCount++;
         }
@@ -713,28 +780,115 @@ export class BarWorkspaceView {
 
   // --- DEDICATED FULL-PAGE BEVERAGE RECIPE EDITOR VIEW (F8.3.1) ---
   renderDedicatedRecipeEditorView() {
-    let recipe = null;
-    if (this.editingRecipeId) {
-      recipe = recipeModel.getById(this.editingRecipeId);
-    }
+    const supplierCatalog = offlineStore.getCollection('supplier_catalog') || offlineStore.getCollection('supplier_catalogue') || [];
+    const allRawItems = inventoryItemModel.getAllItems() || [];
+    const masterInventoryItems = allRawItems.map(inv => {
+      const code = inv.itemCode || inv.sku || inv.id;
+      const name = inv.name || inv.itemName || 'Untitled Item';
+      const category = (inv.category || inv.categoryName || 'RAW_MATERIAL').toUpperCase();
+      let cost = parseFloat(inv.currentUnitCost || inv.unitValuation || inv.lastPurchasePrice || inv.wacCost || inv.cost || 0);
+      if (cost <= 0 && supplierCatalog.length > 0) {
+        const catEntry = supplierCatalog.find(c => 
+          (c.item_code && code && String(c.item_code).toUpperCase() === String(code).toUpperCase()) ||
+          (c.itemCode && code && String(c.itemCode).toUpperCase() === String(code).toUpperCase()) ||
+          (c.supplier_sku && code && String(c.supplier_sku).toUpperCase().includes(String(code).toUpperCase()))
+        );
+        if (catEntry) {
+          cost = parseFloat(catEntry.current_price || catEntry.last_purchase_price || catEntry.cataloguePrice || catEntry.unit_price || catEntry.unitPrice || 0);
+        }
+      }
+      const isAlcohol = category.includes('BAR') || category.includes('SPIRIT') || category.includes('ALCOHOL') || category.includes('BEER') || category.includes('WINE') || category.includes('LIQUEUR') || code.startsWith('BAR') || code.startsWith('ALC');
+      const isMixer = category.includes('MIX') || category.includes('SYRUP') || category.includes('JUICE') || category.includes('SOFT') || category.includes('BEV') || name.toLowerCase().includes('juice') || name.toLowerCase().includes('syrup') || name.toLowerCase().includes('tonic') || name.toLowerCase().includes('soda') || name.toLowerCase().includes('lime') || name.toLowerCase().includes('mint');
+      
+      let baseUnit = inv.baseUnit || inv.baseUom || inv.base_uom;
+      if (!baseUnit || baseUnit === 'KG') {
+        if (isAlcohol || isMixer) baseUnit = 'LTR';
+        else baseUnit = baseUnit || 'KG';
+      }
 
-    const target = this.recipeEditingTarget || {};
-    const menuItemId = recipe ? recipe.menuItemId : target.menuItemId;
-    const itemName = recipe ? recipe.recipeName : (target.itemName || 'Beverage Recipe');
-    const variantName = recipe ? (recipe.variantName || 'Regular') : (target.variantName || 'Regular');
-    const variantId = recipe ? recipe.variantId : target.variantId;
-    const revision = recipe ? (recipe.revision || recipe.revisionNumber || 1) : 1;
-    const status = recipe ? recipe.status : 'DRAFT';
-    const instructions = recipe ? (recipe.instructions || '') : '';
-    const ingredients = recipe ? (recipe.ingredients || []) : [];
-
-    // Calculate live cost
-    let totalCost = 0;
-    ingredients.forEach(ing => {
-      totalCost += (ing.lineCost || (ing.quantity * (ing.unitCost || 0)));
+      return {
+        ...inv,
+        code,
+        name,
+        category,
+        baseUnit,
+        cost,
+        isAlcohol,
+        isMixer
+      };
     });
 
-    const masterInventoryItems = inventoryItemModel.getAllItems() || [];
+    masterInventoryItems.sort((a, b) => {
+      if (a.isAlcohol && !b.isAlcohol) return -1;
+      if (!a.isAlcohol && b.isAlcohol) return 1;
+      if (a.isMixer && !b.isMixer) return -1;
+      if (!a.isMixer && b.isMixer) return 1;
+      return a.name.localeCompare(b.name);
+    });
+
+    if (!this.currentRecipeEditorState) {
+      let recipe = null;
+      if (this.editingRecipeId) {
+        recipe = recipeModel.getById(this.editingRecipeId);
+      }
+      const target = this.recipeEditingTarget || {};
+      const menuItemId = recipe ? recipe.menuItemId : target.menuItemId;
+      const itemName = recipe ? recipe.recipeName : (target.itemName || 'Beverage Recipe');
+      const variantName = recipe ? (recipe.variantName || 'Regular') : (target.variantName || 'Regular');
+      const variantId = recipe ? recipe.variantId : target.variantId;
+      const revision = recipe ? (recipe.revision || recipe.revisionNumber || 1) : 1;
+      const status = recipe ? recipe.status : 'DRAFT';
+      const glassware = recipe ? (recipe.glassware || 'Whisky Rock Glass') : 'Cocktail Glass';
+      const instructions = recipe ? (recipe.instructions || 'Standard cocktail pour recipe method.') : 'Standard cocktail pour recipe method.';
+      const ingredients = recipe && Array.isArray(recipe.ingredients)
+        ? recipe.ingredients.map(ing => {
+            const code = ing.inventoryItemCode || ing.inventory_item_code || ing.itemCode;
+            let unitCost = parseFloat(ing.unitCost || 0);
+            if (unitCost <= 0 && code) {
+              const matched = masterInventoryItems.find(m => m.code === code || m.sku === code);
+              if (matched && matched.cost > 0) unitCost = matched.cost;
+            }
+            const qty = parseFloat(ing.quantity) || 30;
+            return {
+              inventoryItemId: ing.inventoryItemId || ing.inventory_item_id || code,
+              inventoryItemCode: code,
+              inventoryItemName: ing.inventoryItemName || ing.inventory_item_name || ing.name,
+              quantity: qty,
+              uom: ing.uom || 'ML',
+              unitCost,
+              lineCost: parseFloat(ing.lineCost || (qty * unitCost))
+            };
+          })
+        : [];
+
+      this.currentRecipeEditorState = {
+        recipeId: recipe ? recipe.id : null,
+        menuItemId,
+        variantId,
+        variantName,
+        recipeName: itemName,
+        revision,
+        status,
+        glassware,
+        instructions,
+        ingredients
+      };
+    }
+
+    const state = this.currentRecipeEditorState;
+    const { menuItemId, variantId, variantName, recipeName, revision, status, glassware, instructions, ingredients } = state;
+
+    // Calculate live total cost and dynamically backfill any zero costs
+    let totalCost = 0;
+    ingredients.forEach(ing => {
+      if ((!ing.unitCost || parseFloat(ing.unitCost) <= 0) && ing.inventoryItemCode) {
+        const matched = masterInventoryItems.find(m => m.code === ing.inventoryItemCode || m.sku === ing.inventoryItemCode);
+        if (matched && matched.cost > 0) ing.unitCost = matched.cost;
+      }
+      const lineCost = (parseFloat(ing.quantity) || 0) * (parseFloat(ing.unitCost) || 0);
+      ing.lineCost = lineCost;
+      totalCost += lineCost;
+    });
 
     return `
       <div style="display:flex; flex-direction:column; width:100%; height:100%; background:var(--bg-base); color:var(--text-primary); overflow:hidden;">
@@ -764,7 +918,7 @@ export class BarWorkspaceView {
           <div style="max-width:950px; margin:0 auto; display:flex; flex-direction:column; gap:24px;">
             
             <form id="form-recipe-editor-page" class="card" style="padding:28px; background:var(--bg-surface-1); border-radius:14px; border:1px solid var(--border-subtle); display:flex; flex-direction:column; gap:24px;">
-              <input type="hidden" id="recipe-editor-id" value="${recipe ? recipe.id : ''}">
+              <input type="hidden" id="recipe-editor-id" value="${state.recipeId || ''}">
               <input type="hidden" id="recipe-editor-menu-item-id" value="${menuItemId || ''}">
               <input type="hidden" id="recipe-editor-variant-id" value="${variantId || ''}">
 
@@ -772,7 +926,7 @@ export class BarWorkspaceView {
               <div style="display:grid; grid-template-columns:1.5fr 1fr 1fr 1fr; gap:16px; padding-bottom:16px; border-bottom:1px solid var(--border-subtle);">
                 <div>
                   <label style="font-size:0.8rem; font-weight:800; color:var(--text-muted); display:block; margin-bottom:4px;">DRINK NAME</label>
-                  <input type="text" id="recipe-editor-name" value="${itemName}" style="width:100%; padding:10px 14px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); border-radius:8px; color:var(--text-primary); font-size:1rem; font-weight:800;" required>
+                  <input type="text" id="recipe-editor-name" value="${recipeName}" style="width:100%; padding:10px 14px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); border-radius:8px; color:var(--text-primary); font-size:1rem; font-weight:800;" required>
                 </div>
                 <div>
                   <label style="font-size:0.8rem; font-weight:800; color:var(--text-muted); display:block; margin-bottom:4px;">SERVING VARIANT</label>
@@ -801,7 +955,7 @@ export class BarWorkspaceView {
                       Every ingredient strictly links to Master Inventory. Zero free-text ingredients allowed.
                     </div>
                   </div>
-                  <button type="button" id="btn-open-master-picker-modal" class="btn-primary" style="padding:8px 18px; font-weight:800; font-size:0.88rem; background:linear-gradient(90deg,#ec4899,#8b5cf6); color:#fff; border:none; border-radius:6px; cursor:pointer;">
+                  <button type="button" id="btn-open-master-picker-modal" class="btn-primary" style="padding:10px 20px; font-weight:800; font-size:0.9rem; background:linear-gradient(90deg,#ec4899,#8b5cf6); color:#fff; border:none; border-radius:8px; cursor:pointer; box-shadow:0 4px 14px rgba(236,72,153,0.35);">
                     📦 + Add Ingredient from Inventory Master
                   </button>
                 </div>
@@ -811,7 +965,7 @@ export class BarWorkspaceView {
                     <thead style="background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); color:var(--text-muted);">
                       <tr>
                         <th style="padding:12px 16px;">INVENTORY MASTER INGREDIENT</th>
-                        <th style="padding:12px 16px;">POUR QUANTITY</th>
+                        <th style="padding:12px 16px; width:170px;">POUR QUANTITY</th>
                         <th style="padding:12px 16px;">BASE UNIT</th>
                         <th style="padding:12px 16px;">UNIT WAC (₹)</th>
                         <th style="padding:12px 16px;">LINE COST (₹)</th>
@@ -820,23 +974,28 @@ export class BarWorkspaceView {
                     </thead>
                     <tbody id="recipe-ingredients-tbody-page">
                       ${ingredients.length > 0 ? ingredients.map((ing, idx) => `
-                        <tr class="recipe-ing-row" style="border-bottom:1px solid var(--border-subtle);">
-                          <input type="hidden" class="ing-item-code" value="${ing.inventoryItemCode || ing.inventory_item_code || ''}">
-                          <td style="padding:12px 16px; font-weight:800; color:var(--accent-primary);">${ing.inventoryItemName || ing.inventory_item_name}</td>
+                        <tr class="recipe-ing-row" data-idx="${idx}" data-item-code="${ing.inventoryItemCode || ''}" style="border-bottom:1px solid var(--border-subtle);">
+                          <input type="hidden" class="ing-item-code" value="${ing.inventoryItemCode || ''}">
+                          <td class="ing-item-name" style="padding:12px 16px; font-weight:800; color:var(--accent-primary);">${ing.inventoryItemName}</td>
                           <td style="padding:12px 16px;">
-                            <input type="number" step="0.01" class="ing-qty" value="${ing.quantity || 0}" style="width:100px; padding:6px 10px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); border-radius:6px; color:var(--text-primary); font-weight:800;">
+                            <div style="display:flex; align-items:center; gap:8px;">
+                              <input type="number" step="any" min="0.01" class="ing-qty" data-idx="${idx}" value="${ing.quantity || 0}" style="width:100px; padding:6px 10px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); border-radius:6px; color:var(--text-primary); font-weight:800;">
+                              <span style="font-size:0.8rem; font-weight:700; color:var(--text-muted);">${ing.uom || 'ML'}</span>
+                            </div>
                           </td>
-                          <td style="padding:12px 16px; font-weight:700;">${ing.uom || 'ML'}</td>
-                          <td style="padding:12px 16px; font-weight:700; color:var(--text-muted);">₹${parseFloat(ing.unitCost || 0).toFixed(2)}</td>
-                          <td style="padding:12px 16px; font-weight:800; color:#10b981;">₹${parseFloat(ing.lineCost || (ing.quantity * (ing.unitCost || 0))).toFixed(2)}</td>
+                          <td class="ing-uom" style="padding:12px 16px; font-weight:700;">${ing.uom || 'ML'}</td>
+                          <td class="ing-unit-cost" style="padding:12px 16px; font-weight:700; color:var(--text-muted);">₹${parseFloat(ing.unitCost || 0).toFixed(2)}</td>
+                          <td class="ing-line-cost" style="padding:12px 16px; font-weight:800; color:#10b981;">₹${parseFloat(ing.lineCost || (ing.quantity * (ing.unitCost || 0))).toFixed(2)}</td>
                           <td style="padding:12px 16px; text-align:right;">
-                            <button type="button" class="btn-secondary btn-delete-recipe-ing-row" style="padding:4px 10px; font-size:0.78rem; font-weight:700; border-color:#ef4444; color:#ef4444;">🗑️ Remove</button>
+                            <button type="button" class="btn-secondary btn-delete-recipe-ing-row" data-idx="${idx}" style="padding:4px 10px; font-size:0.78rem; font-weight:700; border-color:#ef4444; color:#ef4444;">🗑️ Remove</button>
                           </td>
                         </tr>
                       `).join('') : `
                         <tr id="empty-ingredients-row">
-                          <td colspan="6" style="padding:30px; text-align:center; color:var(--text-muted);">
-                            No ingredients added yet. Click "+ Add Ingredient from Inventory Master" above.
+                          <td colspan="6" style="padding:36px 20px; text-align:center; color:var(--text-muted);">
+                            <div style="font-size:1.8rem; margin-bottom:8px;">🍹</div>
+                            <div style="font-weight:700; font-size:0.95rem; color:var(--text-primary);">No recipe ingredients added yet</div>
+                            <div style="font-size:0.82rem; margin-top:4px;">Click the <strong>"+ Add Ingredient from Inventory Master"</strong> button above to pick spirits, liqueurs, mixers, or produce.</div>
                           </td>
                         </tr>
                       `}
@@ -849,12 +1008,12 @@ export class BarWorkspaceView {
               <div style="padding:16px 20px; background:var(--bg-surface-2); border-radius:10px; border:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
                 <div>
                   <div style="font-size:0.8rem; color:var(--text-muted); font-weight:700;">ESTIMATED INGREDIENT COST PER PORTION</div>
-                  <div style="font-size:1.4rem; font-weight:800; color:#10b981; margin-top:2px;">
+                  <div style="font-size:1.5rem; font-weight:800; color:#10b981; margin-top:2px;">
                     ₹<span id="recipe-editor-total-cost">${totalCost.toFixed(2)}</span>
                   </div>
                 </div>
                 <div style="font-size:0.82rem; color:var(--text-muted); text-align:right;">
-                  Valuation derived live from central WAC ledger.
+                  Valuation derived live from central Inventory Master &amp; WAC ledger.
                 </div>
               </div>
 
@@ -862,11 +1021,11 @@ export class BarWorkspaceView {
               <div style="display:grid; grid-template-columns:1fr 2fr; gap:16px;">
                 <div>
                   <label style="font-size:0.8rem; font-weight:800; color:var(--text-muted); display:block; margin-bottom:6px;">GLASSWARE SPECS</label>
-                  <input type="text" id="recipe-editor-glassware" value="${recipe ? (recipe.glassware || 'Whisky Rock Glass') : 'Whisky Rock Glass'}" style="width:100%; padding:10px 14px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); border-radius:8px; color:var(--text-primary); font-size:0.9rem;">
+                  <input type="text" id="recipe-editor-glassware" value="${glassware}" style="width:100%; padding:10px 14px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); border-radius:8px; color:var(--text-primary); font-size:0.9rem;">
                 </div>
                 <div>
                   <label style="font-size:0.8rem; font-weight:800; color:var(--text-muted); display:block; margin-bottom:6px;">PREPARATION &amp; POUR METHOD</label>
-                  <input type="text" id="recipe-editor-instructions" value="${instructions || 'Standard pour recipe method.'}" style="width:100%; padding:10px 14px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); border-radius:8px; color:var(--text-primary); font-size:0.9rem;">
+                  <input type="text" id="recipe-editor-instructions" value="${instructions}" style="width:100%; padding:10px 14px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); border-radius:8px; color:var(--text-primary); font-size:0.9rem;">
                 </div>
               </div>
 
@@ -895,53 +1054,97 @@ export class BarWorkspaceView {
 
         <!-- INVENTORY MASTER ITEM PICKER MODAL -->
         ${this.recipePickerModalActive ? `
-          <div style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.75); display:flex; align-items:center; justify-content:center; z-index:99999; backdrop-filter:blur(6px);">
-            <div class="card animate-fade-in" style="width:90%; max-width:650px; padding:24px; background:var(--bg-surface-1); border-radius:14px; box-shadow:0 12px 32px rgba(0,0,0,0.5);">
+          <div id="recipe-master-picker-modal" style="position:fixed; top:0; left:0; width:100vw; height:100vh; background:rgba(0,0,0,0.75); display:flex; align-items:center; justify-content:center; z-index:99999; backdrop-filter:blur(6px);">
+            <div class="card animate-fade-in" style="width:92%; max-width:720px; max-height:85vh; padding:24px; background:var(--bg-surface-1); border-radius:14px; box-shadow:0 12px 32px rgba(0,0,0,0.5); display:flex; flex-direction:column; gap:16px;">
               
-              <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-subtle); padding-bottom:14px; margin-bottom:16px;">
-                <h3 style="margin:0; font-size:1.2rem; font-weight:800; display:flex; align-items:center; gap:8px;">
-                  📦 SELECT INVENTORY MASTER INGREDIENT
-                </h3>
-                <button id="btn-close-master-picker-modal" class="btn-secondary" style="padding:4px 10px; font-weight:700;">✕ Close</button>
+              <!-- MODAL HEADER -->
+              <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-subtle); padding-bottom:12px;">
+                <div style="display:flex; align-items:center; gap:10px;">
+                  <div style="font-size:1.4rem;">📦</div>
+                  <div>
+                    <h3 style="margin:0; font-size:1.15rem; font-weight:800;">SELECT INVENTORY MASTER INGREDIENT</h3>
+                    <div style="font-size:0.78rem; color:var(--text-muted); font-weight:600;">Link spirit, mixer, or raw ingredient directly to central inventory</div>
+                  </div>
+                </div>
+                <button type="button" id="btn-close-master-picker-modal" class="btn-secondary" style="padding:6px 12px; font-weight:800; font-size:0.85rem;">✕ Close</button>
               </div>
 
-              <div style="display:flex; flex-direction:column; gap:14px;">
-                <input type="text" id="search-inventory-master-input" placeholder="Search Master Inventory by name or item code..." style="width:100%; padding:10px 14px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); border-radius:8px; color:var(--text-primary); font-size:0.9rem; font-weight:700;">
+              <!-- CATEGORY FILTER TABS -->
+              <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                <button type="button" class="btn-inv-picker-filter ${this.masterPickerFilterTab === 'BAR' ? 'active' : ''}" data-filter="BAR" style="padding:6px 14px; font-size:0.8rem; font-weight:800; border-radius:20px; border:1px solid ${this.masterPickerFilterTab === 'BAR' ? '#ec4899' : 'var(--border-subtle)'}; background:${this.masterPickerFilterTab === 'BAR' ? 'linear-gradient(90deg,#ec4899,#8b5cf6)' : 'var(--bg-surface-2)'}; color:${this.masterPickerFilterTab === 'BAR' ? '#fff' : 'var(--text-muted)'}; cursor:pointer;">
+                  🍸 Bar Spirits &amp; Alcohol
+                </button>
+                <button type="button" class="btn-inv-picker-filter ${this.masterPickerFilterTab === 'MIXER' ? 'active' : ''}" data-filter="MIXER" style="padding:6px 14px; font-size:0.8rem; font-weight:800; border-radius:20px; border:1px solid ${this.masterPickerFilterTab === 'MIXER' ? '#ec4899' : 'var(--border-subtle)'}; background:${this.masterPickerFilterTab === 'MIXER' ? 'linear-gradient(90deg,#ec4899,#8b5cf6)' : 'var(--bg-surface-2)'}; color:${this.masterPickerFilterTab === 'MIXER' ? '#fff' : 'var(--text-muted)'}; cursor:pointer;">
+                  🍋 Mixers, Syrups &amp; Fresh
+                </button>
+                <button type="button" class="btn-inv-picker-filter ${this.masterPickerFilterTab === 'ALL' ? 'active' : ''}" data-filter="ALL" style="padding:6px 14px; font-size:0.8rem; font-weight:800; border-radius:20px; border:1px solid ${this.masterPickerFilterTab === 'ALL' ? '#ec4899' : 'var(--border-subtle)'}; background:${this.masterPickerFilterTab === 'ALL' ? 'linear-gradient(90deg,#ec4899,#8b5cf6)' : 'var(--bg-surface-2)'}; color:${this.masterPickerFilterTab === 'ALL' ? '#fff' : 'var(--text-muted)'}; cursor:pointer;">
+                  📦 All Master Items (${masterInventoryItems.length})
+                </button>
+              </div>
 
-                <div style="max-height:280px; overflow-y:auto; border:1px solid var(--border-subtle); border-radius:8px;">
-                  <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.85rem;">
-                    <thead style="background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); color:var(--text-muted);">
-                      <tr>
-                        <th style="padding:10px 14px;">ITEM CODE</th>
-                        <th style="padding:10px 14px;">INGREDIENT NAME</th>
-                        <th style="padding:10px 14px;">BASE UNIT</th>
-                        <th style="padding:10px 14px;">WAC / UNIT</th>
-                        <th style="padding:10px 14px; text-align:right;">SELECT</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      ${masterInventoryItems.length > 0 ? masterInventoryItems.map(inv => `
-                        <tr style="border-bottom:1px solid var(--border-subtle);">
-                          <td style="padding:10px 14px; font-weight:800; color:var(--accent-primary);">${inv.itemCode || inv.id}</td>
-                          <td style="padding:10px 14px; font-weight:700;">${inv.name || inv.itemName}</td>
-                          <td style="padding:10px 14px;">${inv.baseUnit || 'ML'}</td>
-                          <td style="padding:10px 14px; font-weight:700;">₹${parseFloat(inv.wacCost || inv.cost || 0).toFixed(2)}</td>
+              <!-- SEARCH INPUT -->
+              <div style="position:relative;">
+                <input type="text" id="search-inventory-master-input" value="${this.masterPickerSearchQuery || ''}" placeholder="🔍 Search spirit, mixer, or ingredient name (e.g. Gin, Vodka, Lime, Mint, Soda)..." style="width:100%; padding:10px 14px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); border-radius:8px; color:var(--text-primary); font-size:0.92rem; font-weight:700;">
+              </div>
+
+              <!-- ITEMS TABLE LIST -->
+              <div style="flex:1; overflow-y:auto; border:1px solid var(--border-subtle); border-radius:8px; min-height:220px; max-height:360px;">
+                <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.85rem;">
+                  <thead style="background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); color:var(--text-muted); position:sticky; top:0; z-index:2;">
+                    <tr>
+                      <th style="padding:10px 14px;">ITEM CODE</th>
+                      <th style="padding:10px 14px;">INGREDIENT NAME</th>
+                      <th style="padding:10px 14px;">BASE UNIT</th>
+                      <th style="padding:10px 14px;">WAC / UNIT</th>
+                      <th style="padding:10px 14px; text-align:right;">ACTION</th>
+                    </tr>
+                  </thead>
+                  <tbody id="master-inv-picker-tbody">
+                    ${masterInventoryItems.map(inv => {
+                      const isBar = inv.isAlcohol;
+                      const isMix = inv.isMixer;
+                      const q = (this.masterPickerSearchQuery || '').toLowerCase().trim();
+                      let isVisible = true;
+                      if (q) {
+                        const rowText = `${inv.code} ${inv.name} ${inv.category}`.toLowerCase();
+                        isVisible = rowText.includes(q);
+                      } else {
+                        if (this.masterPickerFilterTab === 'BAR') isVisible = isBar;
+                        else if (this.masterPickerFilterTab === 'MIXER') isVisible = isMix;
+                        else isVisible = true;
+                      }
+                      return `
+                        <tr class="master-inv-picker-row" data-item-code="${inv.code}" data-item-name="${inv.name}" data-category="${inv.category}" data-uom="${inv.baseUnit}" data-cost="${inv.cost}" style="border-bottom:1px solid var(--border-subtle); ${isVisible ? '' : 'display:none;'}">
+                          <td style="padding:10px 14px; font-weight:800; color:var(--accent-primary); white-space:nowrap;">
+                            ${inv.code}
+                          </td>
+                          <td style="padding:10px 14px; font-weight:700;">
+                            <div>${inv.name}</div>
+                            <div style="margin-top:2px;">
+                              <span class="badge" style="font-size:0.68rem; padding:1px 6px; background:${isBar ? 'rgba(236,72,153,0.15); color:#ec4899;' : isMix ? 'rgba(245,158,11,0.15); color:#f59e0b;' : 'var(--bg-surface-2); color:var(--text-muted);'}">
+                                ${inv.category}
+                              </span>
+                            </div>
+                          </td>
+                          <td style="padding:10px 14px; font-weight:700;">${inv.baseUnit}</td>
+                          <td style="padding:10px 14px; font-weight:700; color:var(--text-muted);">₹${inv.cost.toFixed(2)}</td>
                           <td style="padding:10px 14px; text-align:right;">
-                            <button type="button" class="btn-primary btn-select-master-inv-item" data-item-code="${inv.itemCode || inv.id}" data-item-name="${inv.name || inv.itemName}" data-uom="${inv.baseUnit || 'ML'}" data-wac="${inv.wacCost || inv.cost || 0}" style="padding:4px 12px; font-size:0.78rem; font-weight:800;">
+                            <button type="button" class="btn-primary btn-select-master-inv-item" data-item-code="${inv.code}" data-item-name="${inv.name}" data-uom="${inv.baseUnit}" data-cost="${inv.cost}" style="padding:6px 14px; font-size:0.8rem; font-weight:800; background:linear-gradient(90deg,#ec4899,#8b5cf6); color:#fff; border:none; border-radius:6px; cursor:pointer;">
                               + Add
                             </button>
                           </td>
                         </tr>
-                      `).join('') : `
-                        <tr>
-                          <td colspan="5" style="padding:30px; text-align:center; color:var(--text-muted);">
-                            ❌ No Inventory Master items configured.<br>Contact Inventory Manager to configure master ingredients.
-                          </td>
-                        </tr>
-                      `}
-                    </tbody>
-                  </table>
+                      `;
+                    }).join('')}
+                  </tbody>
+                </table>
+                <div id="master-picker-empty-msg" style="display:none; padding:28px; text-align:center; color:var(--text-muted); font-size:0.88rem;">
+                  🔍 No inventory items match your search. Try switching tabs to "All Master Items" or changing your search terms.
                 </div>
+              </div>
+
+              <div style="font-size:0.78rem; color:var(--text-muted); text-align:right;">
+                Showing live Master Inventory SKUs with active WAC valuation ledger.
               </div>
 
             </div>
@@ -1019,44 +1222,10 @@ export class BarWorkspaceView {
 
   // --- TAB 6: 📦 INVENTORY — BAR VIEW ---
   renderInventoryBarViewTab(inventoryItems = []) {
-    return `
-      <div style="display:flex; flex-direction:column; gap:20px;">
-        <h3 style="margin:0; font-size:1.1rem; font-weight:800;">📦 Bar Inventory Ledger &amp; Bottle-to-Pour Ratio (ML Base Unit)</h3>
-
-        <div class="card" style="padding:0; overflow:hidden; background:var(--bg-surface-1); border-radius:10px;">
-          <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.88rem;">
-            <thead>
-              <tr style="background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); color:var(--text-muted);">
-                <th style="padding:12px 16px;">INGREDIENT</th>
-                <th style="padding:12px 16px;">BASE UNIT</th>
-                <th style="padding:12px 16px;">BOTTLE EQUIVALENT</th>
-                <th style="padding:12px 16px;">CURRENT STOCK (ML)</th>
-                <th style="padding:12px 16px;">WAC / UNIT</th>
-                <th style="padding:12px 16px;">STATUS</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${inventoryItems.length > 0 ? inventoryItems.map(item => `
-                <tr style="border-bottom:1px solid var(--border-subtle);">
-                  <td style="padding:12px 16px; font-weight:700;">${item.name || item.itemName}</td>
-                  <td style="padding:12px 16px;">${item.baseUnit || 'ML'}</td>
-                  <td style="padding:12px 16px; color:var(--text-muted);">750 ML Bottle</td>
-                  <td style="padding:12px 16px; font-weight:800; color:var(--accent-primary);">${item.currentStock || 0} ${item.baseUnit || 'ML'}</td>
-                  <td style="padding:12px 16px; font-weight:700;">₹${parseFloat(item.wacCost || item.cost || 0).toFixed(2)}</td>
-                  <td style="padding:12px 16px;"><span class="badge badge-success" style="font-weight:800;">🟢 Healthy</span></td>
-                </tr>
-              `).join('') : `
-                <tr>
-                  <td colspan="6" style="padding:30px; text-align:center; color:var(--text-muted);">
-                    No bar ingredients or spirits found in inventory master.
-                  </td>
-                </tr>
-              `}
-            </tbody>
-          </table>
-        </div>
-      </div>
-    `;
+    const wrapper = document.createElement('div');
+    wrapper.id = 'bar-inventory-tab-mount';
+    this.barInventoryView.render(wrapper, { tenantId: 'tenant_h0qc7wf', employeeName: 'Bartender Sibu' });
+    return wrapper.innerHTML;
   }
 
   // --- TAB 7: ⚙️ BAR CONTROLS ---
@@ -1566,6 +1735,10 @@ export class BarWorkspaceView {
             itemName: btn.dataset.itemName
           };
         }
+        this.currentRecipeEditorState = null; // Forces fresh initialization from target/recipe
+        this.recipePickerModalActive = false;
+        this.masterPickerSearchQuery = '';
+        this.masterPickerFilterTab = 'BAR';
         this.updateContent();
       });
     });
@@ -1578,6 +1751,9 @@ export class BarWorkspaceView {
         btn.addEventListener('click', () => {
           this.editingRecipeId = null;
           this.recipeEditingTarget = null;
+          this.currentRecipeEditorState = null;
+          this.recipePickerModalActive = false;
+          this.masterPickerSearchQuery = '';
           this.updateContent();
         });
       }
@@ -1587,6 +1763,25 @@ export class BarWorkspaceView {
     const btnMasterPicker = this.container.querySelector('#btn-open-master-picker-modal');
     if (btnMasterPicker) {
       btnMasterPicker.addEventListener('click', () => {
+        // Sync current form text values before showing modal
+        const nameInput = this.container.querySelector('#recipe-editor-name');
+        if (nameInput && this.currentRecipeEditorState) this.currentRecipeEditorState.recipeName = nameInput.value.trim();
+        const glasswareInput = this.container.querySelector('#recipe-editor-glassware');
+        if (glasswareInput && this.currentRecipeEditorState) this.currentRecipeEditorState.glassware = glasswareInput.value.trim();
+        const instructionsInput = this.container.querySelector('#recipe-editor-instructions');
+        if (instructionsInput && this.currentRecipeEditorState) this.currentRecipeEditorState.instructions = instructionsInput.value.trim();
+
+        // Sync existing quantities in the table
+        this.container.querySelectorAll('.recipe-ing-row').forEach(tr => {
+          const idx = parseInt(tr.dataset.idx);
+          const qtyInput = tr.querySelector('.ing-qty');
+          if (!isNaN(idx) && qtyInput && this.currentRecipeEditorState && this.currentRecipeEditorState.ingredients[idx]) {
+            const qty = parseFloat(qtyInput.value) || 0;
+            this.currentRecipeEditorState.ingredients[idx].quantity = qty;
+            this.currentRecipeEditorState.ingredients[idx].lineCost = qty * (this.currentRecipeEditorState.ingredients[idx].unitCost || 0);
+          }
+        });
+
         this.recipePickerModalActive = true;
         this.updateContent();
       });
@@ -1597,8 +1792,36 @@ export class BarWorkspaceView {
     if (btnClosePicker) {
       btnClosePicker.addEventListener('click', () => {
         this.recipePickerModalActive = false;
+        this.masterPickerSearchQuery = '';
         this.updateContent();
       });
+    }
+
+    // Category Filter Pills in Master Picker Modal
+    this.container.querySelectorAll('.btn-inv-picker-filter').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.masterPickerFilterTab = btn.dataset.filter || 'BAR';
+        this.container.querySelectorAll('.btn-inv-picker-filter').forEach(b => {
+          const active = b.dataset.filter === this.masterPickerFilterTab;
+          b.style.background = active ? 'linear-gradient(90deg,#ec4899,#8b5cf6)' : 'var(--bg-surface-2)';
+          b.style.borderColor = active ? '#ec4899' : 'var(--border-subtle)';
+          b.style.color = active ? '#fff' : 'var(--text-muted)';
+        });
+        this.filterMasterPickerRows();
+      });
+    });
+
+    // Live Instant Search in Master Picker Modal
+    const searchInput = this.container.querySelector('#search-inventory-master-input');
+    if (searchInput) {
+      searchInput.addEventListener('input', (e) => {
+        this.masterPickerSearchQuery = e.target.value;
+        this.filterMasterPickerRows();
+      });
+      if (this.recipePickerModalActive) {
+        setTimeout(() => searchInput.focus(), 50);
+      }
     }
 
     // Select Inventory Master Item from Picker
@@ -1608,42 +1831,130 @@ export class BarWorkspaceView {
         const code = btn.dataset.itemCode;
         const name = btn.dataset.itemName;
         const uom = btn.dataset.uom || 'ML';
-        const wac = parseFloat(btn.dataset.wac) || 0;
+        const cost = parseFloat(btn.dataset.cost) || 0;
 
-        const tbody = this.container.querySelector('#recipe-ingredients-tbody-page');
-        const emptyRow = this.container.querySelector('#empty-ingredients-row');
-        if (emptyRow) emptyRow.remove();
+        // Sync text inputs
+        const nameInput = this.container.querySelector('#recipe-editor-name');
+        if (nameInput && this.currentRecipeEditorState) this.currentRecipeEditorState.recipeName = nameInput.value.trim();
+        const glasswareInput = this.container.querySelector('#recipe-editor-glassware');
+        if (glasswareInput && this.currentRecipeEditorState) this.currentRecipeEditorState.glassware = glasswareInput.value.trim();
+        const instructionsInput = this.container.querySelector('#recipe-editor-instructions');
+        if (instructionsInput && this.currentRecipeEditorState) this.currentRecipeEditorState.instructions = instructionsInput.value.trim();
 
-        if (tbody) {
-          const tr = document.createElement('tr');
-          tr.className = 'recipe-ing-row';
-          tr.style.cssText = 'border-bottom:1px solid var(--border-subtle);';
-          tr.innerHTML = `
-            <input type="hidden" class="ing-item-code" value="${code}">
-            <td style="padding:12px 16px; font-weight:800; color:var(--accent-primary);">${name}</td>
-            <td style="padding:12px 16px;">
-              <input type="number" step="0.01" class="ing-qty" value="30" style="width:100px; padding:6px 10px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); border-radius:6px; color:var(--text-primary); font-weight:800;">
-            </td>
-            <td style="padding:12px 16px; font-weight:700;">${uom}</td>
-            <td style="padding:12px 16px; font-weight:700; color:var(--text-muted);">₹${wac.toFixed(2)}</td>
-            <td style="padding:12px 16px; font-weight:800; color:#10b981;">₹${(30 * wac).toFixed(2)}</td>
-            <td style="padding:12px 16px; text-align:right;">
-              <button type="button" class="btn-secondary btn-delete-recipe-ing-row" style="padding:4px 10px; font-size:0.78rem; font-weight:700; border-color:#ef4444; color:#ef4444;">🗑️ Remove</button>
-            </td>
-          `;
-          tbody.appendChild(tr);
-          tr.querySelector('.btn-delete-recipe-ing-row').addEventListener('click', () => tr.remove());
+        // Sync quantities
+        this.container.querySelectorAll('.recipe-ing-row').forEach(tr => {
+          const idx = parseInt(tr.dataset.idx);
+          const qtyInput = tr.querySelector('.ing-qty');
+          if (!isNaN(idx) && qtyInput && this.currentRecipeEditorState && this.currentRecipeEditorState.ingredients[idx]) {
+            const qty = parseFloat(qtyInput.value) || 0;
+            this.currentRecipeEditorState.ingredients[idx].quantity = qty;
+            this.currentRecipeEditorState.ingredients[idx].lineCost = qty * (this.currentRecipeEditorState.ingredients[idx].unitCost || 0);
+          }
+        });
+
+        if (!this.currentRecipeEditorState) {
+          this.currentRecipeEditorState = {
+            recipeId: this.editingRecipeId,
+            menuItemId: this.recipeEditingTarget ? this.recipeEditingTarget.menuItemId : null,
+            recipeName: this.recipeEditingTarget ? this.recipeEditingTarget.itemName : 'Beverage Recipe',
+            variantId: this.recipeEditingTarget ? this.recipeEditingTarget.variantId : null,
+            variantName: this.recipeEditingTarget ? this.recipeEditingTarget.variantName : 'Regular',
+            revision: 1,
+            status: 'DRAFT',
+            glassware: 'Cocktail Glass',
+            instructions: 'Standard cocktail pour recipe method.',
+            ingredients: []
+          };
+        }
+
+        const upperUom = uom.toUpperCase();
+        let defaultQty = 30;
+        let pourUom = upperUom;
+        let lineUnitCost = cost;
+
+        if (upperUom === 'BOTTLE' || upperUom === 'CAN' || upperUom === 'PC' || upperUom === 'BCH') {
+          defaultQty = 1;
+          pourUom = upperUom;
+          lineUnitCost = cost;
+        } else if (upperUom === 'L' || upperUom === 'LTR') {
+          defaultQty = 30;
+          pourUom = 'ML';
+          lineUnitCost = cost > 0 ? parseFloat((cost / 1000).toFixed(4)) : 0;
+        } else if (upperUom === 'KG') {
+          defaultQty = 0.05;
+          pourUom = 'KG';
+          lineUnitCost = cost;
+        } else if (upperUom === 'ML' || upperUom === 'G') {
+          defaultQty = 30;
+          pourUom = upperUom;
+          lineUnitCost = cost;
+        }
+
+        const existing = this.currentRecipeEditorState.ingredients.find(i => 
+          (i.inventoryItemCode && i.inventoryItemCode.toLowerCase() === code.toLowerCase())
+        );
+
+        if (existing) {
+          existing.quantity = (parseFloat(existing.quantity) || 0) + defaultQty;
+          if (lineUnitCost > 0) existing.unitCost = lineUnitCost;
+          existing.lineCost = existing.quantity * (existing.unitCost || lineUnitCost);
+        } else {
+          this.currentRecipeEditorState.ingredients.push({
+            inventoryItemCode: code,
+            inventoryItemName: name,
+            quantity: defaultQty,
+            uom: pourUom,
+            unitCost: lineUnitCost,
+            lineCost: defaultQty * lineUnitCost
+          });
         }
 
         this.recipePickerModalActive = false;
+        this.masterPickerSearchQuery = '';
         this.updateContent();
+      });
+    });
+
+    // Dynamic Quantity Change on Recipe BOM Lines
+    this.container.querySelectorAll('.ing-qty').forEach(input => {
+      input.addEventListener('input', () => {
+        const idx = parseInt(input.dataset.idx);
+        if (isNaN(idx) || !this.currentRecipeEditorState || !this.currentRecipeEditorState.ingredients[idx]) return;
+
+        const newQty = parseFloat(input.value) || 0;
+        const ing = this.currentRecipeEditorState.ingredients[idx];
+        ing.quantity = newQty;
+        ing.lineCost = newQty * (ing.unitCost || 0);
+
+        const row = input.closest('tr');
+        if (row) {
+          const lineCostEl = row.querySelector('.ing-line-cost');
+          if (lineCostEl) {
+            lineCostEl.textContent = `₹${ing.lineCost.toFixed(2)}`;
+          }
+        }
+
+        let newTotal = 0;
+        this.currentRecipeEditorState.ingredients.forEach(i => {
+          newTotal += (parseFloat(i.lineCost) || 0);
+        });
+
+        const totalCostEl = this.container.querySelector('#recipe-editor-total-cost');
+        if (totalCostEl) {
+          totalCostEl.textContent = newTotal.toFixed(2);
+        }
       });
     });
 
     // Delete Recipe Ingredient Line
     this.container.querySelectorAll('.btn-delete-recipe-ing-row').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        e.target.closest('tr').remove();
+        e.stopPropagation();
+        const idx = parseInt(btn.dataset.idx);
+        if (!isNaN(idx) && this.currentRecipeEditorState && this.currentRecipeEditorState.ingredients) {
+          this.currentRecipeEditorState.ingredients.splice(idx, 1);
+          this.updateContent();
+        }
       });
     });
 
@@ -1876,13 +2187,24 @@ export class BarWorkspaceView {
       });
     });
 
+    // Bar Inventory (Tab 6) Event Bindings
+    if (this.activeTab === 'inventory' && this.barInventoryView) {
+      this.barInventoryView.bindEvents(this.container);
+    }
+
     // BOT Status Update
     this.container.querySelectorAll('.btn-update-bot-status').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         const ticketId = btn.dataset.ticketId;
         const newStatus = btn.dataset.newStatus;
+        const session = typeof sessionStorage !== 'undefined' ? JSON.parse(sessionStorage.getItem('ros_session') || '{}') : {};
+        const tenantId = session.tenantId || null;
+
+        orderModel.updateTicketStatus(ticketId, newStatus, tenantId);
+
         platformEventBus.publish('bot:status_changed', { ticketId, status: newStatus });
+        platformEventBus.publish('ticket:status_changed', { ticketId, status: newStatus });
         this.updateContent();
       });
     });
@@ -1981,10 +2303,16 @@ export class BarWorkspaceView {
     launchBdsBtns.forEach(btn => {
       if (btn) {
         btn.addEventListener('click', () => {
+          if (this.activeBdsView && typeof this.activeBdsView.destroy === 'function') {
+            this.activeBdsView.destroy();
+          }
           this.activeBdsView = new BarDisplaySystemView({
             onExit: () => {
-              if (document.fullscreenElement) {
+              if (document.fullscreenElement && document.exitFullscreen) {
                 document.exitFullscreen().catch(() => {});
+              }
+              if (this.activeBdsView && typeof this.activeBdsView.destroy === 'function') {
+                this.activeBdsView.destroy();
               }
               this.activeBdsView = null;
               this.updateContent();
@@ -1992,7 +2320,7 @@ export class BarWorkspaceView {
           });
           this.container.innerHTML = '';
           this.container.appendChild(this.activeBdsView.render());
-          if (!document.fullscreenElement) {
+          if (!document.fullscreenElement && document.documentElement && document.documentElement.requestFullscreen) {
             document.documentElement.requestFullscreen().catch(() => {});
           }
         });
@@ -2000,30 +2328,80 @@ export class BarWorkspaceView {
     });
   }
 
-  saveRecipeFromEditor(targetStatus = 'DRAFT') {
-    const name = this.container.querySelector('#recipe-editor-name').value.trim();
-    const menuItemId = this.container.querySelector('#recipe-editor-menu-item-id').value;
-    const variantId = this.container.querySelector('#recipe-editor-variant-id').value;
-    const variantName = this.container.querySelector('#recipe-editor-variant-name').value;
-    const glassware = this.container.querySelector('#recipe-editor-glassware').value.trim();
-    const instructions = this.container.querySelector('#recipe-editor-instructions').value.trim();
+  filterMasterPickerRows() {
+    if (!this.container) return;
+    const q = (this.masterPickerSearchQuery || '').toLowerCase().trim();
+    const currentTab = this.masterPickerFilterTab || 'BAR';
+    const rows = this.container.querySelectorAll('.master-inv-picker-row');
+    let visibleCount = 0;
 
+    rows.forEach(tr => {
+      const code = (tr.dataset.itemCode || '').toLowerCase();
+      const name = (tr.dataset.itemName || '').toLowerCase();
+      const cat = (tr.dataset.category || '').toUpperCase();
+      const isBar = cat.includes('BAR') || cat.includes('SPIRIT') || cat.includes('ALCOHOL') || cat.includes('BEER') || cat.includes('WINE') || cat.includes('LIQUEUR') || code.startsWith('bar') || code.startsWith('alc');
+      const isMix = cat.includes('MIX') || cat.includes('SYRUP') || cat.includes('JUICE') || cat.includes('SOFT') || cat.includes('BEV') || name.includes('juice') || name.includes('syrup') || name.includes('tonic') || name.includes('soda') || name.includes('lime') || name.includes('mint');
+
+      let matchesTab = true;
+      if (currentTab === 'BAR') matchesTab = isBar;
+      else if (currentTab === 'MIXER') matchesTab = isMix;
+
+      const rowText = `${code} ${name} ${cat}`.toLowerCase();
+      const matchesQuery = !q || rowText.includes(q);
+
+      if (matchesQuery && (matchesTab || q.length > 1)) {
+        tr.style.display = '';
+        visibleCount++;
+      } else {
+        tr.style.display = 'none';
+      }
+    });
+
+    const emptyMsg = this.container.querySelector('#master-picker-empty-msg');
+    if (emptyMsg) {
+      emptyMsg.style.display = visibleCount === 0 ? '' : 'none';
+    }
+  }
+
+  saveRecipeFromEditor(targetStatus = 'DRAFT') {
+    const nameInput = this.container.querySelector('#recipe-editor-name');
+    const name = (nameInput ? nameInput.value.trim() : '') || (this.currentRecipeEditorState ? this.currentRecipeEditorState.recipeName : 'Beverage Recipe');
+    const glasswareInput = this.container.querySelector('#recipe-editor-glassware');
+    const glassware = (glasswareInput ? glasswareInput.value.trim() : '') || (this.currentRecipeEditorState ? this.currentRecipeEditorState.glassware : 'Cocktail Glass');
+    const instructionsInput = this.container.querySelector('#recipe-editor-instructions');
+    const instructions = (instructionsInput ? instructionsInput.value.trim() : '') || (this.currentRecipeEditorState ? this.currentRecipeEditorState.instructions : 'Standard pour recipe method.');
+
+    const state = this.currentRecipeEditorState || {};
+    const menuItemId = state.menuItemId || (this.container.querySelector('#recipe-editor-menu-item-id') ? this.container.querySelector('#recipe-editor-menu-item-id').value : null);
+    const variantId = state.variantId || (this.container.querySelector('#recipe-editor-variant-id') ? this.container.querySelector('#recipe-editor-variant-id').value : null);
+    const variantName = state.variantName || (this.container.querySelector('#recipe-editor-variant-name') ? this.container.querySelector('#recipe-editor-variant-name').value : 'Regular');
+
+    // Extract current ingredients from DOM rows and state
     const ingredients = [];
     this.container.querySelectorAll('.recipe-ing-row').forEach(tr => {
-      const code = tr.querySelector('.ing-item-code').value;
-      const ingName = tr.querySelector('td:nth-child(2)').textContent.trim();
-      const qty = parseFloat(tr.querySelector('.ing-qty').value) || 0;
-      const uom = tr.querySelector('td:nth-child(4)').textContent.trim();
+      const code = tr.dataset.itemCode || tr.querySelector('.ing-item-code')?.value;
+      const ingName = tr.querySelector('.ing-item-name')?.textContent.trim();
+      const qty = parseFloat(tr.querySelector('.ing-qty')?.value) || 0;
+      const uom = tr.querySelector('.ing-uom')?.textContent.trim() || 'ML';
+      const unitCostText = tr.querySelector('.ing-unit-cost')?.textContent.replace('₹', '').trim();
+      const unitCost = parseFloat(unitCostText) || 0;
 
       if (code && ingName && qty > 0) {
         ingredients.push({
           inventoryItemCode: code,
           inventoryItemName: ingName,
           quantity: qty,
-          uom
+          uom,
+          unitCost,
+          lineCost: qty * unitCost
         });
       }
     });
+
+    if (ingredients.length === 0) {
+      alert('⚠️ Please add at least one ingredient from Inventory Master to this cocktail recipe BOM.');
+      return;
+    }
 
     try {
       recipeModel.validateIngredientsAgainstInventoryMaster(ingredients);
@@ -2033,8 +2411,9 @@ export class BarWorkspaceView {
     }
 
     let recipe = null;
-    if (this.editingRecipeId) {
-      recipe = recipeModel.getById(this.editingRecipeId);
+    const editingRecipeId = state.recipeId || this.editingRecipeId;
+    if (editingRecipeId) {
+      recipe = recipeModel.getById(editingRecipeId);
       if (recipe && (recipe.status === 'PUBLISHED' || recipe.status === 'APPROVED')) {
         // Clone into new revision!
         recipe = recipeModel.createNewRevision(recipe.id);
@@ -2053,7 +2432,7 @@ export class BarWorkspaceView {
         ingredients
       });
     } else {
-      recipeModel.updateRecipe(recipe.id, {
+      recipe = recipeModel.updateRecipe(recipe.id, {
         recipeName: name,
         glassware,
         instructions,
@@ -2062,10 +2441,18 @@ export class BarWorkspaceView {
     }
 
     if (targetStatus === 'SUBMITTED') {
-      recipeModel.submitRecipe(recipe.id);
+      recipe = recipeModel.submitRecipe(recipe.id);
       alert(`📤 Recipe "${name}" submitted for Manager approval!`);
     } else if (targetStatus === 'PUBLISHED') {
-      recipeModel.publishRecipe(recipe.id, 'Manager Sibu');
+      recipe = recipeModel.publishRecipe(recipe.id, 'Manager Sibu');
+      // Clean up any conflicting single-pour entry in bar_consumption_definitions so composite recipe resolves cleanly
+      const allDefs = barConsumptionModel.getAllDefinitions() || [];
+      const cleanedDefs = allDefs.filter(d => 
+        !(d.menuItemId === menuItemId && (d.variantId === variantId || d.variantName === variantName))
+      );
+      if (cleanedDefs.length !== allDefs.length) {
+        offlineStore.setCollection('bar_consumption_definitions', cleanedDefs);
+      }
       alert(`✅ Recipe "${name}" approved & published cleanly!`);
     } else {
       alert(`💾 Recipe "${name}" draft saved successfully!`);
@@ -2074,5 +2461,18 @@ export class BarWorkspaceView {
     this.editingRecipeId = null;
     this.recipeEditingTarget = null;
     this.updateContent();
+  }
+
+  destroy() {
+    if (this.activeBdsView && typeof this.activeBdsView.destroy === 'function') {
+      this.activeBdsView.destroy();
+      this.activeBdsView = null;
+    }
+    if (Array.isArray(this.unsubscribeEvents)) {
+      this.unsubscribeEvents.forEach(unsub => {
+        if (typeof unsub === 'function') unsub();
+      });
+      this.unsubscribeEvents = [];
+    }
   }
 }

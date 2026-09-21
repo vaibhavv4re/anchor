@@ -14,6 +14,18 @@ import { resolvedBomEngine } from '../ordering/resolvedBomEngine.js';
 import { DataGateway } from '../data/dataGateway.js';
 import { SupabaseClient } from '../cloud/supabaseClient.js';
 import { SupabaseDataAdapter } from '../data/adapters/supabaseDataAdapter.js';
+import { resolveBarConsumption, BAR_SKU_MAP, BAR_COCKTAIL_CODES } from '../bar/barConsumptionMapping.js';
+
+export function isBarInventorySku(itemCode) {
+  const code = String(itemCode || '').toUpperCase().trim();
+  if (!code) return false;
+  if (code.startsWith('BAR')) return true;
+  if (code.startsWith('RC-BAR-')) return true;
+  if (BAR_COCKTAIL_CODES.has(code)) return true;
+  if (Object.values(BAR_SKU_MAP).includes(code)) return true;
+  if (BAR_SKU_MAP[code]) return true;
+  return false;
+}
 
 export class InventoryConsumptionService {
   constructor(options = {}) {
@@ -39,9 +51,15 @@ export class InventoryConsumptionService {
 
   /**
    * Determine storage location for ingredient consumption.
-   * Prioritizes kitchen locations (LOC-886, LOC-KIT, LOC-901, LOC-KITCHEN) before fallback.
+   * Authoritatively enforces Bar Store (LOC-314) isolation for Bar inventory SKUs.
+   * Prioritizes kitchen locations (LOC-886, LOC-KIT, LOC-901, LOC-KITCHEN) for food ingredients.
    */
   resolveLocationForItem(itemCode, tenantId = 'tenant_h0qc7wf') {
+    // 1. Authoritative Bar Store isolation: all Bar SKUs strictly map to LOC-314
+    if (isBarInventorySku(itemCode)) {
+      return 'LOC-314';
+    }
+
     const dg = this._getDataGateway();
     let balances = [];
     if (dg && typeof dg.getCachedCollection === 'function') {
@@ -54,7 +72,7 @@ export class InventoryConsumptionService {
     const norm = (s) => String(s || '').toUpperCase().trim().replace(/[-_]/g, '');
     const target = norm(itemCode);
 
-    // 1. Kitchen Store match
+    // 2. Kitchen Store match
     const kitBal = balances.find(b => {
       const code = norm(b.itemCode || b.item_code);
       const loc = String(b.locationCode || b.location_code || '').toUpperCase().trim();
@@ -63,20 +81,21 @@ export class InventoryConsumptionService {
     });
     if (kitBal) return kitBal.locationCode || kitBal.location_code;
 
-    // 2. Any location match
+    // 3. Any non-bar location match
     const anyBal = balances.find(b => {
       const code = norm(b.itemCode || b.item_code);
-      return code === target || code.includes(target) || target.includes(code);
+      const loc = String(b.locationCode || b.location_code || '').toUpperCase().trim();
+      return (code === target || code.includes(target) || target.includes(code)) && loc !== 'LOC-314';
     });
     if (anyBal) return anyBal.locationCode || anyBal.location_code;
 
-    // 3. Authoritative kitchen default
+    // 4. Authoritative kitchen default
     return 'LOC-886';
   }
 
   /**
    * Authoritative sale consumption execution for an ordered line item.
-   * Triggered when Chef marks item READY in KDS.
+   * Triggered when Chef/Bartender marks item READY in KDS/BDS.
    * 
    * @param {Object} params
    * @param {string} params.tenantId
@@ -106,8 +125,116 @@ export class InventoryConsumptionService {
     const corrId = correlationId || `corr_${orderId}_${orderLineId}`;
     const dg = this._getDataGateway();
 
-    // 1. Resolve exact line item BOM via Resolved BOM Engine
-    const resolved = resolvedBomEngine.resolveOrderLineBOM(item, tId);
+    // 1. Determine domain: Bar vs Kitchen
+    const itemId = item.itemId || item.itemCode || item.id;
+    const menuItems = offlineStore.getCollection('kitchen_menu_items', tId) || [];
+    const menuItem = menuItems.find(m => m.id === itemId || m.itemCode === itemId || m.item_code === itemId) || null;
+
+    const itemCodeUpper = String(item.itemCode || item.itemId || menuItem?.itemCode || '').toUpperCase().trim();
+    const catUpper = String(item.category || menuItem?.category || '').toUpperCase().trim();
+    const isBar = (item.productionArea === 'BAR' || item.routing === 'BAR_LINE' || item.routing === 'BAR' || item.destination === 'BAR') ||
+      (menuItem && (menuItem.productionArea === 'BAR' || menuItem.routing === 'BAR_LINE' || menuItem.routing === 'BAR' || catUpper.includes('BAR') || catUpper.includes('BEER') || catUpper.includes('WINE') || catUpper.includes('WHISKY') || catUpper.includes('COCKTAIL') || catUpper.includes('MOCKTAIL') || catUpper.includes('BRANDY') || catUpper.includes('GIN') || catUpper.includes('VODKA') || catUpper.includes('RUM') || catUpper.includes('TEQUILA') || catUpper.includes('BREEZER'))) ||
+      Boolean(BAR_SKU_MAP[itemCodeUpper]) ||
+      BAR_COCKTAIL_CODES.has(itemCodeUpper) ||
+      itemCodeUpper.startsWith('RC-BAR-');
+
+    let resolved = null;
+
+    if (isBar) {
+      // Bar Item Domain Branch
+      const isRecipeCocktail = BAR_COCKTAIL_CODES.has(itemCodeUpper) || 
+        catUpper.includes('COCKTAIL') || 
+        catUpper.includes('MOCKTAIL');
+
+      if (isRecipeCocktail) {
+        // Check if an approved or published recipe exists
+        const recipes = offlineStore.getCollection('recipes', tId) || [];
+        const targetRecipeId = item.recipeId || menuItem?.recipeId;
+        const approvedRecipe = recipes.find(r => 
+          (r.status === 'APPROVED' || r.status === 'PUBLISHED') && (
+            (targetRecipeId && (r.id === targetRecipeId || r.recipeId === targetRecipeId || r.recipeCode === targetRecipeId)) ||
+            r.menuItemId === itemId || 
+            r.menu_item_id === itemId ||
+            r.menuItemCode === itemCodeUpper ||
+            r.menu_item_code === itemCodeUpper
+          )
+        );
+
+        if (approvedRecipe) {
+          // Resolve approved Bar recipe BOM
+          resolved = resolvedBomEngine.resolveOrderLineBOM(item, tId);
+        } else {
+          // Explicit hard gate for the 14 un-recipied drinks
+          resolved = {
+            domain: 'BAR',
+            mode: 'RECIPE',
+            recipeRequired: true,
+            recipeMissing: true,
+            deductionDisabled: true,
+            warningCode: 'RECIPE_MISSING_DEDUCTION_DISABLED',
+            consumption: []
+          };
+        }
+      } else {
+        // Deterministic POUR or UNIT Bar Item
+        // Variant resolution must never blindly match on undefined === undefined (defaulted to first
+        // variant, e.g. 30ml peg deducted for a 60ml order line). Match explicit ids/names first,
+        // then fall back to order-line name containment ("Singleton … (60 ml)" contains "60 ml").
+        const variantObj = item.variant || (menuItem && Array.isArray(menuItem.variants)
+          ? menuItem.variants.find(v => (item.variantId && (v.variantId === item.variantId || v.id === item.variantId || v.variantCode === item.variantId)) ||
+              (item.variantName && (v.name === item.variantName || v.variantName === item.variantName)) ||
+              (!item.variantId && !item.variantName && v.name && String(item.name || item.itemName || '').toLowerCase().includes(String(v.name).toLowerCase())))
+          : null);
+        
+        const barResult = resolveBarConsumption(menuItem || { itemCode: itemCodeUpper, itemName: item.name || item.itemName }, variantObj, { orderQty: item.quantity || 1 });
+
+        if (barResult && barResult.success && barResult.totalDeduction > 0) {
+          resolved = {
+            domain: 'BAR',
+            mode: barResult.mode,
+            recipeRequired: false,
+            deductionDisabled: false,
+            bomVersionId: 'v1.0',
+            consumption: [
+              {
+                inventoryItemCode: barResult.inventoryItemCode,
+                inventoryItemName: barResult.inventoryItemName,
+                itemType: 'BAR_SKU',
+                quantity: barResult.totalDeduction,
+                uom: barResult.baseUom || 'LTR',
+                source: `BAR_${barResult.mode}_MAPPING`,
+                locationCode: 'LOC-314'
+              }
+            ]
+          };
+        } else {
+          resolved = {
+            domain: 'BAR',
+            mode: barResult?.mode || 'UNKNOWN',
+            recipeRequired: false,
+            deductionDisabled: true,
+            warningCode: 'BAR_CONSUMPTION_UNRESOLVED',
+            consumption: []
+          };
+        }
+      }
+    } else {
+      // Kitchen Item Domain Branch: Generic Kitchen BOM Resolver
+      resolved = resolvedBomEngine.resolveOrderLineBOM(item, tId);
+    }
+
+    // Step 2: Hard gate for deductionDisabled (Cocktail safeguard)
+    if (resolved && resolved.deductionDisabled) {
+      console.warn(`[InventoryConsumptionService] ⚠️ ${resolved.warningCode || 'Deduction Disabled'} for line item "${item.name || item.itemName || item.itemCode}". Skipping consumption without stock mutation.`);
+      return {
+        success: false,
+        status: 'SKIPPED',
+        reason: resolved.warningCode || 'RECIPE_MISSING_DEDUCTION_DISABLED',
+        warningCode: resolved.warningCode || 'RECIPE_MISSING_DEDUCTION_DISABLED',
+        operationId
+      };
+    }
+
     if (!resolved || !Array.isArray(resolved.consumption) || resolved.consumption.length === 0) {
       console.log(`[InventoryConsumptionService] No BOM resolved for line item "${item.name || item.itemName || item.itemCode}". Skipping consumption.`);
       return {
@@ -141,6 +268,22 @@ export class InventoryConsumptionService {
         recipeId: item.recipeId || null,
         bomVersionId: c.bomVersionId || resolved.bomVersionId || 'v1.0'
       };
+    });
+
+    // 2b. Normalize every deduction line to the target stock balance UOM BEFORE execution.
+    // The deployed rpc_record_sale_consumption compares p_items.quantity directly against
+    // stock_balances.quantity without UOM conversion (200 ML vs 9.4 LTR falsely short-circuits
+    // with INSUFFICIENT_STOCK), and its error path skips the client fallback entirely.
+    const balCache = offlineStore.getCollection('stock_balances', tId) || [];
+    itemsToDeduct.forEach(d => {
+      const bal = balCache.find(b =>
+        (b.itemCode || b.item_code) === d.itemCode &&
+        (b.locationCode || b.location_code) === d.locationCode);
+      const balUom = String(bal?.uom || bal?.base_uom || bal?.data?.baseUom || bal?.data?.base_uom ||
+        (isBarInventorySku(d.itemCode) ? 'LTR' : 'KG')).toUpperCase();
+      const rawQty = this._sanitizeBarDeductionQuantity(d);
+      d.quantity = parseFloat(this._convertDeductionQuantity(rawQty, d.uom, balUom).toFixed(4));
+      d.uom = balUom;
     });
 
     // 3. Attempt Atomic Execution via PostgreSQL Stored Procedure (rpc_record_sale_consumption)
@@ -210,6 +353,60 @@ export class InventoryConsumptionService {
   }
 
   /**
+   * Normalize recipe BOM quantity to target stock balance unit of measure
+   */
+  _convertDeductionQuantity(qty, fromUom, targetUom) {
+    const q = parseFloat(qty) || 0;
+    const from = String(fromUom || '').toUpperCase().trim();
+    const to = String(targetUom || '').toUpperCase().trim();
+
+    if (!from || !to || from === to) return q;
+
+    // ML to LTR / L
+    if (from === 'ML' && (to === 'LTR' || to === 'L')) return q / 1000;
+    // LTR / L to ML
+    if ((from === 'LTR' || from === 'L') && to === 'ML') return q * 1000;
+
+    // G to KG
+    if (from === 'G' && to === 'KG') return q / 1000;
+    // KG to G
+    if (from === 'KG' && to === 'G') return q * 1000;
+
+    // Liquid density equivalence (1 KG = 1 LTR, 1 G = 1 ML)
+    if (from === 'KG' && (to === 'LTR' || to === 'L')) return q;
+    if ((from === 'LTR' || from === 'L') && to === 'KG') return q;
+    if (from === 'G' && (to === 'LTR' || to === 'L')) return q / 1000;
+    if (from === 'ML' && to === 'KG') return q / 1000;
+
+    return q;
+  }
+
+  /**
+   * Data-quality safeguard for Bar SKUs (B-02B invariant: bar SKUs are stock-managed in LTR at LOC-314).
+   * Recipe authoring mistakes historically stored ML-scale peg numbers with weight UOM (e.g. Gin "0.6 KG"
+   * for a 600 ML batch entry), which the KG=LTR density equivalence silently inflated into 0.6 LTR per peg.
+   * Bar SKU lines carrying weight UOM are therefore normalized to liquid volume before deduction.
+   * @returns {number} sanitized quantity in dItem.uom (still converted to balance UOM by caller)
+   */
+  _sanitizeBarDeductionQuantity(dItem) {
+    let qty = Math.abs(parseFloat(dItem.quantity) || 0);
+    if (!qty || !isBarInventorySku(dItem.itemCode)) return qty;
+
+    const from = String(dItem.uom || '').toUpperCase().trim();
+    if (from === 'KG' || from === 'G') {
+      console.warn(`[InventoryConsumptionService] \u26a0\ufe0f Bar SKU ${dItem.itemCode} BOM line has weight UOM (${qty} ${from}); normalizing to liquid volume for LTR-based bar stock.`);
+      const mlScale = from === 'KG' ? qty * 1000 : qty;
+      qty = mlScale > 5000 ? mlScale / 1000 : mlScale;
+      dItem.uom = 'ML';
+    } else if ((from === 'LTR' || from === 'L') && qty > 5) {
+      console.warn(`[InventoryConsumptionService] \u26a0\ufe0f Bar SKU ${dItem.itemCode} quantity ${qty} ${from} exceeds sane per-line bound; interpreting as ML-scale entry error.`);
+      qty = qty / 1000;
+      dItem.uom = 'ML';
+    }
+    return qty;
+  }
+
+  /**
    * Resilient client-side atomic execution with strict idempotency and shortage validation.
    */
   async _executeFallbackConsumption({
@@ -249,12 +446,14 @@ export class InventoryConsumptionService {
         return itemMatch && locMatch;
       });
 
+      const balUom = (match?.uom || match?.base_uom || match?.data?.baseUom || match?.data?.base_uom || match?.data?.uom || (isBarInventorySku(dItem.itemCode) ? 'LTR' : 'KG')).toUpperCase();
       const currentQty = match ? parseFloat(match.quantity !== undefined ? match.quantity : (match.data?.quantity || 0)) : 0;
-      const deductQty = dItem.quantity;
+      const rawDeductQty = this._sanitizeBarDeductionQuantity(dItem);
+      const deductQty = parseFloat(this._convertDeductionQuantity(rawDeductQty, dItem.uom, balUom).toFixed(4));
 
       if (!match || currentQty < deductQty) {
         const avail = match ? currentQty : 0;
-        throw new Error(`INSUFFICIENT_STOCK: Item ${dItem.itemCode} at ${dItem.locationCode} requires ${deductQty} ${dItem.uom}, but only ${avail} is available`);
+        throw new Error(`INSUFFICIENT_STOCK: Item ${dItem.itemCode} at ${dItem.locationCode} requires ${deductQty} ${balUom} (${rawDeductQty} ${dItem.uom}), but only ${avail} is available`);
       }
 
       const unitCost = parseFloat(match.unitCost || match.unit_cost || (match.data?.unitCost) || 0);
@@ -264,6 +463,7 @@ export class InventoryConsumptionService {
       balanceUpdates.push({
         balanceRecord: match,
         deductQty,
+        balUom,
         currentQty,
         newQty,
         unitCost,
@@ -290,7 +490,7 @@ export class InventoryConsumptionService {
         itemName: bUp.dItem.itemName,
         locationCode: bUp.dItem.locationCode,
         quantity: -Math.abs(bUp.deductQty),
-        uom: bUp.dItem.uom,
+        uom: bUp.balUom,
         unitCost: bUp.unitCost,
         totalCost: parseFloat((Math.abs(bUp.deductQty) * bUp.unitCost).toFixed(2)),
         performedBy,
@@ -408,19 +608,45 @@ export class InventoryConsumptionService {
       try {
         const rpcPayload = {
           p_tenant_id: tId,
-          p_operation_id: operationId,
+          p_reversal_operation_id: operationId,
           p_original_operation_id: origOperationId,
-          p_reversal_reason: reason,
+          p_reason: reason,
           p_occurred_at: occurredAt,
           p_performed_by: performedBy
         };
 
         const rpcRes = await dg.rpc('rpc_reverse_sale_consumption', rpcPayload);
         if (rpcRes && rpcRes.success && rpcRes.data) {
-          console.log(`[InventoryConsumptionService] PostgreSQL RPC rpc_reverse_sale_consumption success:`, rpcRes.data);
+          const resData = rpcRes.data;
+          console.log(`[InventoryConsumptionService] PostgreSQL RPC rpc_reverse_sale_consumption success:`, resData);
+
+          // Update local cache and offline store from reversed transactions
+          if (Array.isArray(resData.reversedTransactions)) {
+            const localBals = offlineStore.getCollection('stock_balances', tId) || [];
+            resData.reversedTransactions.forEach(rt => {
+              const itemCode = rt.itemCode || rt.item_code;
+              const locCode = rt.locationCode || rt.location_code;
+              const newBal = rt.newBalance !== undefined ? parseFloat(rt.newBalance) : null;
+              if (itemCode && locCode && newBal !== null) {
+                const bIdx = localBals.findIndex(b => (b.itemCode || b.item_code) === itemCode && (b.locationCode || b.location_code) === locCode);
+                if (bIdx >= 0) {
+                  const unitCost = parseFloat(localBals[bIdx].unitCost || localBals[bIdx].unit_cost || 0);
+                  localBals[bIdx].quantity = newBal;
+                  localBals[bIdx].currentStock = newBal;
+                  localBals[bIdx].valuation = parseFloat((newBal * unitCost).toFixed(2));
+                  if (localBals[bIdx].data) {
+                    localBals[bIdx].data.quantity = newBal;
+                    localBals[bIdx].data.valuation = localBals[bIdx].valuation;
+                  }
+                }
+              }
+            });
+            offlineStore.setCollection('stock_balances', localBals);
+          }
+
           platformEventBus.publish('stock:balance:updated', { tenantId: tId, operationId });
           platformEventBus.publish('inventory:reversed', { tenantId: tId, operationId, origOperationId });
-          return rpcRes.data;
+          return resData;
         }
       } catch (err) {
         console.warn(`[InventoryConsumptionService] Caught error calling reverse RPC: ${err.message}. Falling back to client reversal.`);
