@@ -1,0 +1,1118 @@
+{
+  "summary": {
+    "🟢 MATCH": 50,
+    "🟡 NEEDS MAPPING": 0,
+    "🔴 MISSING": 0,
+    "🔵 RECIPE INGREDIENT": 14,
+    "⚪ NOT STOCK ITEM": 0
+  },
+  "total": 64,
+  "items": [
+    {
+      "item_code": "RC-BAR-101",
+      "item_name": "Red Wine",
+      "category": "HOUSE WINES",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0001",
+      "inv_name": "Red Wine",
+      "base_uom": "LTR",
+      "variants_count": 3,
+      "details": "Mapped to SKU BAR0001 (Red Wine) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-102",
+      "item_name": "White Wine",
+      "category": "HOUSE WINES",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0002",
+      "inv_name": "White Wine",
+      "base_uom": "LTR",
+      "variants_count": 3,
+      "details": "Mapped to SKU BAR0002 (White Wine) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-103",
+      "item_name": "Sparkling White",
+      "category": "HOUSE WINES",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0003",
+      "inv_name": "Sparkling White",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0003 (Sparkling White) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-104",
+      "item_name": "Glenfiddich 12 Yr Old",
+      "category": "SINGLE MALT SCOTCH WHISKY",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0004",
+      "inv_name": "Glenfiddich 12 Yr Old",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0004 (Glenfiddich 12 Yr Old) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-105",
+      "item_name": "Singleton Luscious 12 Yr Old",
+      "category": "SINGLE MALT SCOTCH WHISKY",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0005",
+      "inv_name": "Singleton Luscious 12 Yr Old",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0005 (Singleton Luscious 12 Yr Old) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-106",
+      "item_name": "Chivas Regal 12 Yrs",
+      "category": "BLENDED SCOTCH WHISKY",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0006",
+      "inv_name": "Chivas Regal 12 Yrs",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0006 (Chivas Regal 12 Yrs) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-107",
+      "item_name": "J.W. Black Label",
+      "category": "BLENDED SCOTCH WHISKY",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0007",
+      "inv_name": "J.W. Black Label",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0007 (J.W. Black Label) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-108",
+      "item_name": "J.W. Red Label",
+      "category": "BLENDED SCOTCH WHISKY",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0008",
+      "inv_name": "J.W. Red Label",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0008 (J.W. Red Label) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-109",
+      "item_name": "Jack Daniels",
+      "category": "BLENDED SCOTCH WHISKY",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0009",
+      "inv_name": "Jack Daniels",
+      "base_uom": "LTR",
+      "variants_count": 4,
+      "details": "Mapped to SKU BAR0009 (Jack Daniels) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-110",
+      "item_name": "Black Dog Gold",
+      "category": "BLENDED SCOTCH WHISKY",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0010",
+      "inv_name": "Black Dog Gold",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0010 (Black Dog Gold) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-111",
+      "item_name": "Teachers Highland",
+      "category": "BLENDED SCOTCH WHISKY",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0011",
+      "inv_name": "Teachers Highland",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0011 (Teachers Highland) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-112",
+      "item_name": "100 Pipers",
+      "category": "BLENDED SCOTCH WHISKY",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0012",
+      "inv_name": "100 Pipers",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0012 (100 Pipers) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-113",
+      "item_name": "Black & White",
+      "category": "BLENDED SCOTCH WHISKY",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0013",
+      "inv_name": "Black & White",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0013 (Black & White) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-114",
+      "item_name": "Vat 69",
+      "category": "BLENDED SCOTCH WHISKY",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0014",
+      "inv_name": "Vat 69",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0014 (Vat 69) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-115",
+      "item_name": "Ballantine's Finest Scotch",
+      "category": "BLENDED SCOTCH WHISKY",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0015",
+      "inv_name": "Ballantine's Finest Scotch",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0015 (Ballantine's Finest Scotch) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-116",
+      "item_name": "Jameson",
+      "category": "BLENDED SCOTCH WHISKY",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0016",
+      "inv_name": "Jamson",
+      "base_uom": "LTR",
+      "variants_count": 4,
+      "details": "Mapped to SKU BAR0016 (Jamson) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-117",
+      "item_name": "Blenders Pride Reserve",
+      "category": "PREMIUM WHISKY",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0017",
+      "inv_name": "Blenders Pride Reserve",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0017 (Blenders Pride Reserve) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-118",
+      "item_name": "Blenders Pride",
+      "category": "PREMIUM WHISKY",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0018",
+      "inv_name": "Blenders Pride",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0018 (Blenders Pride) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-119",
+      "item_name": "Antiquity Blue",
+      "category": "PREMIUM WHISKY",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0019",
+      "inv_name": "Antiquity Blue",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0019 (Antiquity Blue) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-120",
+      "item_name": "Signature",
+      "category": "DOMESTIC WHISKY",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0020",
+      "inv_name": "Signature",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0020 (Signature) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-121",
+      "item_name": "Royal Challenge",
+      "category": "DOMESTIC WHISKY",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0021",
+      "inv_name": "Royal Challenge",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0021 (Royal Challenge) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-122",
+      "item_name": "Royal Stag",
+      "category": "DOMESTIC WHISKY",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0022",
+      "inv_name": "Royal Stag",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0022 (Royal Stag) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-123",
+      "item_name": "Imperial Blue",
+      "category": "DOMESTIC WHISKY",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0023",
+      "inv_name": "Imperial Blue",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0023 (Imperial Blue) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-124",
+      "item_name": "Monarch Brandy",
+      "category": "BRANDY",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0024",
+      "inv_name": "Monarch Brandy",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0024 (Monarch Brandy) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-125",
+      "item_name": "Dr. Brandy",
+      "category": "BRANDY",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0025",
+      "inv_name": "Dr. Brandy",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0025 (Dr. Brandy) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-126",
+      "item_name": "Bombay Sapphire",
+      "category": "GIN",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0026",
+      "inv_name": "Bombay Sapphire",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0026 (Bombay Sapphire) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-127",
+      "item_name": "Greater Than London Dry Gin",
+      "category": "GIN",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0027",
+      "inv_name": "Greater Than Londan Dry Gin",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0027 (Greater Than Londan Dry Gin) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-128",
+      "item_name": "Don Julio Blanco",
+      "category": "TEQUILA",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0028",
+      "inv_name": "Don Julio Blanco",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0028 (Don Julio Blanco) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-129",
+      "item_name": "Absolut",
+      "category": "VODKA",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0029",
+      "inv_name": "Absolute",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0029 (Absolute) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-130",
+      "item_name": "Smirnoff No. 21 Red",
+      "category": "VODKA",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0030",
+      "inv_name": "Smirnoff No. 21 Red",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0030 (Smirnoff No. 21 Red) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-131",
+      "item_name": "Smirnoff Minty Jamun",
+      "category": "VODKA",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0031",
+      "inv_name": "Smirnoff Minty Jamun",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0031 (Smirnoff Minty Jamun) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-132",
+      "item_name": "Smirnoff Green Apple",
+      "category": "VODKA",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0032",
+      "inv_name": "Smirnoff Green Apple",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0032 (Smirnoff Green Apple) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-133",
+      "item_name": "Bacardi White",
+      "category": "RUM",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0033",
+      "inv_name": "Bacardi White",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0033 (Bacardi White) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-134",
+      "item_name": "Old Monk",
+      "category": "RUM",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0034",
+      "inv_name": "Old Monk",
+      "base_uom": "LTR",
+      "variants_count": 2,
+      "details": "Mapped to SKU BAR0034 (Old Monk) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-135",
+      "item_name": "Budweiser Mild",
+      "category": "MILD BEER",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0035",
+      "inv_name": "Budweiser Mild",
+      "base_uom": "LTR",
+      "variants_count": 1,
+      "details": "Mapped to SKU BAR0035 (Budweiser Mild) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-136",
+      "item_name": "Kingfisher Ultra",
+      "category": "MILD BEER",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0036",
+      "inv_name": "Kingfisher Ultra",
+      "base_uom": "LTR",
+      "variants_count": 1,
+      "details": "Mapped to SKU BAR0036 (Kingfisher Ultra) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-137",
+      "item_name": "Kingfisher Mild",
+      "category": "MILD BEER",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0037",
+      "inv_name": "Kingfisher Mild",
+      "base_uom": "LTR",
+      "variants_count": 1,
+      "details": "Mapped to SKU BAR0037 (Kingfisher Mild) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-138",
+      "item_name": "Tuborg",
+      "category": "MILD BEER",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0038",
+      "inv_name": "Tuborg",
+      "base_uom": "LTR",
+      "variants_count": 1,
+      "details": "Mapped to SKU BAR0038 (Tuborg) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-139",
+      "item_name": "Heineken",
+      "category": "MILD BEER",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0039",
+      "inv_name": "Heineken",
+      "base_uom": "LTR",
+      "variants_count": 1,
+      "details": "Mapped to SKU BAR0039 (Heineken) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-140",
+      "item_name": "Hoegaarden",
+      "category": "MILD BEER",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0040",
+      "inv_name": "Hoegarden",
+      "base_uom": "LTR",
+      "variants_count": 1,
+      "details": "Mapped to SKU BAR0040 (Hoegarden) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-141",
+      "item_name": "Corona",
+      "category": "MILD BEER",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0041",
+      "inv_name": "Corona",
+      "base_uom": "LTR",
+      "variants_count": 1,
+      "details": "Mapped to SKU BAR0041 (Corona) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-142",
+      "item_name": "London Pilsner",
+      "category": "MILD BEER",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0042",
+      "inv_name": "London Pilsner",
+      "base_uom": "LTR",
+      "variants_count": 1,
+      "details": "Mapped to SKU BAR0042 (London Pilsner) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-143",
+      "item_name": "Carlsberg Elephant",
+      "category": "MILD BEER",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0044",
+      "inv_name": "Carlsberg Elephant",
+      "base_uom": "LTR",
+      "variants_count": 1,
+      "details": "Mapped to SKU BAR0044 (Carlsberg Elephant) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-144",
+      "item_name": "Budweiser Magnum",
+      "category": "STRONG BEER",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0043",
+      "inv_name": "Budweiser Magnum",
+      "base_uom": "LTR",
+      "variants_count": 1,
+      "details": "Mapped to SKU BAR0043 (Budweiser Magnum) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-145",
+      "item_name": "Tuborg Strong",
+      "category": "STRONG BEER",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0045",
+      "inv_name": "Tuborg Strong",
+      "base_uom": "LTR",
+      "variants_count": 1,
+      "details": "Mapped to SKU BAR0045 (Tuborg Strong) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-146",
+      "item_name": "Kingfisher Strong",
+      "category": "STRONG BEER",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0046",
+      "inv_name": "Kingfisher Strong",
+      "base_uom": "LTR",
+      "variants_count": 1,
+      "details": "Mapped to SKU BAR0046 (Kingfisher Strong) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-147",
+      "item_name": "Seaside Balcony - Savoury",
+      "category": "COCKTAILS",
+      "status": "🔵 RECIPE INGREDIENT",
+      "mapped_sku": null,
+      "inv_name": null,
+      "base_uom": null,
+      "variants_count": 1,
+      "details": "Recipe missing; requires recipe BOM definition before inventory can be resolved"
+    },
+    {
+      "item_code": "RC-BAR-148",
+      "item_name": "Afternoon Garden - Floral",
+      "category": "COCKTAILS",
+      "status": "🔵 RECIPE INGREDIENT",
+      "mapped_sku": null,
+      "inv_name": null,
+      "base_uom": null,
+      "variants_count": 1,
+      "details": "Recipe missing; requires recipe BOM definition before inventory can be resolved"
+    },
+    {
+      "item_code": "RC-BAR-149",
+      "item_name": "Kitchen pantry - Herbs & Spices",
+      "category": "COCKTAILS",
+      "status": "🔵 RECIPE INGREDIENT",
+      "mapped_sku": null,
+      "inv_name": null,
+      "base_uom": null,
+      "variants_count": 1,
+      "details": "Recipe missing; requires recipe BOM definition before inventory can be resolved"
+    },
+    {
+      "item_code": "RC-BAR-150",
+      "item_name": "Feni Cellar - Refreshing",
+      "category": "COCKTAILS",
+      "status": "🔵 RECIPE INGREDIENT",
+      "mapped_sku": null,
+      "inv_name": null,
+      "base_uom": null,
+      "variants_count": 1,
+      "details": "Recipe missing; requires recipe BOM definition before inventory can be resolved"
+    },
+    {
+      "item_code": "RC-BAR-151",
+      "item_name": "Orchard - Fruity / Spicy",
+      "category": "COCKTAILS",
+      "status": "🔵 RECIPE INGREDIENT",
+      "mapped_sku": null,
+      "inv_name": null,
+      "base_uom": null,
+      "variants_count": 1,
+      "details": "Recipe missing; requires recipe BOM definition before inventory can be resolved"
+    },
+    {
+      "item_code": "RC-BAR-152",
+      "item_name": "Courtyard - Summery",
+      "category": "COCKTAILS",
+      "status": "🔵 RECIPE INGREDIENT",
+      "mapped_sku": null,
+      "inv_name": null,
+      "base_uom": null,
+      "variants_count": 1,
+      "details": "Recipe missing; requires recipe BOM definition before inventory can be resolved"
+    },
+    {
+      "item_code": "RC-BAR-153",
+      "item_name": "Sunset terrace - Sundowner",
+      "category": "COCKTAILS",
+      "status": "🔵 RECIPE INGREDIENT",
+      "mapped_sku": null,
+      "inv_name": null,
+      "base_uom": null,
+      "variants_count": 1,
+      "details": "Recipe missing; requires recipe BOM definition before inventory can be resolved"
+    },
+    {
+      "item_code": "RC-BAR-154",
+      "item_name": "Tropical Grove",
+      "category": "MOCKTAILS",
+      "status": "🔵 RECIPE INGREDIENT",
+      "mapped_sku": null,
+      "inv_name": null,
+      "base_uom": null,
+      "variants_count": 1,
+      "details": "Recipe missing; requires recipe BOM definition before inventory can be resolved"
+    },
+    {
+      "item_code": "RC-BAR-155",
+      "item_name": "Virgin Watermelon & Basil Mojito",
+      "category": "MOCKTAILS",
+      "status": "🔵 RECIPE INGREDIENT",
+      "mapped_sku": null,
+      "inv_name": null,
+      "base_uom": null,
+      "variants_count": 1,
+      "details": "Recipe missing; requires recipe BOM definition before inventory can be resolved"
+    },
+    {
+      "item_code": "RC-BAR-156",
+      "item_name": "Shikanji",
+      "category": "MOCKTAILS",
+      "status": "🔵 RECIPE INGREDIENT",
+      "mapped_sku": null,
+      "inv_name": null,
+      "base_uom": null,
+      "variants_count": 1,
+      "details": "Recipe missing; requires recipe BOM definition before inventory can be resolved"
+    },
+    {
+      "item_code": "RC-BAR-157",
+      "item_name": "Ginger me (Frozen)",
+      "category": "MOCKTAILS",
+      "status": "🔵 RECIPE INGREDIENT",
+      "mapped_sku": null,
+      "inv_name": null,
+      "base_uom": null,
+      "variants_count": 1,
+      "details": "Recipe missing; requires recipe BOM definition before inventory can be resolved"
+    },
+    {
+      "item_code": "RC-BAR-158",
+      "item_name": "Mango Mastani",
+      "category": "MOCKTAILS",
+      "status": "🔵 RECIPE INGREDIENT",
+      "mapped_sku": null,
+      "inv_name": null,
+      "base_uom": null,
+      "variants_count": 1,
+      "details": "Recipe missing; requires recipe BOM definition before inventory can be resolved"
+    },
+    {
+      "item_code": "RC-BAR-159",
+      "item_name": "Guava Mary",
+      "category": "MOCKTAILS",
+      "status": "🔵 RECIPE INGREDIENT",
+      "mapped_sku": null,
+      "inv_name": null,
+      "base_uom": null,
+      "variants_count": 1,
+      "details": "Recipe missing; requires recipe BOM definition before inventory can be resolved"
+    },
+    {
+      "item_code": "RC-BAR-160",
+      "item_name": "Fresh Juice",
+      "category": "MOCKTAILS",
+      "status": "🔵 RECIPE INGREDIENT",
+      "mapped_sku": null,
+      "inv_name": null,
+      "base_uom": null,
+      "variants_count": 1,
+      "details": "Recipe missing; requires recipe BOM definition before inventory can be resolved"
+    },
+    {
+      "item_code": "RC-BAR-161",
+      "item_name": "Breezer",
+      "category": "BREEZER",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0047",
+      "inv_name": "Breezer",
+      "base_uom": "LTR",
+      "variants_count": 1,
+      "details": "Mapped to SKU BAR0047 (Breezer) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-162",
+      "item_name": "Bottled Water",
+      "category": "BEVERAGE",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0048",
+      "inv_name": "Bottled Water",
+      "base_uom": "LTR",
+      "variants_count": 1,
+      "details": "Mapped to SKU BAR0048 (Bottled Water) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-163",
+      "item_name": "Cold Drink",
+      "category": "BEVERAGE",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0049",
+      "inv_name": "Cold Drink",
+      "base_uom": "LTR",
+      "variants_count": 1,
+      "details": "Mapped to SKU BAR0049 (Cold Drink) [UOM: LTR]"
+    },
+    {
+      "item_code": "RC-BAR-164",
+      "item_name": "Soda",
+      "category": "BEVERAGE",
+      "status": "🟢 MATCH",
+      "mapped_sku": "BAR0050",
+      "inv_name": "Soda",
+      "base_uom": "LTR",
+      "variants_count": 1,
+      "details": "Mapped to SKU BAR0050 (Soda) [UOM: LTR]"
+    }
+  ],
+  "all_bar_skus": [
+    {
+      "item_code": "BAR0012",
+      "item_name": "100 Pipers",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0023",
+      "item_name": "Imperial Blue",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0030",
+      "item_name": "Smirnoff No. 21 Red",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0044",
+      "item_name": "Carlsberg Elephant",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0011",
+      "item_name": "Teachers Highland",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0017",
+      "item_name": "Blenders Pride Reserve",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0022",
+      "item_name": "Royal Stag",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0029",
+      "item_name": "Absolute",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0013",
+      "item_name": "Black & White",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0016",
+      "item_name": "Jamson",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0018",
+      "item_name": "Blenders Pride",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0024",
+      "item_name": "Monarch Brandy",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0015",
+      "item_name": "Ballantine's Finest Scotch",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0026",
+      "item_name": "Bombay Sapphire",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0033",
+      "item_name": "Bacardi White",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0040",
+      "item_name": "Hoegarden",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0019",
+      "item_name": "Antiquity Blue",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0020",
+      "item_name": "Signature",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0034",
+      "item_name": "Old Monk",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0041",
+      "item_name": "Corona",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0048",
+      "item_name": "Bottled Water",
+      "category_code": "CAT-BEV-SOFT",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0032",
+      "item_name": "Smirnoff Green Apple",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0046",
+      "item_name": "Kingfisher Strong",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0039",
+      "item_name": "Heineken",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0010",
+      "item_name": "Black Dog Gold",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0021",
+      "item_name": "Royal Challenge",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0028",
+      "item_name": "Don Julio Blanco",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0042",
+      "item_name": "London Pilsner",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0003",
+      "item_name": "Sparkling White",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0036",
+      "item_name": "Kingfisher Ultra",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0043",
+      "item_name": "Budweiser Magnum",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0045",
+      "item_name": "Tuborg Strong",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0047",
+      "item_name": "Breezer",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0009",
+      "item_name": "Jack Daniels",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0050",
+      "item_name": "Soda",
+      "category_code": "CAT-BEV-SOFT",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0001",
+      "item_name": "Red Wine",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0002",
+      "item_name": "White Wine",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0004",
+      "item_name": "Glenfiddich 12 Yr Old",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0005",
+      "item_name": "Singleton Luscious 12 Yr Old",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0006",
+      "item_name": "Chivas Regal 12 Yrs",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0007",
+      "item_name": "J.W. Black Label",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0008",
+      "item_name": "J.W. Red Label",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0014",
+      "item_name": "Vat 69",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0035",
+      "item_name": "Budweiser Mild",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0038",
+      "item_name": "Tuborg",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0025",
+      "item_name": "Dr. Brandy",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0031",
+      "item_name": "Smirnoff Minty Jamun",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0037",
+      "item_name": "Kingfisher Mild",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0049",
+      "item_name": "Cold Drink",
+      "category_code": "CAT-BEV-SOFT",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    },
+    {
+      "item_code": "BAR0027",
+      "item_name": "Greater Than Londan Dry Gin",
+      "category_code": "CAT-BEV-ALC",
+      "base_uom": "LTR",
+      "opening_stock": 0,
+      "unit_valuation": 0
+    }
+  ]
+}
