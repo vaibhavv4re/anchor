@@ -1,0 +1,34 @@
+{
+  "id": "taxcfg-tenant_h0qc7wf",
+  "tenant_id": "tenant_h0qc7wf",
+  "data": {
+    "id": "taxcfg-tenant_h0qc7wf",
+    "tenantId": "tenant_h0qc7wf",
+    "tenant_id": "tenant_h0qc7wf",
+    "itemTaxMappings": {
+      "categoryDefaults": {
+        "BEVERAGES & BAR": "RESTAURANT_BEVERAGE",
+        "BEVERAGES": "RESTAURANT_BEVERAGE",
+        "BEVERAGE": "RESTAURANT_BEVERAGE",
+        "BAR": "RESTAURANT_BEVERAGE",
+        "MOCKTAILS": "RESTAURANT_BEVERAGE",
+        "SINGLE MALT SCOTCH WHISKY": "ALCOHOL_SPIRITS",
+        "BLENDED SCOTCH WHISKY": "ALCOHOL_SPIRITS",
+        "PREMIUM WHISKY": "ALCOHOL_SPIRITS",
+        "DOMESTIC WHISKY": "ALCOHOL_SPIRITS",
+        "GIN": "ALCOHOL_SPIRITS",
+        "RUM": "ALCOHOL_SPIRITS",
+        "VODKA": "ALCOHOL_SPIRITS",
+        "TEQUILA": "ALCOHOL_SPIRITS",
+        "BRANDY": "ALCOHOL_SPIRITS",
+        "BREEZER": "ALCOHOL_SPIRITS",
+        "COCKTAILS": "ALCOHOL_SPIRITS",
+        "MILD BEER": "ALCOHOL_BEER",
+        "STRONG BEER": "ALCOHOL_BEER",
+        "HOUSE WINES": "ALCOHOL_WINE"
+      },
+      "itemOverrides": {},
+      "__default": "RESTAURANT_FOOD"
+    }
+  }
+}
