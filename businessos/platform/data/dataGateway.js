@@ -33,6 +33,15 @@ export class DataGateway {
     this.MAX_JOB_ATTEMPTS = 8;
     this.FLUSH_INTERVAL_MS = 30000;
 
+    // Stage 2B fast-path (F4 fix): a failed fire-and-forget write previously waited
+    // up to the full 30s periodic sweep (or a connectivity toggle) before its first
+    // retry, and that grace window is exactly where the (now-removed) journal
+    // clobber destroyed jobs. Debounce a near-immediate flush after a failure so a
+    // transient blip recovers in ~0.5s while the periodic backoff ladder still
+    // governs repeated failures.
+    this._fastFlushTimer = null;
+    this.FAST_FLUSH_DEBOUNCE_MS = 500;
+
     if (config.realtime && typeof config.realtime.subscribe === 'function') {
       config.realtime.subscribe('*', (event) => this.handleRealtimeEvent(event));
     }
@@ -44,7 +53,14 @@ export class DataGateway {
     // OFFLINE->ONLINE transition so a recovered link drains the journal at once.
     if (platformEventBus && typeof platformEventBus.subscribe === 'function') {
       this._wasOnlineBeforeProbe = this.isOnline;
-      platformEventBus.subscribe(PlatformEventTypes.CONNECTIVITY_CHANGED, (diag) => {
+      platformEventBus.subscribe(PlatformEventTypes.CONNECTIVITY_CHANGED, (envelope) => {
+        // platformEventBus wraps every payload in a {type,payload,timestamp}
+        // envelope. Unwrap it (tolerantly, so a direct diagnostics object still
+        // works). Previously this read `diag.networkState` off the envelope, got
+        // undefined, and forced this.isOnline=false on EVERY setPendingSyncCount
+        // call - silently starving both the periodic sweep and the fast-flush so
+        // queued writes never drained even while the network was fine.
+        const diag = (envelope && envelope.payload) ? envelope.payload : envelope;
         const nowOnline = !!(diag && diag.networkState === 'ONLINE');
         const cameBack = nowOnline && !this._wasOnlineBeforeProbe;
         this.isOnline = nowOnline;
@@ -73,6 +89,56 @@ export class DataGateway {
       clearInterval(this._flushTimer);
       this._flushTimer = null;
     }
+  }
+
+  /**
+   * Stage 2B fast-path: coalesce bursts of failed writes into ONE near-immediate
+   * retry. Debounced so ten failed orders in a second trigger a single flush,
+   * not ten. No-op while offline or with no cloud adapter (the periodic sweep and
+   * the OFFLINE->ONLINE transition cover those). Never disables the backoff
+   * ladder - this only shortens the wait for the *first* retry.
+   */
+  _scheduleFastFlush() {
+    if (typeof setTimeout !== 'function') return;
+    if (!this.isOnline || !this.cloudAdapter) return;
+    if (this._fastFlushTimer) clearTimeout(this._fastFlushTimer);
+    this._fastFlushTimer = setTimeout(() => {
+      this._fastFlushTimer = null;
+      this.flushOfflineQueue().catch(() => {});
+    }, this.FAST_FLUSH_DEBOUNCE_MS);
+  }
+
+  /**
+   * Sync visibility for the connectivity badge. `pending` counts jobs the queue
+   * will actively retry (QUEUED/PENDING/ERROR); oldestJobAgeMs surfaces a stuck
+   * backlog; lastError is the most recent failure (including CONFLICT) so nothing
+   * fails silently again.
+   * @returns {{ pending: number, oldestJobAgeMs: number, lastError: string|null }}
+   */
+  getSyncStatus() {
+    const journal = offlineStore.getCollection('offline_journal') || [];
+    const stateOf = j => j.syncState || j.sync_state || 'QUEUED';
+    const retryable = j => ['QUEUED', 'PENDING', 'ERROR'].includes(stateOf(j));
+    const pendingJobs = journal.filter(retryable);
+
+    const nowMs = Date.now();
+    let oldestMs = 0;
+    for (const j of pendingJobs) {
+      const ts = j.timestamp || j.created_at || j.createdAt;
+      const t = ts ? new Date(ts).getTime() : 0;
+      if (t && (!oldestMs || t < oldestMs)) oldestMs = t;
+    }
+
+    let lastError = null;
+    const failedJobs = journal.filter(j => j.lastError)
+      .sort((a, b) => new Date(b.timestamp || b.created_at || 0) - new Date(a.timestamp || a.created_at || 0));
+    if (failedJobs.length) lastError = failedJobs[0].lastError;
+
+    return {
+      pending: pendingJobs.length,
+      oldestJobAgeMs: oldestMs ? (nowMs - oldestMs) : 0,
+      lastError
+    };
   }
 
   async setOnlineState(online) {
@@ -521,7 +587,7 @@ export class DataGateway {
     return merged;
   }
 
-  async hydrateCollections(collections = ['tenants', 'identities', 'employees', 'table_sessions', 'orders', 'bill_revisions', 'invoices', 'payments', 'session_audit_logs', 'offline_journal'], tenantId = null) {
+  async hydrateCollections(collections = ['tenants', 'identities', 'employees', 'table_sessions', 'orders', 'bill_revisions', 'invoices', 'payments', 'session_audit_logs'], tenantId = null) {
     if (connectivityManager && typeof connectivityManager.notifySyncStart === 'function') {
       connectivityManager.notifySyncStart();
     }
@@ -549,6 +615,37 @@ export class DataGateway {
   }
 
   /**
+   * Phase 6 - Workspace mount-time authoritative fetch.
+   * Cloud-first read for each listed collection; on failure keeps cache (does
+   * NOT blank UI). Publishes 'data:changed' per collection so subscribing
+   * workspace views re-render naturally. Designed for call at workspace mount
+   * and in-session tab switches where the user needs live data NOW.
+   *
+   * @param {string} workspaceName  Human label for logging
+   * @param {string[]} collections  Collection names to refresh
+   * @param {string|null} tenantId  Target tenant
+   * @returns {Promise<Object>} map of collection -> data or null
+   */
+  async refreshForWorkspace(workspaceName, collections, tenantId) {
+    const tId = tenantId || 'tenant_h0qc7wf';
+    const results = {};
+    for (const col of (collections || [])) {
+      if (col === 'roles') continue;
+      try {
+        const data = await this.getCollection(col, tId);
+        results[col] = data;
+        if (platformEventBus && typeof platformEventBus.publish === 'function') {
+          platformEventBus.publish('data:changed', { collection: col, source: `workspace_refresh:${workspaceName}` });
+        }
+      } catch (e) {
+        console.warn(`[DataGateway] refreshForWorkspace("${workspaceName}") failed for "${col}" - keeping local cache:`, e.message || e);
+        results[col] = null;
+      }
+    }
+    return results;
+  }
+
+  /**
    * Stage 2C NON-BREAKING read safety net. The reachability probe drives
    * this.isOnline for the badge and for WRITE queueing, but a READ must never be
    * hidden behind a probe false-negative (that blanked every workspace once RLS
@@ -564,6 +661,14 @@ export class DataGateway {
   }
 
   async getCollection(collection, tenantId = null) {
+    // Device-local sync state must never be fetched from (and clobbered by) the
+    // cloud. offline_journal is this device's durable retry queue; reading the
+    // shared cloud table and setCollection()-ing it here previously overwrote
+    // pending jobs, so failed writes were dropped and their rows lost refresh
+    // protection. Always serve it straight from the local cache.
+    if (collection === 'offline_journal') {
+      return this.getCachedCollection('offline_journal', tenantId);
+    }
     if (this._shouldAttemptCloudRead() && this.cloudAdapter && collection !== 'roles') {
       try {
         const res = await this.cloudAdapter.getCollection(collection, tenantId);
@@ -571,6 +676,19 @@ export class DataGateway {
         const cloudData = Array.isArray(res) ? res : (res && Array.isArray(res.data) ? res.data : null);
 
         if (isSuccess && cloudData !== null) {
+          // Data-loss guard: if the cloud read comes back EMPTY but we still hold
+          // local rows, do NOT clobber the local cache. An empty successful read
+          // almost always means a broken/RLS-blinded/unprovisioned read (e.g. the
+          // anon key can't SELECT bill_revisions), not "every bill was deleted".
+          // Wiping here is what made in-flight cashier bills vanish on refresh.
+          const localList = this.getCachedCollection(collection, tenantId) || [];
+          if (cloudData.length === 0 && localList.length > 0) {
+            console.warn(`[DataGateway] collection=${collection} cloud returned 0 rows but ${localList.length} local rows exist - preserving local cache (possible RLS/auth/provisioning gap).`);
+            if (connectivityManager && typeof connectivityManager.notifySyncComplete === 'function') {
+              connectivityManager.notifySyncComplete({ success: true, timestamp: new Date().toISOString() });
+            }
+            return localList;
+          }
           // Stage 3 (safe hydrate): do not clobber local rows that still have an
           // unflushed (QUEUED/PENDING/ERROR/CONFLICT) journal job. Those edits are
           // authoritative-until-synced, so the local copy wins over cloud for the
@@ -663,6 +781,7 @@ export class DataGateway {
       } catch (e) {
         console.warn(`[DataGateway] Cloud create failed for "${collection}", queuing offline job:`, e.message);
         this._recordOfflineMutation('CREATE', collection, record, record.tenantId);
+        this._scheduleFastFlush();
       }
     } else if (collection !== 'roles') {
       console.log(`[DataGateway] collection=${collection} mode=OFFLINE queuing offline CREATE job`);
@@ -682,6 +801,7 @@ export class DataGateway {
       } catch (e) {
         console.warn(`[DataGateway] Cloud update failed for "${collection}:${id}", queuing offline job:`, e.message);
         this._recordOfflineMutation('UPDATE', collection, { id, patch }, patch.tenantId);
+        this._scheduleFastFlush();
       }
     } else if (collection !== 'roles') {
       console.log(`[DataGateway] collection=${collection}:${id} mode=OFFLINE queuing offline UPDATE job`);
@@ -700,6 +820,7 @@ export class DataGateway {
       } catch (e) {
         console.warn(`[DataGateway] Cloud delete failed for "${collection}:${id}", queuing offline job:`, e.message);
         this._recordOfflineMutation('DELETE', collection, { id });
+        this._scheduleFastFlush();
       }
     } else if (collection !== 'roles') {
       console.log(`[DataGateway] collection=${collection}:${id} mode=OFFLINE queuing offline DELETE job`);

@@ -162,6 +162,12 @@ export class ConnectivityComponent {
     } else if (diag.syncState === SyncStates.SYNC_ATTENTION) {
       badgeStyle = 'background:rgba(239, 68, 68, 0.25); color:#fca5a5; border:1px solid #ef4444;';
       label = `🔴 Sync Attention (${diag.pendingSyncCount})`;
+    } else if (diag.pendingSyncCount > 0) {
+      // Online, not mid-flush, but the retry queue is non-empty (fast-flush
+      // window or a backed-off ERROR job). Never render a silent green while
+      // writes are still waiting to land - show the count + "retrying".
+      badgeStyle = 'background:rgba(245, 158, 11, 0.2); color:#fbbf24; border:1px solid rgba(245, 158, 11, 0.4);';
+      label = `🟡 Retrying (${diag.pendingSyncCount} pending)`;
     }
 
     return `

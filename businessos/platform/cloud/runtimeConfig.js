@@ -82,6 +82,43 @@ export const runtimeConfig = {
   },
 
   /**
+   * F2 fix - restore the authenticated session across a page reload.
+   *
+   * authEngine mints a Supabase JWT via the pin-login Edge Function and persists
+   * it (authEngine._persistAccessToken) under `anchor_access_token`. Before this,
+   * nothing read that copy back, so EVERY reload started with `Authorization:
+   * Bearer <anon>` - which the forced tenant RLS in supabase/rls_policies.sql
+   * denies - and post-reload writes silently failed and were then destroyed by
+   * the (now-removed) offline_journal clobber. Callers invoke this as the very
+   * first platform action so the first network call is already authenticated.
+   *
+   * Returns the restored token (or null). Expired tokens are dropped so we fall
+   * back to a clean anon + local path rather than sending a stale JWT.
+   */
+  hydrateAccessToken() {
+    if (typeof window === 'undefined' || !window.localStorage) return null;
+    try {
+      const raw = window.localStorage.getItem('anchor_access_token');
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      const token = parsed && parsed.token;
+      if (!token) return null;
+      const expiresAt = parsed.expiresAt ? new Date(parsed.expiresAt).getTime() : null;
+      // 30s safety margin against clock skew / just-expired tokens.
+      if (expiresAt && Date.now() >= expiresAt - 30000) {
+        window.localStorage.removeItem('anchor_access_token');
+        accessToken = null;
+        return null;
+      }
+      accessToken = token;
+      return token;
+    } catch (e) {
+      console.warn('[runtimeConfig] Failed to hydrate access token:', e);
+      return null;
+    }
+  },
+
+  /**
    * Auth headers: use the session JWT when a user is logged in, otherwise the
    * public anon key. `apikey` always carries the anon key (Supabase requires
    * it), while `Authorization` reflects the effective role.

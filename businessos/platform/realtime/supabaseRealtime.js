@@ -1,16 +1,24 @@
 /**
  * SupabaseRealtime Cloud & Multi-Device Transport for RestaurantOS / BusinessOS.
  *
- * Real-Time Architecture:
- * 1. Native Supabase Realtime WebSocket Connection (Phoenix Channel protocol).
- * 2. Cross-Tab & Cross-Window Instant Synchronization via Web BroadcastChannel (0ms latency).
- * 3. Resilient Cloud Delta Polling Fallback (every 2.0s) ensuring zero missed updates.
- * 4. Automatic ingestion into DataGateway & PlatformEventBus for instant UI updates without page refresh.
+ * Real-Time Architecture (post Phase 4 rewrite):
+ * 1. Official supabase-js v2 Realtime channels as PRIMARY delivery (<1s latency).
+ *    Authenticated JWT is injected via the accessToken callback in the factory,
+ *    so subscribers pass forced tenant RLS without re-subscribe.
+ * 2. Cross-Tab & Cross-Window Instant Sync via BroadcastChannel (0ms, same device).
+ * 3. REST delta-polling as FALLBACK insurance (10s interval) — only activated
+ *    when the realtime channel has not reached 'joined' state within 5s.
+ * 4. Automatic ingestion into DataGateway & PlatformEventBus.
  */
 
 import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
 import { runtimeConfig } from '../cloud/runtimeConfig.js';
+import { getSupabaseClient, destroySupabaseClient } from './supabaseClientFactory.js';
+
+const REALTIME_TABLES = ['orders', 'table_sessions', 'bill_revisions', 'invoices', 'payments', 'stock_balances'];
+const CHANNEL_JOIN_TIMEOUT_MS = 5000;
+const POLL_INTERVAL_MS = 10000; // 10s fallback; realtime primary is <1s
 
 export class SupabaseRealtime {
   constructor(config = {}) {
@@ -18,19 +26,19 @@ export class SupabaseRealtime {
     this.eventBus = config.eventBus || platformEventBus;
     this.subscriptions = new Map();
     this.isConnected = false;
-    this.ws = null;
-    this.heartbeatTimer = null;
     this.pollTimer = null;
     this.reconnectTimer = null;
     this.broadcastChannel = null;
     this.lastOrdersHash = '';
     this.lastStockBalancesHash = '';
-    this.refCounter = 1;
+
+    // supabase-js channel references
+    this._rtChannels = [];
+    this._rtClient = null;
 
     this._initNetworkListeners();
     this._initBroadcastChannel();
-    this._initWebSocket();
-    this._initDeltaPolling();
+    this._initSupabaseRealtime();
   }
 
   get baseUrl() {
@@ -64,12 +72,11 @@ export class SupabaseRealtime {
           console.warn('⚠️ [SupabaseRealtime] Cloud refresh warning on reconnect:', e.message);
         }
       }
-      this._initWebSocket();
-      this._initDeltaPolling();
+      this._initSupabaseRealtime();
     });
 
     window.addEventListener('offline', () => {
-      console.log('📡 [SupabaseRealtime] Network disconnected (OFFLINE). Pausing delta polling & WebSocket...');
+      console.log('📡 [SupabaseRealtime] Network disconnected (OFFLINE). Pausing realtime & delta polling...');
       if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.dataGateway) {
         window.__APP__.platform.dataGateway.setOnlineState(false);
       }
@@ -81,18 +88,7 @@ export class SupabaseRealtime {
         clearTimeout(this.reconnectTimer);
         this.reconnectTimer = null;
       }
-      if (this.heartbeatTimer) {
-        clearInterval(this.heartbeatTimer);
-        this.heartbeatTimer = null;
-      }
-      if (this.ws) {
-        try {
-          this.ws.onclose = null;
-          this.ws.onerror = null;
-          this.ws.close();
-        } catch (_) {}
-        this.ws = null;
-      }
+      this._removeAllChannels();
       this.isConnected = false;
     });
   }
@@ -142,134 +138,115 @@ export class SupabaseRealtime {
   }
 
   /**
-   * 2. Native Supabase Realtime WebSocket Connection
+   * 2. Official supabase-js Realtime channels (Phase 4 PRIMARY delivery).
+   *
+   * Flow:
+   *   - Get (or create) the singleton supabase-js client via the CDN factory.
+   *   - Subscribe one channel per operational table, filtered by tenant_id so
+   *     RLS is honored server-side.
+   *   - On each postgres_changes event, route through handleIncomingPayload for
+   *     ingestion + cross-tab BroadcastChannel.
+   *   - Start the delta-poll fallback ONLY if NO channel reaches 'joined' state
+   *     within CHANNEL_JOIN_TIMEOUT_MS.
+   *
+   * On `auth:session_started`, the accessToken callback inside the factory
+   * transparently picks up the JWT from runtimeConfig on the next WS reconnect,
+   * so no manual tear-down/resubscribe cycle is needed.
    */
-  _initWebSocket() {
-    if (typeof WebSocket === 'undefined') return;
-
-    if (this.reconnectTimer) {
-      clearTimeout(this.reconnectTimer);
-      this.reconnectTimer = null;
-    }
-
+  async _initSupabaseRealtime() {
+    // Offline guard.
     if (typeof navigator !== 'undefined' && !navigator.onLine) {
-      console.log('[SupabaseRealtime] Offline — WebSocket initialization skipped.');
-      if (this.ws) {
-        try {
-          this.ws.onclose = null;
-          this.ws.onerror = null;
-          this.ws.close();
-        } catch (_) {}
-        this.ws = null;
-      }
+      console.log('[SupabaseRealtime] Offline — supabase-js realtime skipped.');
       this.isConnected = false;
       return;
     }
 
-    if (this.ws) {
-      try {
-        this.ws.onclose = null;
-        this.ws.onerror = null;
-        this.ws.close();
-      } catch (_) {}
-      this.ws = null;
+    // Remove any prior channels (reconnect path).
+    this._removeAllChannels();
+
+    const client = await getSupabaseClient();
+    if (!client) {
+      // CDN unreachable or module not loaded — fall back to delta polling.
+      console.warn('[SupabaseRealtime] supabase-js unavailable — enabling delta poll at POLL_INTERVAL_MS.');
+      this._startPollFallback();
+      return;
     }
 
-    try {
-      const wsHost = this.baseUrl.replace(/^http/, 'ws');
-      const wsUrl = `${wsHost}/realtime/v1/websocket?apikey=${this.anonKey}&vsn=1.0.0`;
+    this._rtClient = client;
 
-      this.ws = new WebSocket(wsUrl);
+    const session = typeof sessionStorage !== 'undefined' ? JSON.parse(sessionStorage.getItem('ros_session') || '{}') : {};
+    const tenantId = session.tenantId || 'tenant_h0qc7wf';
 
-      this.ws.onopen = () => {
-        this.isConnected = true;
-        console.log('⚡ [SupabaseRealtime] WebSocket connected to Supabase Realtime Engine.');
+    let anyJoined = false;
+    const joinTimeout = setTimeout(() => {
+      if (!anyJoined) {
+        console.warn('[SupabaseRealtime] No channel joined within timeout — enabling poll fallback.');
+        this._startPollFallback();
+      }
+    }, CHANNEL_JOIN_TIMEOUT_MS);
 
-        // Join Postgres Changes channel for all operational and financial tables
-        const tablesToSubscribe = ['orders', 'table_sessions', 'bill_revisions', 'invoices', 'payments', 'stock_balances'];
-        tablesToSubscribe.forEach(tbl => {
-          this._sendWsMessage({
-            topic: `realtime:public:${tbl}`,
-            event: 'phx_join',
-            payload: {
-              config: {
-                postgres_changes: [
-                  { event: '*', schema: 'public', table: tbl }
-                ]
-              }
-            },
-            ref: String(this.refCounter++)
-          });
-        });
-
-        // Start 25s Phoenix heartbeat
-        if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
-        this.heartbeatTimer = setInterval(() => {
-          if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-            this._sendWsMessage({
-              topic: 'phoenix',
-              event: 'heartbeat',
-              payload: {},
-              ref: 'hb'
-            });
-          }
-        }, 25000);
-      };
-
-      this.ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          if (!msg) return;
-
-          // Check if message is a Postgres change event
-          if (msg.event === 'postgres_changes' && msg.payload && msg.payload.data) {
-            const { type, record, old_record, table } = msg.payload.data;
-            const targetTable = table || (msg.topic ? msg.topic.split(':').pop() : 'orders');
+    for (const table of REALTIME_TABLES) {
+      const channel = client.channel(`rt:${table}`)
+        .on('postgres_changes',
+          { event: '*', schema: 'public', table, filter: `tenant_id=eq.${tenantId}` },
+          (payload) => {
+            const record = payload.new || payload.old;
             if (record) {
-              this.handleIncomingPayload(targetTable, type || 'UPDATE', record, old_record);
+              this.handleIncomingPayload(table, payload.eventType || 'UPDATE', payload.new, payload.old);
             }
           }
-        } catch (_) {}
-      };
-
-      this.ws.onclose = () => {
-        this.isConnected = false;
-        if (this.heartbeatTimer) {
-          clearInterval(this.heartbeatTimer);
-          this.heartbeatTimer = null;
-        }
-
-        // GUARD: If browser is offline, do NOT schedule a reconnect attempt!
-        if (typeof navigator !== 'undefined' && !navigator.onLine) {
-          console.log('[SupabaseRealtime] Network disconnected (OFFLINE). WebSocket onclose ignored.');
-          return;
-        }
-
-        // Attempt reconnection after 5 seconds ONLY IF ONLINE
-        if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-        this.reconnectTimer = setTimeout(() => {
-          if (typeof navigator !== 'undefined' && navigator.onLine) {
-            this._initWebSocket();
+        )
+        .subscribe((status) => {
+          if (status === 'SUBSCRIBED') {
+            anyJoined = true;
+            this.isConnected = true;
+            clearTimeout(joinTimeout);
+            if (this.pollTimer) {
+              // Realtime is live; stop the fallback poller.
+              clearInterval(this.pollTimer);
+              this.pollTimer = null;
+              console.log('🛑 [SupabaseRealtime] Channel live — fallback poller stopped.');
+            }
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') {
+            this.isConnected = false;
+            if (!this.pollTimer) {
+              this._startPollFallback();
+            }
           }
-        }, 5000);
-      };
+        });
 
-      this.ws.onerror = () => {
-        this.isConnected = false;
-      };
-    } catch (err) {
-      console.warn('[SupabaseRealtime] WebSocket connection notice:', err.message);
+      this._rtChannels.push(channel);
     }
-  }
 
-  _sendWsMessage(msg) {
-    if (this.ws && this.ws.readyState === WebSocket.OPEN) {
-      this.ws.send(JSON.stringify(msg));
+    if (this.isConnected) {
+      console.log('⚡ [SupabaseRealtime] supabase-js channels subscribed (primary realtime).');
     }
   }
 
   /**
-   * 3. Resilient High-Speed Cloud Delta Polling Fallback (every 2.0s)
+   * Starts the REST delta-poll fallback at the slower 10s safety-net interval.
+   * Only runs when realtime is confirmed unavailable or degraded.
+   */
+  _startPollFallback() {
+    if (this.pollTimer) return;
+    this._initDeltaPolling();
+  }
+
+  /**
+   * Gracefully removes all supabase-js channels (called on offline / reconnect).
+   */
+  _removeAllChannels() {
+    if (!this._rtClient) return;
+    for (const ch of this._rtChannels) {
+      try { this._rtClient.removeChannel(ch); } catch (_) {}
+    }
+    this._rtChannels = [];
+    this.isConnected = false;
+  }
+
+  /**
+   * 3. REST Cloud Delta Polling FALLBACK (10s, only when realtime unavailable).
+   *    Now secondary safety-net after Phase 4; realtime channels deliver <1s.
    */
   _initDeltaPolling() {
     if (typeof window === 'undefined') return;
@@ -349,20 +326,15 @@ export class SupabaseRealtime {
           }
         }
 
-        // 6. Delta poll offline_journal (Reconciliation exceptions & audit entries)
-        const journalResp = await fetch(`${this.baseUrl}/rest/v1/offline_journal?select=*&order=created_at.desc&limit=100`, { headers });
-        if (journalResp.ok) {
-          const cloudJournal = await journalResp.json();
-          if (Array.isArray(cloudJournal)) {
-            const journalHash = JSON.stringify(cloudJournal.map(j => `${j.job_id}_${j.sync_state}_${j.created_at || ''}`));
-            if (journalHash !== this.lastJournalHash) {
-              this.lastJournalHash = journalHash;
-              this._syncCloudOfflineJournal(cloudJournal, tenantId);
-            }
-          }
-        }
+        // NOTE: offline_journal is a DEVICE-LOCAL retry queue, not shared cloud
+        // state. It must never be fetched and written back over the local store
+        // (this is the same clobber already removed from bootstrap.js HYDRATE_SET
+        // and dataGateway.getCollection). Doing here every poll tick deleted
+        // QUEUED/PENDING/ERROR jobs for orders, table_sessions, KOTs, bill_revisions,
+        // invoices and payments, so failed writes silently disappeared on refresh
+        // or from another browser. See Persistence/Realtime repair plan Phase 1.
 
-        // 7. Delta poll stock_balances (Safety-net recovery for missed realtime events)
+        // 6. Delta poll stock_balances (Safety-net recovery for missed realtime events)
         const sbResp = await fetch(`${this.baseUrl}/rest/v1/stock_balances?select=*`, { headers });
         if (sbResp.ok) {
           const cloudBalances = await sbResp.json();
@@ -375,7 +347,7 @@ export class SupabaseRealtime {
           }
         }
       } catch (_) {}
-    }, 2000);
+    }, POLL_INTERVAL_MS);
   }
 
   /**
@@ -436,13 +408,6 @@ export class SupabaseRealtime {
 
       this.eventBus.publish('stock:balance:updated', { source: 'realtime_sync' });
     }
-  }
-
-  _syncCloudOfflineJournal(cloudJournal, tenantId) {
-    offlineStore.setCollection('offline_journal', cloudJournal);
-    this.eventBus.publish('reconciliation:exception:flagged', {});
-    this.eventBus.publish('exception:resolved', {});
-    this.eventBus.publish('data:changed', {});
   }
 
   /**

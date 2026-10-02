@@ -64,6 +64,17 @@ export class BarWorkspaceView {
     this.subscribePlatformEvents();
     this.updateContent(sessionUser);
 
+    // Phase 6: authoritative cloud fetch on mount so a fresh browser sees
+    // persisted orders + stock_balances without waiting for the boot hydrate.
+    const dg = this.dataGateway
+      || (typeof window !== 'undefined' && window.__APP__?.platform?.dataGateway);
+    if (dg && typeof dg.refreshForWorkspace === 'function') {
+      const tenantId = (sessionUser && sessionUser.tenantId) || 'tenant_h0qc7wf';
+      dg.refreshForWorkspace('bar', ['orders', 'stock_balances'], tenantId)
+        .then(() => this.updateContent(sessionUser))
+        .catch(() => {});
+    }
+
     if (mountEl) {
       mountEl.innerHTML = '';
       mountEl.appendChild(this.container);

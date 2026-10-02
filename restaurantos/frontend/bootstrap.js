@@ -1,5 +1,6 @@
 import { createPlatformContainer } from '../../businessos/platform/platformContainer.js';
 import { createApplicationContainer } from '../../businessos/platform/container/applicationContainer.js';
+import { runtimeConfig } from '../../businessos/platform/cloud/runtimeConfig.js';
 import { ApplicationShell } from './app.js';
 
 /**
@@ -39,6 +40,14 @@ export function createApplication(options = {}) {
  * @returns {ApplicationShell} Initialized ApplicationShell instance.
  */
 export function startModularApp(options = {}) {
+  // F2 fix - restore the authenticated session BEFORE any network call so the
+  // very first cloud read/write carries the tenant JWT instead of the anon key
+  // (which forced RLS denies). Must be the first platform action.
+  const restoredToken = runtimeConfig.hydrateAccessToken();
+  if (restoredToken) {
+    console.log('🔑 [Bootstrap] Restored authenticated session from storage on reload.');
+  }
+
   const appGraph = createApplication(options);
 
   if (typeof window !== 'undefined') {
@@ -59,17 +68,44 @@ export function startModularApp(options = {}) {
       'kitchen_menu_items', 'recipes', 'recipe_ingredients', 'orders',
       'production_batches', 'stock_transactions', 'stock_requisitions',
       // Billing & Session domain collections (Cashier & Waiter Realtime Synchronization)
-      'table_sessions', 'bill_revisions', 'invoices', 'payments', 'session_audit_logs', 'offline_journal'
+      // NOTE: 'offline_journal' is intentionally EXCLUDED. It is this device's local
+      // retry queue (durable, per-device state), NOT shared cloud data. Hydrating it
+      // from the cloud offline_journal table replaced pending local jobs with another
+      // device's history, silently dropping unsynced writes (e.g. a finalized bill)
+      // and un-protecting their rows on refresh - which made bills vanish.
+      'table_sessions', 'bill_revisions', 'invoices', 'payments', 'session_audit_logs',
+      // Fiscal config (single source of truth for the Food/Bar tax split) - read-only
+      // under RLS pre-login, so every device resolves the same tax categories.
+      'tax_configurations'
     ];
 
     const dg = appGraph.platform.dataGateway;
     if (dg && typeof dg.hydrateCollections === 'function') {
+      // Collections readable with the public anon key even pre-login (read-only
+      // under RLS). Business collections (orders/sessions/bills) need the JWT.
+      const CONFIG_SET = [
+        'tenants', 'identities', 'roles', 'devices', 'system_config',
+        'inventory_categories', 'inventory_uoms', 'storage_locations',
+        'suppliers', 'tax_configurations'
+      ];
+
       const hydrate = (tenantId) => dg.hydrateCollections(HYDRATE_SET, tenantId || 'tenant_h0qc7wf')
         .then(res => console.log('☁️ [DataGateway] Pre-hydrated domain collections from cloud:', Object.keys(res)))
         .catch(err => console.warn('⚠️ [DataGateway] Hydration fallback notice:', err.message || err));
 
-      // Boot warm-up (read-only config succeeds under RLS even pre-login).
-      hydrate('tenant_h0qc7wf');
+      const hydrateConfig = (tenantId) => dg.hydrateCollections(CONFIG_SET, tenantId || 'tenant_h0qc7wf')
+        .then(res => console.log('☁️ [DataGateway] Hydrated anon-readable config collections:', Object.keys(res)))
+        .catch(err => console.warn('⚠️ [DataGateway] Config hydration fallback notice:', err.message || err));
+
+      // Boot warm-up: if a session JWT was restored, do the full authenticated
+      // hydrate immediately (fresh browser now sees persisted business data).
+      // Otherwise only pull the anon-readable config so the shell has menu/tax
+      // structure, and DEFER the business hydrate to auth:session_started.
+      if (restoredToken) {
+        hydrate('tenant_h0qc7wf');
+      } else {
+        hydrateConfig('tenant_h0qc7wf');
+      }
 
       // Stage 1B NON-BREAKING GATE: once RLS is enabled, tenant business reads
       // require the session JWT. Re-hydrate with the authenticated tenant on

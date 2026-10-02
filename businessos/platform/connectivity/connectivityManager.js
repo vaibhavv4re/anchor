@@ -183,7 +183,16 @@ export class ConnectivityManager {
     const session = typeof sessionStorage !== 'undefined' ? JSON.parse(sessionStorage.getItem('ros_session') || '{}') : {};
     const tenantId = session.tenantId || 'tenant_h0qc7wf';
     const pendingJournal = offlineStore.getCollection('offline_journal') || [];
-    const pendingCount = pendingJournal.filter(j => j.sync_state === 'PENDING' || j.syncState === 'PENDING').length || this.pendingSyncCount;
+    // Authoritative retryable count: QUEUED (awaiting first send), PENDING
+    // (mid-flight) and ERROR (backed-off, will retry) are all "pending" to the
+    // operator. Counting only PENDING under-reported the backlog, so a stuck
+    // write looked "Online" with nothing queued - exactly the silent failure we
+    // must avoid. Mirrors DataGateway.getSyncStatus().pending.
+    const isRetryable = j => {
+      const s = j.syncState || j.sync_state || 'QUEUED';
+      return s === 'QUEUED' || s === 'PENDING' || s === 'ERROR';
+    };
+    const pendingCount = pendingJournal.filter(isRetryable).length || this.pendingSyncCount;
 
     return {
       networkState: this.networkState,

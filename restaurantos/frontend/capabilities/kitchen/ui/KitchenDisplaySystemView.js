@@ -45,6 +45,16 @@ export class KitchenDisplaySystemView {
     this.startLiveTimer();
     this.startRealtimeSync();
     this.subscribeEvents();
+
+    // Phase 6: cloud-fetch orders + embedded tickets on mount so a KDS opened
+    // in a fresh browser immediately shows live KOTs (no boot-hydrate dependency).
+    const dg = this._getDataGateway();
+    if (dg && typeof dg.refreshForWorkspace === 'function') {
+      dg.refreshForWorkspace('kds', ['orders', 'tickets'], 'tenant_h0qc7wf')
+        .then(() => this.updateContent())
+        .catch(() => {});
+    }
+
     return this.container;
   }
 
@@ -157,8 +167,11 @@ export class KitchenDisplaySystemView {
       if (e.payload?.status === 'READY') this.playKitchenChime('ready');
       this.updateContent();
     });
+    const unsub4 = platformEventBus.subscribe('data:changed', () => {
+      this.updateContent();
+    });
 
-    this.unsubscribeEvents.push(unsub1, unsub2, unsub3);
+    this.unsubscribeEvents.push(unsub1, unsub2, unsub3, unsub4);
   }
 
   getElapsedMinutes(createdAt) {

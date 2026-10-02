@@ -44,6 +44,11 @@ export class WaiterWorkspaceView {
     const tenantId = session ? (session.tenantId || session.tenant_id) : 'tenant_h0qc7wf';
 
     this.subscribeRealtimeEvents(tenantId);
+    // Phase 6: authoritative cloud fetch on mount so a fresh browser/tab sees
+    // persisted table_sessions + orders without waiting for the boot hydrate.
+    if (this.dataGateway && typeof this.dataGateway.refreshForWorkspace === 'function') {
+      this.dataGateway.refreshForWorkspace('waiter', ['table_sessions', 'orders'], tenantId);
+    }
     this.updateWorkspaceShell(waiterName, waiterId, tenantId, session);
 
     return this.rootMount;
@@ -79,8 +84,9 @@ export class WaiterWorkspaceView {
     const unsubPaid = platformEventBus.subscribe('payment:recorded', refreshAll);
     const unsubInvoice = platformEventBus.subscribe('invoice:issued', refreshAll);
     const unsubRevision = platformEventBus.subscribe('bill:revision:created', refreshAll);
+    const unsubDataChanged = platformEventBus.subscribe('data:changed', refreshAll);
 
-    this.unsubscribeEvents.push(unsubTicket, unsubItem, unsubKot, unsubBot, unsubOrder, unsubSession, unsubMilestone, unsubTable, unsubFinalized, unsubSettled, unsubReopened, unsubPaid, unsubInvoice, unsubRevision);
+    this.unsubscribeEvents.push(unsubTicket, unsubItem, unsubKot, unsubBot, unsubOrder, unsubSession, unsubMilestone, unsubTable, unsubFinalized, unsubSettled, unsubReopened, unsubPaid, unsubInvoice, unsubRevision, unsubDataChanged);
   }
 
   getReadyTickets(tenantId) {
