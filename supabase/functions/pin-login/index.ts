@@ -7,8 +7,14 @@
 //
 // Deploy (Supabase):
 //   supabase functions deploy pin-login --no-verify-jwt
-// Required secrets (set via `supabase secrets set`, never in the client):
-//   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_JWT_SECRET
+//   (or paste this file into the Dashboard Edge Function editor named pin-login
+//    and turn OFF "Verify JWT")
+// Secrets:
+//   SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY are AUTO-INJECTED by the Edge
+//   runtime (the Dashboard reserves the SUPABASE_ prefix, so do NOT add them).
+//   You MUST add the shared HS256 signing secret as a custom secret named
+//   JWT_SECRET (Dashboard: Project Settings -> API -> JWT Secret -> Reveal).
+//   Never put any of these in a client file.
 // Optional: SUPERADMIN_PIN (defaults to 888888), TENANT_ADMIN_PIN (defaults to 999999)
 //
 // The client calls this only when AUTH_MODE=server (Stage 1A rollout gate);
@@ -77,7 +83,14 @@ Deno.serve(async (req: Request) => {
 
   const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
   const SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const JWT_SECRET = Deno.env.get('SUPABASE_JWT_SECRET')!;
+  // The Supabase Dashboard reserves the SUPABASE_ prefix (those vars are
+  // auto-injected), so the shared HS256 signing secret is supplied under a
+  // custom name. Accept either so it works via CLI (SUPABASE_JWT_SECRET) or the
+  // Dashboard (JWT_SECRET).
+  const JWT_SECRET = Deno.env.get('JWT_SECRET') || Deno.env.get('SUPABASE_JWT_SECRET')!;
+  if (!JWT_SECRET) {
+    return new Response(JSON.stringify({ error: 'AUTH_CONFIG_MISSING' }), { status: 500, headers: { ...cors(), 'Content-Type': 'application/json' } });
+  }
   const SUPERADMIN_PIN = Deno.env.get('SUPERADMIN_PIN') || '888888';
   const TENANT_ADMIN_PIN = Deno.env.get('TENANT_ADMIN_PIN') || '999999';
 
@@ -127,12 +140,23 @@ Deno.serve(async (req: Request) => {
       };
     }
 
-    // 2. Tenant admin PIN fallback
+    // 2. Tenant admin login. The SUBMITTED pin must match a tenant's stored
+    //    admin_pin, OR equal the bootstrap TENANT_ADMIN_PIN (which resolves the
+    //    primary tenant). NOTE: the previous `or=(admin_pin.eq.<pin>,
+    //    admin_pin.eq.<TENANT_ADMIN_PIN>)` form matched the tenant whose stored
+    //    admin_pin was the bootstrap value for *any* submitted pin, minting an
+    //    admin token for every login - an auth bypass. It is removed here.
     if (!claims) {
-      const admins = await fetch(
-        `${SUPABASE_URL}/rest/v1/tenants?or=(admin_pin.eq.${pin},admin_pin.eq.${TENANT_ADMIN_PIN})&select=*`,
+      let admins = await fetch(
+        `${SUPABASE_URL}/rest/v1/tenants?admin_pin=eq.${encodeURIComponent(pin)}&select=*&limit=1`,
         { headers }
       ).then(r => r.json()).catch(() => []);
+      if ((!Array.isArray(admins) || admins.length === 0) && pin === TENANT_ADMIN_PIN) {
+        admins = await fetch(
+          `${SUPABASE_URL}/rest/v1/tenants?select=*&limit=1`,
+          { headers }
+        ).then(r => r.json()).catch(() => []);
+      }
       if (Array.isArray(admins) && admins.length > 0) {
         const t = admins[0];
         claims = { sub: t.tenant_id, tenant_id: t.tenant_id, role_id: 'role-admin', workspace: 'admin' };

@@ -357,6 +357,27 @@ CREATE TABLE IF NOT EXISTS audit_logs (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Centralized Tax Configuration Authority (single editable config row per tenant).
+-- The full config (GST registration, rules, categories, itemTaxMappings) is kept
+-- in the JSONB `data` column; tax_configurations is read on the billing path.
+CREATE TABLE IF NOT EXISTS tax_configurations (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT,
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Immutable audit trail of every tax configuration change (who/when/what).
+CREATE TABLE IF NOT EXISTS tax_audit_log (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT,
+  actor TEXT,
+  action TEXT,
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS orders (
   id TEXT PRIMARY KEY,
   tenant_id TEXT,

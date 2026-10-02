@@ -20,3 +20,11 @@
  * The service_role key must NEVER appear in this file or any client bundle.
  */
 window.__APP_ENV__ = window.__APP_ENV__ || {};
+
+// Stage 1A: enable server-side PIN auth so the client adopts a tenant-scoped
+// JWT and cloud sync (billing/inventory) becomes authenticated + persistent.
+// Safe rollout: if the pin-login Edge Function is not reachable yet, AuthEngine
+// falls back to local PIN auth (see authEngine._authenticateViaServer), so this
+// flag never locks operators out. On Vercel, prefer setting the AUTH_MODE env
+// var (inject_runtime_env.js regenerates this file at build) over editing here.
+window.__APP_ENV__.AUTH_MODE = window.__APP_ENV__.AUTH_MODE || 'server';

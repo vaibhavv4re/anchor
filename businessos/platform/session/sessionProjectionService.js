@@ -10,6 +10,23 @@ import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
 import { tableMasterModel } from '../layout/tableMasterModel.js';
 import { tenantModel } from '../tenant/tenantModel.js';
+import { taxConfigurationModel } from '../accounting/taxConfigurationModel.js';
+import { menuMasterModel } from '../ordering/menuMasterModel.js';
+
+/**
+ * Resolve an order line's menu category for tax classification, falling back to
+ * the menu master by item code when the line carries no category. Mirrors
+ * billRevisionModel._enrichItemsForTax so the waiter running-bill preview splits
+ * Food vs Bar identically to the final cashier invoice.
+ */
+function resolveMenuCategory(itemCode, category) {
+  if (category) return category;
+  if (itemCode && menuMasterModel && typeof menuMasterModel.getItem === 'function') {
+    const mi = menuMasterModel.getItem(itemCode);
+    if (mi && mi.category) return mi.category;
+  }
+  return null;
+}
 
 class SessionProjectionService {
   constructor() {
@@ -169,6 +186,8 @@ class SessionProjectionService {
         itemizedList.push({
           lineItemId: item.lineItemId || item.itemId || `${o.id}_${item.name}`,
           itemId: item.itemId,
+          itemCode: item.itemCode || item.itemId,
+          category: resolveMenuCategory(item.itemCode || item.itemId, item.category),
           name: item.name || item.itemName || 'Dish',
           price: itemPrice,
           quantity: itemQty,
@@ -189,6 +208,8 @@ class SessionProjectionService {
           itemizedList.push({
             lineItemId: item.lineItemId || item.itemId || `${t.id}_${item.name}`,
             itemId: item.itemId,
+            itemCode: item.itemCode || item.itemId,
+            category: resolveMenuCategory(item.itemCode || item.itemId, item.category),
             name: item.name || item.itemName || 'Dish',
             price: itemPrice,
             quantity: itemQty,
@@ -200,21 +221,27 @@ class SessionProjectionService {
       });
     }
 
-    const primaryTenant = tenantModel.getPrimaryTenant() || {};
-    const cgstPercent = primaryTenant.cgstPercent !== undefined ? primaryTenant.cgstPercent : 2.5;
-    const sgstPercent = primaryTenant.sgstPercent !== undefined ? primaryTenant.sgstPercent : 2.5;
-    const isServiceChargeEnabled = primaryTenant.isServiceChargeEnabled !== false;
-    const serviceChargePercent = (isServiceChargeEnabled && primaryTenant.serviceChargePercent) ? parseFloat(primaryTenant.serviceChargePercent) : 5.0;
+    // Per-line tax via the Centralized Tax engine so the running-bill preview
+    // matches the final invoice exactly (food GST vs explicitly-marked liquor VAT).
+    const billTax = taxConfigurationModel.computeBillTax({
+      items: itemizedList,
+      discountRecords: [],
+      isIntraState: true,
+      tenantId: targetTenantId
+    });
 
     const calculatedSubtotal = itemizedList.reduce((sum, it) => sum + (parseFloat(it.lineTotal) || 0), 0);
     const ordersSubtotal = orders.reduce((sum, o) => sum + (parseFloat(o.subtotal || o.totalAmount || o.total_amount) || 0), 0);
-    const subtotal = calculatedSubtotal > 0 ? calculatedSubtotal : ordersSubtotal;
+    const subtotal = billTax.taxableAmount > 0 ? billTax.taxableAmount : (calculatedSubtotal > 0 ? calculatedSubtotal : ordersSubtotal);
 
-    const cgstAmount = Math.round(subtotal * (cgstPercent / 100) * 100) / 100;
-    const sgstAmount = Math.round(subtotal * (sgstPercent / 100) * 100) / 100;
-    const serviceChargeAmount = isServiceChargeEnabled ? Math.round(subtotal * (serviceChargePercent / 100) * 100) / 100 : 0;
-    const taxAmount = cgstAmount + sgstAmount;
-    const grandTotal = Math.round((subtotal + taxAmount + serviceChargeAmount) * 100) / 100;
+    const cgstPercent = billTax.cgstPercent;
+    const sgstPercent = billTax.sgstPercent;
+    const serviceChargePercent = billTax.serviceChargePercent;
+    const cgstAmount = billTax.cgstAmount;
+    const sgstAmount = billTax.sgstAmount;
+    const serviceChargeAmount = billTax.serviceChargeAmount;
+    const taxAmount = billTax.totalTax;
+    const grandTotal = billTax.grandTotal;
 
     const guestNotes = session.guestNotes || session.notes || '';
     const dietaryTags = session.dietaryTags || [];
@@ -273,6 +300,9 @@ class SessionProjectionService {
       serviceChargeAmount,
       taxAmount,
       grandTotal,
+      taxLines: billTax.taxLines || [],
+      charges: billTax.charges || [],
+      fiscalSections: billTax.fiscalSections || [],
       billStatus: session.status === 'BILL_GENERATED' ? 'GENERATED' : (session.status === 'PAYMENT_RECEIVED' || session.status === 'CLOSED' ? 'PAID' : 'NONE'),
       paymentStatus: session.status === 'PAYMENT_RECEIVED' || session.status === 'CLOSED' ? 'COMPLETED' : 'PENDING',
       elapsedTime,

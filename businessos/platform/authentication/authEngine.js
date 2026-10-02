@@ -16,6 +16,11 @@ export class AuthEngine {
     this.platformEventBus = deps.platformEventBus || platformEventBus;
 
     this.activeSession = this._loadPersistedSession();
+    // Re-adopt the cloud JWT (if any) before anything issues a request, so an
+    // authenticated session survives a page refresh. Without this the token
+    // lives only in memory and every post-refresh call silently reverts to the
+    // anon key, which RLS-blinds the billing tables (bills appear to vanish).
+    this._restoreAccessToken();
     this.lockTimeoutTimer = null;
     this.lockTimeoutMs = deps.lockTimeoutMs || 300000;
     if (this.activeSession) {
@@ -42,10 +47,14 @@ export class AuthEngine {
 
   async authenticate(pin, deviceId = 'LOCAL-POS-01') {
     // Stage 1A rollout gate: when server auth is enabled, verify the PIN via
-    // the pin-login Edge Function and adopt its JWT. Otherwise fall through to
-    // the legacy local path unchanged (non-breaking default).
+    // the pin-login Edge Function and adopt its JWT. If the function is not
+    // reachable yet (undeployed / transient outage) we fall back to the legacy
+    // local path so operators are never locked out mid-rollout. Genuine
+    // credential rejections (401/403) and rate limits (429) still fail closed.
     if (runtimeConfig.isServerAuthEnabled()) {
-      return this._authenticateViaServer(pin, deviceId);
+      const serverRes = await this._authenticateViaServer(pin, deviceId);
+      if (!serverRes || !serverRes.infraUnavailable) return serverRes;
+      console.warn('[AuthEngine] pin-login unavailable; using local auth fallback (no cloud JWT).');
     }
 
     const sPin = String(pin || '').trim();
@@ -204,11 +213,19 @@ export class AuthEngine {
         body: JSON.stringify({ pin: sPin, deviceId })
       });
       if (!resp.ok) {
+        // Infrastructure unavailability (function undeployed / server error) is
+        // recoverable via the local fallback; auth rejections are NOT.
+        if (resp.status === 404 || resp.status === 405 || resp.status >= 500) {
+          return { success: false, infraUnavailable: true, error: 'Auth service unavailable' };
+        }
         return { success: false, error: resp.status === 429 ? 'Too many attempts, please wait' : 'Invalid PIN or credentials' };
       }
       const data = await resp.json();
       const claims = data.claims || {};
       runtimeConfig.setAccessToken(data.token);
+      // Persist the JWT alongside the session so authenticated cloud reads/writes
+      // survive a refresh (the in-memory token alone is lost on reload).
+      this._persistAccessToken(data.token, data.expiresAt || null);
 
       const roleId = claims.role_id || 'role-waiter';
       const tenantId = claims.tenant_id || 'tenant_h0qc7wf';
@@ -249,9 +266,11 @@ export class AuthEngine {
       }
       return { success: true, session, workspace };
     } catch (e) {
-      // Fail closed: never silently fall back to client-side trust in server mode.
-      console.warn('[AuthEngine] Server auth failed:', e.message);
-      return { success: false, error: 'Sign-in unavailable. Check connection and try again.' };
+      // Network / runtime failure reaching the Edge Function: allow the local
+      // fallback so a transient outage never locks the whole venue out. Bad
+      // credentials still fail closed (they surface as a non-200, handled above).
+      console.warn('[AuthEngine] Server auth unreachable, falling back to local:', e.message);
+      return { success: false, infraUnavailable: true, error: 'Sign-in service unreachable' };
     }
   }
 
@@ -291,6 +310,7 @@ export class AuthEngine {
     }
     this.activeSession = null;
     runtimeConfig.setAccessToken(null);
+    this._persistAccessToken(null, null);
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
         window.localStorage.removeItem('anchor_active_session');
@@ -318,6 +338,39 @@ export class AuthEngine {
       this.dataGateway.create('sessions', session);
     } else if (this.offlineStore && typeof this.offlineStore.appendItem === 'function') {
       this.offlineStore.appendItem('sessions', session);
+    }
+  }
+
+  _persistAccessToken(token, expiresAt) {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    try {
+      if (token) {
+        window.localStorage.setItem('anchor_access_token', JSON.stringify({ token, expiresAt: expiresAt || null }));
+      } else {
+        window.localStorage.removeItem('anchor_access_token');
+      }
+    } catch (e) {
+      console.warn('[AuthEngine] Failed to persist access token:', e);
+    }
+  }
+
+  _restoreAccessToken() {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    try {
+      const raw = window.localStorage.getItem('anchor_access_token');
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      const token = parsed && parsed.token;
+      if (!token) return;
+      // Expired tokens are dropped so the next call cleanly falls back to local
+      // cache instead of issuing a request that will 401.
+      if (parsed.expiresAt && new Date(parsed.expiresAt).getTime() <= Date.now()) {
+        window.localStorage.removeItem('anchor_access_token');
+        return;
+      }
+      runtimeConfig.setAccessToken(token);
+    } catch (e) {
+      console.warn('[AuthEngine] Failed to restore access token:', e);
     }
   }
 

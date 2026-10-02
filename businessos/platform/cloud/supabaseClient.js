@@ -770,6 +770,24 @@ export function formatRecordForTable(entityName, job) {
     };
   }
 
+  if (entityName === 'tax_configurations') {
+    return {
+      id: p.id || ('taxcfg-' + (job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf')),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      data: p
+    };
+  }
+
+  if (entityName === 'tax_audit_log') {
+    return {
+      id: p.id || ('taxaudit-' + Math.random().toString(36).substring(2, 9)),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      actor: p.actor || null,
+      action: p.changeSummary || null,
+      data: p
+    };
+  }
+
   return p;
 }
 

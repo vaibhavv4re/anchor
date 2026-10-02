@@ -10,6 +10,7 @@ import { supplierInvoiceModel } from '../../../../../businessos/platform/account
 import { apMatchingEngine } from '../../../../../businessos/platform/accounting/apMatchingEngine.js';
 import { supplierPaymentModel } from '../../../../../businessos/platform/accounting/supplierPaymentModel.js';
 import { taxConfigurationModel } from '../../../../../businessos/platform/accounting/taxConfigurationModel.js';
+import { menuMasterModel } from '../../../../../businessos/platform/ordering/menuMasterModel.js';
 import { platformEventBus } from '../../../../../businessos/platform/events/platformEvents.js';
 import { TaxInvoicePrintModal } from '../../billing/ui/TaxInvoicePrintModal.js';
 import { ExportEngine } from '../../../../../businessos/platform/accounting/exportEngine.js';
@@ -1066,97 +1067,377 @@ export class AccountsCaWorkspaceView {
     const reg = taxConfig.gstRegistration;
     const rules = taxConfig.taxRules;
     const categories = taxConfig.taxCategories;
+    const sc = taxConfig.serviceCharge || { enabled: false, rate: 0, isGstApplicableOnServiceCharge: false };
+    const bar = taxConfig.barBilling || { separateExciseLicence: false, licenceName: '', licenceNumber: '', gstin: '', address: '', splitByDefault: false };
+    const mappings = taxConfig.itemTaxMappings || { categoryDefaults: {}, itemOverrides: {}, __default: 'RESTAURANT_FOOD' };
+
+    // Tax-category <option> builder (shared by category defaults + item overrides).
+    const catOptions = (selected) => `
+      <option value="">— inherit —</option>
+      ${categories.map(c => `<option value="${c.code}" ${c.code === selected ? 'selected' : ''}>${c.name} (${c.code})</option>`).join('')}
+    `;
+    const ruleOptions = (selected) => rules.map(r => `<option value="${r.code}" ${r.code === selected ? 'selected' : ''}>${r.code} · ${r.rate}%</option>`).join('');
+
+    // Menu categories (both FOOD + BAR) for the category-default mapping.
+    const menuCats = (menuMasterModel.getAllCategories() || []);
+    const menuItems = (menuMasterModel.getAllMenuItems() || []).filter(i => i.isAvailable);
+
+    const audit = taxConfigurationModel.getTaxAuditLog(null, 25);
 
     return `
       <div style="display:flex; flex-direction:column; gap:24px;">
-        <div style="background:var(--bg-surface-1); padding:20px; border-radius:10px; border:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
+        <div style="background:var(--bg-surface-1); padding:20px; border-radius:10px; border:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;">
           <div>
             <h3 style="margin:0 0 4px; font-size:1.2rem; font-weight:800; color:var(--accent-primary);">⚙️ Centralized Tax Configuration Authority</h3>
-            <p style="margin:0; color:var(--text-muted); font-size:0.85rem;">Single source of truth for GST, State Liquor VAT, Service Charge, and Tax Rules used across POS, Billing, AP, and Reporting.</p>
+            <p style="margin:0; color:var(--text-muted); font-size:0.85rem;">Edit rates and map menu categories/items to tax rules. Changes apply immediately to NEW bills; already-issued bills keep their snapshot.</p>
           </div>
-          <span style="background:rgba(16,185,129,0.15); color:#10b981; padding:6px 14px; border-radius:8px; font-weight:800; font-size:0.8rem; border:1px solid rgba(16,185,129,0.3);">
-            🔒 Effective-Dated Immutability Active
-          </span>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <button type="button" id="btn-reset-tax-config" class="btn-secondary" style="padding:10px 16px; min-height:44px; font-weight:700;">↺ Discard</button>
+            <button type="button" id="btn-save-tax-config" class="btn-primary" style="padding:10px 20px; min-height:44px; font-weight:800;">💾 Save Configuration</button>
+          </div>
         </div>
+        <div id="tax-save-banner" style="display:none; padding:12px 16px; border-radius:8px; font-weight:700; font-size:0.85rem;"></div>
 
-        <!-- 1. GST REGISTRATION DETAILS PANEL -->
+        <!-- 1. GST REGISTRATION DETAILS -->
         <div class="card" style="padding:20px; background:var(--bg-surface-1); border:1px solid var(--border-subtle);">
-          <h4 style="margin:0 0 16px; font-size:1.05rem; font-weight:800; display:flex; align-items:center; gap:8px;">
-            <span>🏢</span> GST Statutory Registration Details
-          </h4>
-          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:16px; font-size:0.85rem;">
-            <div style="padding:12px; background:var(--bg-surface-2); border-radius:8px;">
-              <span style="font-size:0.72rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">GSTIN / UIN</span>
-              <div style="font-size:1.1rem; font-weight:800; color:var(--accent-primary); margin-top:2px;">${reg.gstin}</div>
+          <h4 style="margin:0 0 16px; font-size:1.05rem; font-weight:800;">🏢 GST Statutory Registration</h4>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:16px; font-size:0.82rem;">
+            <div><label style="font-weight:700; color:var(--text-muted); text-transform:uppercase; font-size:0.7rem;">GSTIN / UIN</label>
+              <input id="reg-gstin" class="input" style="width:100%; margin-top:4px; padding:10px;" value="${reg.gstin || ''}" /></div>
+            <div><label style="font-weight:700; color:var(--text-muted); text-transform:uppercase; font-size:0.7rem;">Registered Legal Name</label>
+              <input id="reg-legal-name" class="input" style="width:100%; margin-top:4px; padding:10px;" value="${reg.legalName || ''}" /></div>
+            <div><label style="font-weight:700; color:var(--text-muted); text-transform:uppercase; font-size:0.7rem;">Trade Name</label>
+              <input id="reg-trade-name" class="input" style="width:100%; margin-top:4px; padding:10px;" value="${reg.tradeName || ''}" /></div>
+            <div><label style="font-weight:700; color:var(--text-muted); text-transform:uppercase; font-size:0.7rem;">State Name</label>
+              <input id="reg-state-name" class="input" style="width:100%; margin-top:4px; padding:10px;" value="${reg.stateName || ''}" /></div>
+            <div><label style="font-weight:700; color:var(--text-muted); text-transform:uppercase; font-size:0.7rem;">State Code</label>
+              <input id="reg-state-code" class="input" style="width:100%; margin-top:4px; padding:10px;" value="${reg.stateCode || ''}" /></div>
+            <div><label style="font-weight:700; color:var(--text-muted); text-transform:uppercase; font-size:0.7rem;">Registration Type</label>
+              <select id="reg-type" class="input" style="width:100%; margin-top:4px; padding:10px;">
+                ${['Regular', 'Composition', 'Unregistered'].map(t => `<option ${t === reg.registrationType ? 'selected' : ''}>${t}</option>`).join('')}
+              </select></div>
+            <div><label style="font-weight:700; color:var(--text-muted); text-transform:uppercase; font-size:0.7rem;">Effective From</label>
+              <input id="reg-effective-from" type="date" class="input" style="width:100%; margin-top:4px; padding:10px;" value="${reg.effectiveFrom || ''}" /></div>
+            <div style="display:flex; align-items:center;"><label style="display:flex; align-items:center; gap:8px; font-weight:700; cursor:pointer; min-height:44px;">
+              <input id="reg-registered" type="checkbox" ${reg.isGstRegistered !== false ? 'checked' : ''} /> GST Registered</label></div>
+          </div>
+        </div>
+
+        <!-- 2. SERVICE CHARGE -->
+        <div class="card" style="padding:20px; background:var(--bg-surface-1); border:1px solid var(--border-subtle);">
+          <h4 style="margin:0 0 16px; font-size:1.05rem; font-weight:800;">🧾 Service Charge</h4>
+          <div style="display:flex; gap:24px; align-items:center; flex-wrap:wrap; font-size:0.85rem;">
+            <label style="display:flex; align-items:center; gap:8px; font-weight:700; cursor:pointer; min-height:44px;">
+              <input id="sc-enabled" type="checkbox" ${sc.enabled !== false ? 'checked' : ''} /> Enabled</label>
+            <label style="display:flex; align-items:center; gap:8px; font-weight:700;">Rate %
+              <input id="sc-rate" type="number" step="0.5" min="0" class="input" style="width:100px; padding:10px;" value="${sc.rate || 0}" /></label>
+            <label style="display:flex; align-items:center; gap:8px; font-weight:700; cursor:pointer; min-height:44px;">
+              <input id="sc-gst" type="checkbox" ${sc.isGstApplicableOnServiceCharge ? 'checked' : ''} /> Apply GST on service charge</label>
+            <span style="color:var(--text-muted); font-size:0.78rem;">Service charge is skipped on alcohol lines automatically.</span>
+          </div>
+        </div>
+
+        <!-- 2B. BAR / EXCISE BILLING -->
+        <div class="card" style="padding:20px; background:var(--bg-surface-1); border:1px solid var(--border-subtle);">
+          <h4 style="margin:0 0 4px; font-size:1.05rem; font-weight:800;">🍷 Bar / Excise Billing</h4>
+          <p style="margin:0 0 16px; color:var(--text-muted); font-size:0.8rem;">By default the bar bills under the same entity/GSTIN as the restaurant. Enable a separate excise licence to print the BAR invoice under its own legal identity, and split the guest bill into two fiscal documents (Food = GST, Bar = Excise VAT).</p>
+          <div style="display:flex; flex-direction:column; gap:14px; font-size:0.82rem;">
+            <div style="display:flex; gap:24px; align-items:center; flex-wrap:wrap;">
+              <label style="display:flex; align-items:center; gap:8px; font-weight:700; cursor:pointer; min-height:44px;">
+                <input id="bar-sep-licence" type="checkbox" ${bar.separateExciseLicence ? 'checked' : ''} /> Separate excise licence (different entity)</label>
+              <label style="display:flex; align-items:center; gap:8px; font-weight:700; cursor:pointer; min-height:44px;">
+                <input id="bar-split-default" type="checkbox" ${bar.splitByDefault ? 'checked' : ''} /> Default new bills to Food/Bar split</label>
             </div>
-            <div style="padding:12px; background:var(--bg-surface-2); border-radius:8px;">
-              <span style="font-size:0.72rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">REGISTERED STATE</span>
-              <div style="font-size:1.1rem; font-weight:800; margin-top:2px;">${reg.stateName} (${reg.stateCode})</div>
-            </div>
-            <div style="padding:12px; background:var(--bg-surface-2); border-radius:8px;">
-              <span style="font-size:0.72rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">REGISTRATION TYPE</span>
-              <div style="font-size:1.1rem; font-weight:800; margin-top:2px;">${reg.registrationType}</div>
-            </div>
-            <div style="padding:12px; background:var(--bg-surface-2); border-radius:8px;">
-              <span style="font-size:0.72rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">REGISTERED LEGAL NAME</span>
-              <div style="font-size:1rem; font-weight:800; margin-top:2px;">${reg.legalName}</div>
+            <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:16px;">
+              <div><label style="font-weight:700; color:var(--text-muted); text-transform:uppercase; font-size:0.7rem;">Bar Legal / Trade Name</label>
+                <input id="bar-licence-name" class="input" style="width:100%; margin-top:4px; padding:10px;" value="${bar.licenceName || ''}" placeholder="e.g. Anchor Excise Bar" ${bar.separateExciseLicence ? '' : 'disabled'} /></div>
+              <div><label style="font-weight:700; color:var(--text-muted); text-transform:uppercase; font-size:0.7rem;">Excise Licence No.</label>
+                <input id="bar-licence-number" class="input" style="width:100%; margin-top:4px; padding:10px;" value="${bar.licenceNumber || ''}" placeholder="e.g. EXC/MH/2026/0012" ${bar.separateExciseLicence ? '' : 'disabled'} /></div>
+              <div><label style="font-weight:700; color:var(--text-muted); text-transform:uppercase; font-size:0.7rem;">Bar GSTIN (if any)</label>
+                <input id="bar-gstin" class="input" style="width:100%; margin-top:4px; padding:10px;" value="${bar.gstin || ''}" placeholder="Optional" ${bar.separateExciseLicence ? '' : 'disabled'} /></div>
+              <div><label style="font-weight:700; color:var(--text-muted); text-transform:uppercase; font-size:0.7rem;">Bar Address</label>
+                <input id="bar-address" class="input" style="width:100%; margin-top:4px; padding:10px;" value="${bar.address || ''}" placeholder="Licence address as printed on the bar bill" ${bar.separateExciseLicence ? '' : 'disabled'} /></div>
             </div>
           </div>
         </div>
 
-        <!-- 2. ACTIVE TAX RULES TABLE -->
+        <!-- 3. TAX RULES (EDITABLE) -->
         <div class="card" style="padding:0; background:var(--bg-surface-1); border:1px solid var(--border-subtle); overflow:hidden;">
           <div style="padding:16px 20px; background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center;">
-            <h4 style="margin:0; font-size:1rem; font-weight:800;">🧮 Active Tax Rules & Rates</h4>
-            <span style="font-size:0.78rem; color:var(--text-muted); font-weight:700;">Consumed by POS & Billing</span>
+            <h4 style="margin:0; font-size:1rem; font-weight:800;">🧮 Tax Rules & Rates</h4>
+            <button type="button" id="btn-add-tax-rule" class="btn-secondary" style="padding:8px 14px; min-height:40px; font-weight:700; font-size:0.8rem;">＋ Add Rule</button>
           </div>
-          <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.85rem;">
-            <thead>
-              <tr style="background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); color:var(--text-muted); font-size:0.75rem; text-transform:uppercase;">
-                <th style="padding:12px 16px;">Tax Code</th>
-                <th style="padding:12px 16px;">Rule Name</th>
-                <th style="padding:12px 16px;">Tax Type</th>
-                <th style="padding:12px 16px;">Rate</th>
-                <th style="padding:12px 16px;">Component Split</th>
-                <th style="padding:12px 16px;">Effective From</th>
-                <th style="padding:12px 16px;">Status</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rules.map(r => `
-                <tr style="border-bottom:1px solid var(--border-subtle);">
-                  <td style="padding:12px 16px; font-weight:800; color:var(--accent-primary);">${r.code}</td>
-                  <td style="padding:12px 16px; font-weight:700;">${r.name}</td>
-                  <td style="padding:12px 16px;"><span style="background:var(--bg-surface-2); padding:2px 8px; border-radius:4px; font-weight:700;">${r.taxType}</span></td>
-                  <td style="padding:12px 16px; font-weight:800; color:#10b981;">${r.rate}%</td>
-                  <td style="padding:12px 16px; font-size:0.8rem; color:var(--text-secondary);">
-                    ${r.taxType === 'GST' ? `CGST: ${r.cgstRate}% | SGST: ${r.sgstRate}% | IGST: ${r.igstRate}%` : `VAT: ${r.rate}%`}
-                  </td>
-                  <td style="padding:12px 16px;">${r.effectiveFrom}</td>
-                  <td style="padding:12px 16px;"><span class="badge badge-success" style="font-size:0.7rem;">${r.status}</span></td>
+          <div style="overflow-x:auto;">
+            <table style="width:100%; border-collapse:collapse; text-align:left; font-size:0.82rem;" id="tax-rules-table">
+              <thead>
+                <tr style="background:var(--bg-surface-2); border-bottom:1px solid var(--border-subtle); color:var(--text-muted); font-size:0.72rem; text-transform:uppercase;">
+                  <th style="padding:10px 12px;">Code</th><th style="padding:10px 12px;">Name</th><th style="padding:10px 12px;">Type</th>
+                  <th style="padding:10px 12px;">Rate %</th><th style="padding:10px 12px;">Effective From</th><th style="padding:10px 12px;">Status</th><th style="padding:10px 12px;"></th>
                 </tr>
-              `).join('')}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                ${rules.map(r => this._renderTaxRuleRow(r, ruleOptions)).join('')}
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        <!-- 3. TAX CATEGORIES MAPPING -->
+        <!-- 4. TAX CATEGORIES (EDITABLE DEFAULT RULE) -->
         <div class="card" style="padding:20px; background:var(--bg-surface-1); border:1px solid var(--border-subtle);">
-          <h4 style="margin:0 0 16px; font-size:1.05rem; font-weight:800; display:flex; align-items:center; gap:8px;">
-            <span>🏷️</span> Menu Item & Product Tax Categories
-          </h4>
-          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px; font-size:0.85rem;">
+          <h4 style="margin:0 0 16px; font-size:1.05rem; font-weight:800;">🏷️ Tax Categories → Default Rule</h4>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px, 1fr)); gap:12px; font-size:0.85rem;">
             ${categories.map(c => `
-              <div style="padding:12px 16px; background:var(--bg-surface-2); border-radius:8px; border:1px solid var(--border-subtle);">
-                <div style="font-size:0.75rem; color:var(--accent-primary); font-weight:800;">${c.code}</div>
-                <div style="font-weight:700; margin-top:2px;">${c.name}</div>
-                <div style="font-size:0.78rem; color:var(--text-muted); margin-top:4px;">Default Rule: <strong>${c.defaultTaxRuleCode}</strong></div>
+              <div style="padding:12px 16px; background:var(--bg-surface-2); border-radius:8px; border:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                <div><div style="font-size:0.72rem; color:var(--accent-primary); font-weight:800;">${c.code}</div>
+                  <div style="font-weight:700; margin-top:2px;">${c.name}</div></div>
+                <select class="input cat-default-rule" data-cat-code="${c.code}" style="min-width:150px; padding:8px;">
+                  ${rules.map(r => `<option value="${r.code}" ${r.code === c.defaultTaxRuleCode ? 'selected' : ''}>${r.code} · ${r.rate}%</option>`).join('')}
+                </select>
               </div>
             `).join('')}
           </div>
         </div>
+
+        <!-- 5. MENU CATEGORY → TAX MAPPING -->
+        <div class="card" style="padding:20px; background:var(--bg-surface-1); border:1px solid var(--border-subtle);">
+          <h4 style="margin:0 0 6px; font-size:1.05rem; font-weight:800;">🍽️ Menu Categories → Tax Category</h4>
+          <p style="margin:0 0 16px; color:var(--text-muted); font-size:0.8rem;">Set the default tax treatment per menu category. Leave as “inherit” to fall back to the restaurant default (${mappings.__default}).</p>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:10px; font-size:0.83rem;">
+            ${menuCats.map(mc => `
+              <div style="padding:10px 14px; background:var(--bg-surface-2); border-radius:8px; border:1px solid var(--border-subtle); display:flex; justify-content:space-between; align-items:center; gap:10px;">
+                <span style="font-weight:700;">${mc.shortName || mc.name} <span style="color:var(--text-muted); font-weight:600;">(${mc.count})</span></span>
+                <select class="input map-cat" data-menu-cat="${mc.rawCategory}" style="min-width:150px; padding:8px;">${catOptions(mappings.categoryDefaults[mc.rawCategory])}</select>
+              </div>
+            `).join('')}
+          </div>
+        </div>
+
+        <!-- 6. ITEM-LEVEL OVERRIDES + LIQUOR MARKING -->
+        <div class="card" style="padding:20px; background:var(--bg-surface-1); border:1px solid var(--border-subtle);">
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:6px;">
+            <h4 style="margin:0; font-size:1.05rem; font-weight:800;">🔎 Item Overrides & Liquor Marking</h4>
+            <input id="item-map-search" class="input" placeholder="Search dish / drink…" style="min-width:220px; padding:10px;" />
+          </div>
+          <p style="margin:0 0 14px; color:var(--text-muted); font-size:0.8rem;">Override a single item's tax category, or tick <strong>Liquor</strong> to charge State Liquor VAT. Overrides beat category defaults.</p>
+          <div style="max-height:420px; overflow-y:auto; border:1px solid var(--border-subtle); border-radius:8px;">
+            <table style="width:100%; border-collapse:collapse; font-size:0.82rem;">
+              <thead>
+                <tr style="position:sticky; top:0; background:var(--bg-surface-2); color:var(--text-muted); font-size:0.72rem; text-transform:uppercase;">
+                  <th style="padding:10px 12px; text-align:left;">Item</th><th style="padding:10px 12px; text-align:left;">Category</th>
+                  <th style="padding:10px 12px; text-align:left;">Tax Category</th><th style="padding:10px 12px; text-align:center;">Liquor</th>
+                </tr>
+              </thead>
+              <tbody id="item-map-body">
+                ${menuItems.map(it => {
+                  const ov = (mappings.itemOverrides && mappings.itemOverrides[it.itemCode]) || {};
+                  return `
+                    <tr class="item-map-row" data-name="${(it.name || '').toLowerCase()}" style="border-bottom:1px solid var(--border-subtle);">
+                      <td style="padding:8px 12px; font-weight:700;">${it.name}<div style="font-size:0.68rem; color:var(--text-muted); font-weight:600;">${it.itemCode}</div></td>
+                      <td style="padding:8px 12px; color:var(--text-secondary); font-size:0.75rem;">${it.category}</td>
+                      <td style="padding:8px 12px;"><select class="input map-item" data-item-code="${it.itemCode}" style="min-width:150px; padding:8px;">${catOptions(ov.taxCategoryCode)}</select></td>
+                      <td style="padding:8px 12px; text-align:center;"><input type="checkbox" class="map-liquor" data-item-code="${it.itemCode}" ${ov.isLiquor ? 'checked' : ''} style="width:20px; height:20px;" /></td>
+                    </tr>`;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 7. TAX CHANGE LOG -->
+        <div class="card" style="padding:20px; background:var(--bg-surface-1); border:1px solid var(--border-subtle);">
+          <h4 style="margin:0 0 12px; font-size:1.05rem; font-weight:800; cursor:pointer;" id="tax-log-toggle">📜 Tax Change Log ${audit.length ? `(${audit.length})` : ''} ▾</h4>
+          <div id="tax-log-body" style="display:flex; flex-direction:column; gap:8px; max-height:280px; overflow-y:auto;">
+            ${audit.length ? audit.map(a => `
+              <div style="padding:10px 12px; background:var(--bg-surface-2); border-radius:8px; border:1px solid var(--border-subtle); font-size:0.8rem;">
+                <div style="display:flex; justify-content:space-between; gap:10px;">
+                  <strong>${a.actor || 'System'}</strong>
+                  <span style="color:var(--text-muted);">${new Date(a.timestamp).toLocaleString()}</span>
+                </div>
+                <div style="margin-top:4px; color:var(--text-secondary);">${a.changeSummary}</div>
+              </div>
+            `).join('') : '<div style="color:var(--text-muted); font-size:0.82rem;">No changes recorded yet.</div>'}
+          </div>
+        </div>
       </div>
     `;
+  }
+
+  /** One editable tax-rule row (used by renderTaxSetupTab + Add Rule). */
+  _renderTaxRuleRow(r, ruleOptions) {
+    return `
+      <tr class="tax-rule-row" data-code="${r.code}" style="border-bottom:1px solid var(--border-subtle);">
+        <td style="padding:8px 12px;"><input class="input rule-code" value="${r.code}" style="width:120px; padding:8px; font-weight:800; color:var(--accent-primary);" /></td>
+        <td style="padding:8px 12px;"><input class="input rule-name" value="${r.name}" style="width:100%; min-width:140px; padding:8px;" /></td>
+        <td style="padding:8px 12px;"><select class="input rule-type" style="padding:8px;">${['GST', 'LIQUOR_VAT', 'NONE'].map(t => `<option ${t === r.taxType ? 'selected' : ''}>${t}</option>`).join('')}</select></td>
+        <td style="padding:8px 12px;"><input class="input rule-rate" type="number" step="0.5" min="0" value="${r.rate}" style="width:80px; padding:8px; font-weight:800;" /></td>
+        <td style="padding:8px 12px;"><input class="input rule-effective" type="date" value="${r.effectiveFrom || ''}" style="padding:8px;" /></td>
+        <td style="padding:8px 12px;"><select class="input rule-status" style="padding:8px;">${['ACTIVE', 'INACTIVE'].map(s => `<option ${s === r.status ? 'selected' : ''}>${s}</option>`).join('')}</select></td>
+        <td style="padding:8px 12px; text-align:right;"><button type="button" class="btn-remove-rule" style="color:var(--status-danger); background:transparent; border:none; cursor:pointer; font-weight:700; min-height:36px;">✕</button></td>
+      </tr>`;
+  }
+
+  /**
+   * Wire the editable Tax Setup screen: item search filter, add/remove rule
+   * rows, save (build config from DOM -> saveTaxConfiguration -> re-render),
+   * discard, and the change-log toggle.
+   */
+  _bindTaxSetupEvents() {
+    const c = this.container;
+    if (!c) return;
+
+    // Live filter of the item-mapping table.
+    const search = c.querySelector('#item-map-search');
+    if (search) {
+      search.addEventListener('input', () => {
+        const q = search.value.toLowerCase();
+        c.querySelectorAll('.item-map-row').forEach(row => {
+          row.style.display = (!row.dataset.name || row.dataset.name.includes(q)) ? '' : 'none';
+        });
+      });
+    }
+
+    // Collapsible change log.
+    const logToggle = c.querySelector('#tax-log-toggle');
+    const logBody = c.querySelector('#tax-log-body');
+    if (logToggle && logBody) {
+      logToggle.addEventListener('click', () => {
+        const hidden = logBody.style.display === 'none';
+        logBody.style.display = hidden ? 'flex' : 'none';
+      });
+    }
+
+    // Add / remove tax-rule rows (delegated removal).
+    const rulesTable = c.querySelector('#tax-rules-table');
+    const rulesBody = rulesTable ? rulesTable.querySelector('tbody') : null;
+    if (rulesTable) {
+      rulesTable.addEventListener('click', (e) => {
+        const rm = e.target.closest('.btn-remove-rule');
+        if (rm) rm.closest('tr').remove();
+      });
+    }
+    const btnAddRule = c.querySelector('#btn-add-tax-rule');
+    if (btnAddRule && rulesBody) {
+      btnAddRule.addEventListener('click', () => {
+        const blank = { code: 'RULE-' + String(Date.now()).slice(-4), name: 'New Rule', taxType: 'GST', rate: 0, effectiveFrom: '', status: 'ACTIVE' };
+        rulesBody.insertAdjacentHTML('beforeend', this._renderTaxRuleRow(blank));
+      });
+    }
+
+    // Discard -> reload from the store.
+    const btnReset = c.querySelector('#btn-reset-tax-config');
+    if (btnReset) btnReset.addEventListener('click', () => this.updateContent());
+
+    // Live-toggle the bar identity fields against the "separate licence" checkbox.
+    const barSep = c.querySelector('#bar-sep-licence');
+    if (barSep) {
+      barSep.addEventListener('change', () => {
+        ['#bar-licence-name', '#bar-licence-number', '#bar-gstin', '#bar-address'].forEach(sel => {
+          const el = c.querySelector(sel);
+          if (el) el.disabled = !barSep.checked;
+        });
+      });
+    }
+
+    // Save -> assemble config from the DOM and persist through the model.
+    const btnSave = c.querySelector('#btn-save-tax-config');
+    if (btnSave) {
+      btnSave.addEventListener('click', () => {
+        try {
+          const cfg = taxConfigurationModel.getTaxConfiguration();
+
+          cfg.gstRegistration = {
+            ...cfg.gstRegistration,
+            gstin: c.querySelector('#reg-gstin') ? c.querySelector('#reg-gstin').value.trim() : cfg.gstRegistration.gstin,
+            legalName: c.querySelector('#reg-legal-name') ? c.querySelector('#reg-legal-name').value.trim() : cfg.gstRegistration.legalName,
+            tradeName: c.querySelector('#reg-trade-name') ? c.querySelector('#reg-trade-name').value.trim() : cfg.gstRegistration.tradeName,
+            stateName: c.querySelector('#reg-state-name') ? c.querySelector('#reg-state-name').value.trim() : cfg.gstRegistration.stateName,
+            stateCode: c.querySelector('#reg-state-code') ? c.querySelector('#reg-state-code').value.trim() : cfg.gstRegistration.stateCode,
+            registrationType: c.querySelector('#reg-type') ? c.querySelector('#reg-type').value : cfg.gstRegistration.registrationType,
+            effectiveFrom: c.querySelector('#reg-effective-from') ? c.querySelector('#reg-effective-from').value : cfg.gstRegistration.effectiveFrom,
+            isGstRegistered: c.querySelector('#reg-registered') ? c.querySelector('#reg-registered').checked : cfg.gstRegistration.isGstRegistered
+          };
+
+          cfg.serviceCharge = {
+            ...cfg.serviceCharge,
+            enabled: c.querySelector('#sc-enabled') ? c.querySelector('#sc-enabled').checked : cfg.serviceCharge.enabled,
+            rate: c.querySelector('#sc-rate') ? (parseFloat(c.querySelector('#sc-rate').value) || 0) : cfg.serviceCharge.rate,
+            isGstApplicableOnServiceCharge: c.querySelector('#sc-gst') ? c.querySelector('#sc-gst').checked : cfg.serviceCharge.isGstApplicableOnServiceCharge
+          };
+
+          cfg.barBilling = {
+            ...(cfg.barBilling || {}),
+            separateExciseLicence: c.querySelector('#bar-sep-licence') ? c.querySelector('#bar-sep-licence').checked : false,
+            splitByDefault: c.querySelector('#bar-split-default') ? c.querySelector('#bar-split-default').checked : false,
+            licenceName: c.querySelector('#bar-licence-name') ? c.querySelector('#bar-licence-name').value.trim() : '',
+            licenceNumber: c.querySelector('#bar-licence-number') ? c.querySelector('#bar-licence-number').value.trim() : '',
+            gstin: c.querySelector('#bar-gstin') ? c.querySelector('#bar-gstin').value.trim() : '',
+            address: c.querySelector('#bar-address') ? c.querySelector('#bar-address').value.trim() : ''
+          };
+
+          const origRules = {};
+          (cfg.taxRules || []).forEach(r => { origRules[r.code] = r; });
+          const newRules = [];
+          c.querySelectorAll('#tax-rules-table tbody tr').forEach(tr => {
+            const codeEl = tr.querySelector('.rule-code');
+            if (!codeEl) return;
+            const code = codeEl.value.trim();
+            if (!code) return;
+            const type = tr.querySelector('.rule-type').value;
+            const rate = parseFloat(tr.querySelector('.rule-rate').value) || 0;
+            const name = tr.querySelector('.rule-name').value || code;
+            const effectiveFrom = tr.querySelector('.rule-effective').value || (origRules[code] && origRules[code].effectiveFrom) || null;
+            const status = tr.querySelector('.rule-status').value;
+            const rule = { ...origRules[code], code, name, taxType: type, rate, status, effectiveFrom, effectiveTo: (origRules[code] && origRules[code].effectiveTo) || null };
+            if (type === 'GST') { rule.cgstRate = rate / 2; rule.sgstRate = rate / 2; rule.igstRate = rate; }
+            newRules.push(rule);
+          });
+          if (newRules.length) cfg.taxRules = newRules;
+
+          cfg.taxCategories = (cfg.taxCategories || []).map(cat => {
+            const sel = c.querySelector(`.cat-default-rule[data-cat-code="${cat.code}"]`);
+            return sel ? { ...cat, defaultTaxRuleCode: sel.value } : cat;
+          });
+
+          const categoryDefaults = {};
+          c.querySelectorAll('.map-cat').forEach(sel => { if (sel.value) categoryDefaults[sel.dataset.menuCat] = sel.value; });
+          const itemOverrides = {};
+          c.querySelectorAll('.map-item').forEach(sel => {
+            const code = sel.dataset.itemCode;
+            const liq = c.querySelector(`.map-liquor[data-item-code="${code}"]`);
+            const val = sel.value;
+            const isLiq = liq ? liq.checked : false;
+            if (val || isLiq) itemOverrides[code] = { ...(val ? { taxCategoryCode: val } : {}), isLiquor: isLiq };
+          });
+          cfg.itemTaxMappings = {
+            categoryDefaults,
+            itemOverrides,
+            __default: (cfg.itemTaxMappings && cfg.itemTaxMappings.__default) || 'RESTAURANT_FOOD'
+          };
+
+          taxConfigurationModel.saveTaxConfiguration(cfg);
+
+          const banner = c.querySelector('#tax-save-banner');
+          if (banner) {
+            banner.style.display = 'block';
+            banner.style.background = 'rgba(16,185,129,0.15)';
+            banner.style.color = '#10b981';
+            banner.style.border = '1px solid rgba(16,185,129,0.3)';
+            banner.textContent = '✅ Tax configuration saved. New bills will use these rates immediately.';
+          }
+          // Re-render after a short beat so the banner is visible briefly.
+          setTimeout(() => this.updateContent(), 700);
+        } catch (err) {
+          const banner = c.querySelector('#tax-save-banner');
+          if (banner) {
+            banner.style.display = 'block';
+            banner.style.background = 'rgba(239,68,68,0.15)';
+            banner.style.color = '#ef4444';
+            banner.style.border = '1px solid rgba(239,68,68,0.3)';
+            banner.textContent = '⚠️ Failed to save: ' + (err && err.message ? err.message : String(err));
+          }
+        }
+      });
+    }
   }
 
   // =========================================================================
@@ -1561,6 +1842,8 @@ export class AccountsCaWorkspaceView {
   // =========================================================================
   bindEvents() {
     if (!this.container) return;
+
+    if (this.activeTab === 'tax_setup') this._bindTaxSetupEvents();
 
     // Main Navigation Tabs
     this.container.querySelectorAll('.btn-ca-tab').forEach(btn => {

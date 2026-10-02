@@ -36,7 +36,7 @@ declare
     'stock_transfers','stock_issues','stock_adjustments','stock_counts',
     'stock_balances','stock_operations','stock_transactions','inventory_requests',
     'offline_journal','audit_logs','orders','table_sessions','bill_revisions',
-    'invoices','payments','session_audit_logs'
+    'invoices','payments','session_audit_logs','tax_configurations','tax_audit_log'
   ];
 begin
   foreach t in array tables loop
@@ -64,7 +64,7 @@ declare
     'stock_transfers','stock_issues','stock_adjustments','stock_counts',
     'stock_balances','stock_operations','stock_transactions','inventory_requests',
     'offline_journal','audit_logs','orders','table_sessions','bill_revisions',
-    'invoices','payments','session_audit_logs'
+    'invoices','payments','session_audit_logs','tax_configurations','tax_audit_log'
   ];
 begin
   foreach t in array tables loop
@@ -84,7 +84,7 @@ revoke all on all sequences in schema public from anon;
 grant usage on schema public to anon, authenticated;
 
 grant select on
-  "inventory_categories","inventory_uoms","product_families","storage_locations","suppliers"
+  "inventory_categories","inventory_uoms","product_families","storage_locations","suppliers","tax_configurations"
 to anon;
 
 grant select, insert, update, delete on all tables in schema public to authenticated;
