@@ -432,109 +432,20 @@ CREATE TABLE IF NOT EXISTS session_audit_logs (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 🔓 STEP 2: DISABLE ROW LEVEL SECURITY (RLS) & GRANT FULL ANON ACCESS
-ALTER TABLE tenants DISABLE ROW LEVEL SECURITY;
-ALTER TABLE identities DISABLE ROW LEVEL SECURITY;
-ALTER TABLE employees DISABLE ROW LEVEL SECURITY;
-ALTER TABLE dining_areas DISABLE ROW LEVEL SECURITY;
-ALTER TABLE tables_master DISABLE ROW LEVEL SECURITY;
-ALTER TABLE inventory_categories DISABLE ROW LEVEL SECURITY;
-ALTER TABLE inventory_uoms DISABLE ROW LEVEL SECURITY;
-ALTER TABLE storage_locations DISABLE ROW LEVEL SECURITY;
-ALTER TABLE suppliers DISABLE ROW LEVEL SECURITY;
-ALTER TABLE inventory DISABLE ROW LEVEL SECURITY;
-ALTER TABLE kitchen_menu_items DISABLE ROW LEVEL SECURITY;
-ALTER TABLE recipes DISABLE ROW LEVEL SECURITY;
-ALTER TABLE recipe_ingredients DISABLE ROW LEVEL SECURITY;
-ALTER TABLE purchase_orders DISABLE ROW LEVEL SECURITY;
-ALTER TABLE goods_receipt_notes DISABLE ROW LEVEL SECURITY;
-ALTER TABLE stock_transfers DISABLE ROW LEVEL SECURITY;
-ALTER TABLE stock_issues DISABLE ROW LEVEL SECURITY;
-ALTER TABLE stock_adjustments DISABLE ROW LEVEL SECURITY;
-ALTER TABLE stock_counts DISABLE ROW LEVEL SECURITY;
-ALTER TABLE stock_balances DISABLE ROW LEVEL SECURITY;
-ALTER TABLE inventory_requests DISABLE ROW LEVEL SECURITY;
-ALTER TABLE offline_journal DISABLE ROW LEVEL SECURITY;
-ALTER TABLE audit_logs DISABLE ROW LEVEL SECURITY;
-ALTER TABLE orders DISABLE ROW LEVEL SECURITY;
-ALTER TABLE table_sessions DISABLE ROW LEVEL SECURITY;
-ALTER TABLE bill_revisions DISABLE ROW LEVEL SECURITY;
-ALTER TABLE invoices DISABLE ROW LEVEL SECURITY;
-ALTER TABLE payments DISABLE ROW LEVEL SECURITY;
-ALTER TABLE session_audit_logs DISABLE ROW LEVEL SECURITY;
+-- STEP 2: SECURITY - Row Level Security is enforced by migration.
+-- The former "DISABLE RLS + GRANT FULL ANON ACCESS" block opened the entire
+-- database to the public anon key. It is intentionally REMOVED here. Tenant
+-- isolation is applied by supabase/rls_policies.sql (enable + force RLS and
+-- per-table tenant_isolation policies). Do NOT re-add USING (true) policies.
+-- See also supabase/backfill_pin_hash.sql and supabase/functions/pin-login.
+-- Server-generated GST-safe numbering and the atomic financial writes
+-- (invoice_sequence, next_invoice_number, rpc_issue_invoice, rpc_record_payment)
+-- live in supabase/sequences.sql; apply it after rls_policies.sql.
 
--- Add permissive policies safely
-DROP POLICY IF EXISTS "Anon Access Tenants" ON tenants;
-CREATE POLICY "Anon Access Tenants" ON tenants FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Anon Access Identities" ON identities;
-CREATE POLICY "Anon Access Identities" ON identities FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Anon Access Employees" ON employees;
-CREATE POLICY "Anon Access Employees" ON employees FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Anon Access Dining Areas" ON dining_areas;
-CREATE POLICY "Anon Access Dining Areas" ON dining_areas FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Anon Access Tables Master" ON tables_master;
-CREATE POLICY "Anon Access Tables Master" ON tables_master FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Anon Access Categories" ON inventory_categories;
-CREATE POLICY "Anon Access Categories" ON inventory_categories FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Anon Access UOMs" ON inventory_uoms;
-CREATE POLICY "Anon Access UOMs" ON inventory_uoms FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Anon Access Storage Locations" ON storage_locations;
-CREATE POLICY "Anon Access Storage Locations" ON storage_locations FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Anon Access Suppliers" ON suppliers;
-CREATE POLICY "Anon Access Suppliers" ON suppliers FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Anon Access Inventory" ON inventory;
-CREATE POLICY "Anon Access Inventory" ON inventory FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Anon Access Kitchen Menu Items" ON kitchen_menu_items;
-CREATE POLICY "Anon Access Kitchen Menu Items" ON kitchen_menu_items FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Anon Access Recipes" ON recipes;
-CREATE POLICY "Anon Access Recipes" ON recipes FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Anon Access Recipe Ingredients" ON recipe_ingredients;
-CREATE POLICY "Anon Access Recipe Ingredients" ON recipe_ingredients FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Anon Access Purchase Orders" ON purchase_orders;
-CREATE POLICY "Anon Access Purchase Orders" ON purchase_orders FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Anon Access Goods Receipt Notes" ON goods_receipt_notes;
-CREATE POLICY "Anon Access Goods Receipt Notes" ON goods_receipt_notes FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Anon Access Stock Transfers" ON stock_transfers;
-CREATE POLICY "Anon Access Stock Transfers" ON stock_transfers FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Anon Access Stock Issues" ON stock_issues;
-CREATE POLICY "Anon Access Stock Issues" ON stock_issues FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Anon Access Stock Adjustments" ON stock_adjustments;
-CREATE POLICY "Anon Access Stock Adjustments" ON stock_adjustments FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Anon Access Stock Counts" ON stock_counts;
-CREATE POLICY "Anon Access Stock Counts" ON stock_counts FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Anon Access Stock Balances" ON stock_balances;
-CREATE POLICY "Anon Access Stock Balances" ON stock_balances FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Anon Access Inventory Requests" ON inventory_requests;
-CREATE POLICY "Anon Access Inventory Requests" ON inventory_requests FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Anon Access Offline Journal" ON offline_journal;
-CREATE POLICY "Anon Access Offline Journal" ON offline_journal FOR ALL USING (true) WITH CHECK (true);
-
-DROP POLICY IF EXISTS "Anon Access Audit Logs" ON audit_logs;
-CREATE POLICY "Anon Access Audit Logs" ON audit_logs FOR ALL USING (true) WITH CHECK (true);
-
-GRANT ALL ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
-GRANT ALL ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, service_role;
+-- (Removed: permissive "Anon Access *" USING (true) policies and the
+--  GRANT ALL ... TO anon statements. supabase/rls_policies.sql now owns
+--  policy creation and role grants: anon is read-only on config tables and
+--  authenticated is tenant-scoped. Apply it after deploying pin-login.)
 
 -- ====================================================================
 -- 🧾 Enterprise RPC Functions: Atomic Model-B Sale Consumption & Reversal

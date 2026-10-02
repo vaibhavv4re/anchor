@@ -71,26 +71,16 @@ class SessionModel {
       correlationId
     };
 
-    offlineStore.appendItem('table_sessions', newSession);
-
-    // Sync to Supabase cloud table & offline_journal for multi-device cross-replication
+    // Single write path (Stage 3): DataGateway.create writes the local store via
+    // its adapter, syncs to the cloud for cross-device replication, and queues a
+    // genuine offline_journal job on failure. The old hand-written fake
+    // sync_state='SYNCED' journal row (a second notion of truth) is removed; we
+    // only persist locally when no gateway is available.
     const dg = this._getDataGateway();
     if (dg && typeof dg.create === 'function') {
       dg.create('table_sessions', newSession).catch(e => console.warn('[sessionModel] Cloud table_sessions sync error:', e.message));
-
-      const journalEntry = {
-        job_id: 'job_' + sessionId,
-        job_type: 'SESSION_OPENED',
-        tenant_id: targetTenantId,
-        entity_name: 'table_sessions',
-        payload: newSession,
-        device_id: typeof navigator !== 'undefined' ? navigator.userAgent.substring(0, 30) : 'POS-TERMINAL-01',
-        actor: assignedWaiterId || 'Staff',
-        correlation_id: correlationId,
-        sync_state: 'SYNCED',
-        created_at: now
-      };
-      dg.create('offline_journal', journalEntry).catch(e => console.warn('[sessionModel] Cloud session journal sync error:', e.message));
+    } else {
+      offlineStore.appendItem('table_sessions', newSession);
     }
 
     // Publish platform event

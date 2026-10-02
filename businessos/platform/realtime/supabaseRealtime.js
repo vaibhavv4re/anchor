@@ -10,11 +10,11 @@
 
 import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
+import { runtimeConfig } from '../cloud/runtimeConfig.js';
 
 export class SupabaseRealtime {
   constructor(config = {}) {
-    this.baseUrl = config.baseUrl || 'https://orlcftjkhqypvqzcmfci.supabase.co';
-    this.anonKey = config.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ybGNmdGpraHF5cHZxemNtZmNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5MTU5NzgsImV4cCI6MjA5OTQ5MTk3OH0.Flrz1S766klUE-7vi-X1oga7Ic5KazssXo2vfXjjTzw';
+    this.config = config;
     this.eventBus = config.eventBus || platformEventBus;
     this.subscriptions = new Map();
     this.isConnected = false;
@@ -31,6 +31,14 @@ export class SupabaseRealtime {
     this._initBroadcastChannel();
     this._initWebSocket();
     this._initDeltaPolling();
+  }
+
+  get baseUrl() {
+    return this.config.baseUrl || runtimeConfig.getSupabaseUrl();
+  }
+
+  get anonKey() {
+    return this.config.anonKey || runtimeConfig.getAnonKey();
   }
 
   _initNetworkListeners() {
@@ -274,7 +282,7 @@ export class SupabaseRealtime {
       try {
         const session = typeof sessionStorage !== 'undefined' ? JSON.parse(sessionStorage.getItem('ros_session') || '{}') : {};
         const tenantId = session.tenantId || 'tenant_h0qc7wf';
-        const headers = { 'apikey': this.anonKey, 'Authorization': `Bearer ${this.anonKey}` };
+        const headers = runtimeConfig.getAuthHeaders({ 'Content-Type': 'application/json' });
 
         // 1. Delta poll orders
         const resp = await fetch(`${this.baseUrl}/rest/v1/orders?select=*`, { headers });

@@ -5,6 +5,9 @@
   "description": "Anchor RestaurantOS - Modular Realtime Operating System",
   "scripts": {
     "dev": "npx serve .",
-    "start": "npx serve ."
+    "start": "npx serve .",
+    "build": "node scratch/inject_runtime_env.js",
+    "check": "node scratch/ci_check.js",
+    "test:staging": "node scratch/test-data-gateway.js"
   }
 }

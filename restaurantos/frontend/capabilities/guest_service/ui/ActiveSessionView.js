@@ -12,6 +12,7 @@ import { sessionStateMachine, SessionMilestones } from '../../../../../businesso
 import { tableStateMachine, PhysicalTableStates } from '../../../../../businessos/platform/table_state/tableStateMachine.js';
 import { platformEventBus } from '../../../../../businessos/platform/events/platformEvents.js';
 import { billRevisionModel } from '../../../../../businessos/platform/billing/billRevisionModel.js';
+import { offlineStore } from '../../../../../businessos/platform/offline_store/offlineStore.js';
 
 import { MenuBrowserView } from '../../order_management/ui/MenuBrowserView.js';
 import { OrderBuilderDrawer } from '../../order_management/ui/OrderBuilderDrawer.js';
@@ -26,6 +27,9 @@ export class ActiveSessionView {
     this.container = null;
     this.draftItems = [];
     this.unsubscribeEvents = [];
+    // Preserves the menu browser's navigation (Food/Bar tab, category, search)
+    // across full re-renders so adding an item doesn't jump back to "All".
+    this._menuState = { domain: 'FOOD', activeCategoryId: 'ALL', searchQuery: '' };
   }
 
   render() {
@@ -34,6 +38,9 @@ export class ActiveSessionView {
     this.container.style.padding = 'var(--space-xl)';
 
     this.subscribeEvents();
+    // Restore any unsent order draft for THIS table/session (survives refresh
+    // and switching tables). Guarded so the session-browser view is unaffected.
+    if (this.sessionId) this._loadDraft();
     this.updateContent();
 
     return this.container;
@@ -358,6 +365,8 @@ export class ActiveSessionView {
     if (menuMount) {
       const menuBrowser = new MenuBrowserView({
         isWaiterView: true,
+        initialState: this._menuState,
+        onStateChange: (s) => { this._menuState = s; },
         onSelectItem: (item) => {
           this.addDraftItem(item);
         }
@@ -373,6 +382,7 @@ export class ActiveSessionView {
         draftItems: this.draftItems,
         onUpdateItems: (items) => {
           this.draftItems = items;
+          this._saveDraft();
         },
         onReviewOrder: (items) => {
           this.openOrderReviewModal(projection, items);
@@ -391,6 +401,7 @@ export class ActiveSessionView {
       onClose: () => {},
       onOrderConfirmed: (confirmedOrder) => {
         this.draftItems = [];
+        this._clearDraft();
         this.updateContent();
       }
     });
@@ -408,7 +419,54 @@ export class ActiveSessionView {
         quantity: 1
       });
     }
+    this._saveDraft();
     this.updateContent();
+  }
+
+  /**
+   * Local (per-device) persistence for the CURRENT ORDER DRAFT - items the
+   * waiter has tapped but NOT yet sent to the kitchen. Stored in offlineStore
+   * (localStorage + IndexedDB mirror) keyed by sessionId, so a browser refresh
+   * or switching to another table and back restores the exact draft. This is
+   * working state only; it is never pushed to the cloud (sending the order
+   * creates the real KOT/order records) and is cleared once sent.
+   */
+  _loadDraft() {
+    try {
+      const map = offlineStore.getCollection('order_drafts') || {};
+      const entry = map[this.sessionId];
+      this.draftItems = (entry && Array.isArray(entry.items)) ? entry.items : [];
+    } catch (_) {
+      this.draftItems = [];
+    }
+  }
+
+  _saveDraft(tableNumber = null) {
+    if (!this.sessionId) return;
+    try {
+      const map = offlineStore.getCollection('order_drafts') || {};
+      if (this.draftItems && this.draftItems.length) {
+        map[this.sessionId] = {
+          items: this.draftItems,
+          tableNumber,
+          updatedAt: new Date().toISOString()
+        };
+      } else {
+        delete map[this.sessionId];
+      }
+      offlineStore.setCollection('order_drafts', map);
+    } catch (_) {
+      // Non-fatal: draft still lives in memory for this session.
+    }
+  }
+
+  _clearDraft() {
+    if (!this.sessionId) return;
+    try {
+      const map = offlineStore.getCollection('order_drafts') || {};
+      delete map[this.sessionId];
+      offlineStore.setCollection('order_drafts', map);
+    } catch (_) {}
   }
 
   bindEvents(projection) {

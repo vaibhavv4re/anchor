@@ -8,6 +8,7 @@ import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
 import { billRevisionModel } from './billRevisionModel.js';
 import { tenantModel } from '../tenant/tenantModel.js';
+import { runtimeConfig } from '../cloud/runtimeConfig.js';
 
 class InvoiceModel {
   constructor() {
@@ -231,24 +232,12 @@ class InvoiceModel {
     // 2. Save Tax Invoice to local offline store
     offlineStore.appendItem('invoices', invoiceRecord);
 
-    // 3. Sync to Supabase cloud table & offline_journal / DataGateway
-    if (dg && typeof dg.create === 'function') {
-      dg.create('invoices', invoiceRecord).catch(e => console.warn('[invoiceModel] Cloud invoices sync error:', e.message));
-
-      const journalEntry = {
-        job_id: 'job_' + invoiceRecord.id,
-        job_type: 'TAX_INVOICE_ISSUED',
-        tenant_id: targetTenantId,
-        entity_name: 'invoices',
-        payload: invoiceRecord,
-        device_id: typeof navigator !== 'undefined' ? navigator.userAgent.substring(0, 30) : 'POS-TERMINAL-01',
-        actor: cashierName,
-        correlation_id: cid,
-        sync_state: 'SYNCED',
-        created_at: now
-      };
-      dg.create('offline_journal', journalEntry).catch(e => console.warn('[invoiceModel] Cloud journal sync error:', e.message));
-    }
+    // 3. Sync to Supabase cloud table & offline_journal / DataGateway.
+    //    Stage 1C: when server writes are enabled the DB assigns the
+    //    authoritative GST-safe number (closes the dual-device race); the
+    //    local record is reconciled with the returned number. Otherwise the
+    //    original anon-REST create is preserved unchanged (non-breaking).
+    this._syncInvoiceToCloud(dg, invoiceRecord, targetTenantId, cid, now);
 
     // 4. Publish platform event
     platformEventBus.publish('invoice:issued', {
@@ -262,6 +251,105 @@ class InvoiceModel {
     });
 
     return invoiceRecord;
+  }
+
+  /**
+   * Stage 1C cloud persistence for a tax invoice.
+   * - server writes ON + online + rpc available: call rpc_issue_invoice, which
+   *   assigns the number atomically and inserts the row; reconcile the local
+   *   record (id/invoiceNumber/sequence) from the response and re-notify.
+   * - any failure / offline / flag OFF: fall back to the prior dg.create flow
+   *   (invoices row + SYNCED journal), so behavior is byte-for-byte preserved.
+   * Runs fire-and-forget so issueInvoice stays synchronous for UI callers.
+   */
+  _syncInvoiceToCloud(dg, invoiceRecord, targetTenantId, cid, now) {
+    const useServer = runtimeConfig.isServerWritesEnabled()
+      && dg
+      && typeof dg.rpc === 'function'
+      && typeof dg.isOnline !== 'undefined' && dg.isOnline;
+
+    if (!useServer) {
+      if (dg && typeof dg.create === 'function') {
+        dg.create('invoices', invoiceRecord).catch(e => console.warn('[invoiceModel] Cloud invoices sync error:', e.message));
+        const journalEntry = {
+          job_id: 'job_' + invoiceRecord.id,
+          job_type: 'TAX_INVOICE_ISSUED',
+          tenant_id: targetTenantId,
+          entity_name: 'invoices',
+          payload: invoiceRecord,
+          device_id: typeof navigator !== 'undefined' ? navigator.userAgent.substring(0, 30) : 'POS-TERMINAL-01',
+          actor: invoiceRecord.cashierName,
+          correlation_id: cid,
+          sync_state: 'SYNCED',
+          created_at: now
+        };
+        dg.create('offline_journal', journalEntry).catch(e => console.warn('[invoiceModel] Cloud journal sync error:', e.message));
+      }
+      return;
+    }
+
+    dg.rpc('rpc_issue_invoice', {
+      p_tenant_id: targetTenantId,
+      p_session_id: invoiceRecord.sessionId,
+      p_series: invoiceRecord.invoiceSeries || 'POS',
+      p_financial_year: invoiceRecord.financialYear || null,
+      p_payload: invoiceRecord
+    }).then(res => {
+      const data = res && res.success && res.data ? (res.data[0] || res.data) : null;
+      if (!data || !data.invoiceNumber) {
+        throw new Error((res && res.error) || 'RPC_ISSUE_INVOICE_EMPTY');
+      }
+      this._reconcileIssuedInvoice(invoiceRecord, data, targetTenantId, cid, now);
+    }).catch(err => {
+      console.warn('[invoiceModel] rpc_issue_invoice failed, falling back to REST create:', err.message);
+      if (dg && typeof dg.create === 'function') {
+        dg.create('invoices', invoiceRecord).catch(e => console.warn('[invoiceModel] Cloud invoices sync error:', e.message));
+      }
+    });
+  }
+
+  /**
+   * Replace the optimistic local number with the DB-assigned authoritative one
+   * and re-broadcast so any later refresh shows the true GST invoice number. Old
+   * (preview) row is removed to keep the local store consistent with the cloud.
+   */
+  _reconcileIssuedInvoice(invoiceRecord, data, targetTenantId, cid, now) {
+    const list = (offlineStore.getCollection('invoices') || []).filter(
+      i => i.id !== invoiceRecord.id && (i.invoiceNumber || i.invoice_number) !== data.invoiceNumber
+    );
+    const finalRecord = {
+      ...invoiceRecord,
+      id: data.id || invoiceRecord.id,
+      invoiceNumber: data.invoiceNumber,
+      invoice_number: data.invoiceNumber,
+      invoiceSequence: data.invoiceSequence != null ? data.invoiceSequence : invoiceRecord.invoiceSequence,
+      financialYear: data.financialYear || invoiceRecord.financialYear,
+      correlationId: cid
+    };
+    list.push(finalRecord);
+    offlineStore.setCollection('invoices', list);
+
+    const dg = this._getDataGateway();
+    if (dg && typeof dg.create === 'function') {
+      const journalEntry = {
+        job_id: 'job_' + finalRecord.id,
+        job_type: 'TAX_INVOICE_ISSUED',
+        tenant_id: targetTenantId,
+        entity_name: 'invoices',
+        payload: finalRecord,
+        device_id: typeof navigator !== 'undefined' ? navigator.userAgent.substring(0, 30) : 'POS-TERMINAL-01',
+        actor: finalRecord.cashierName,
+        correlation_id: cid,
+        sync_state: 'SYNCED',
+        created_at: now
+      };
+      dg.create('offline_journal', journalEntry).catch(() => {});
+    }
+    platformEventBus.publish('invoice:reconciled', {
+      sessionId: finalRecord.sessionId,
+      invoiceNumber: finalRecord.invoiceNumber,
+      previousNumber: invoiceRecord.invoiceNumber
+    });
   }
 }
 

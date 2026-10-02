@@ -8,6 +8,7 @@ import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
 import { billRevisionModel } from './billRevisionModel.js';
 import { invoiceModel } from './invoiceModel.js';
+import { runtimeConfig } from '../cloud/runtimeConfig.js';
 
 class PaymentModel {
   constructor() {
@@ -148,26 +149,11 @@ class PaymentModel {
     // 2. Mark latest bill revision as PAID
     billRevisionModel.markRevisionPaid(sessionId, targetTenantId);
 
-    // 3. Sync to Supabase offline_journal and payments table
-    if (dg) {
-      if (typeof dg.create === 'function') {
-        dg.create('payments', paymentRecord).catch(e => console.warn('[paymentModel] Cloud payment sync error:', e.message));
-
-        const journalEntry = {
-          job_id: 'job_' + paymentId,
-          job_type: 'PAYMENT_RECORDED',
-          tenant_id: targetTenantId,
-          entity_name: 'payments',
-          payload: paymentRecord,
-          device_id: typeof navigator !== 'undefined' ? navigator.userAgent.substring(0, 30) : 'POS-TERMINAL-01',
-          actor: receivedByName,
-          correlation_id: cid,
-          sync_state: 'SYNCED',
-          created_at: now.toISOString()
-        };
-        dg.create('offline_journal', journalEntry).catch(e => console.warn('[paymentModel] Cloud journal sync error:', e.message));
-      }
-    }
+    // 3. Sync to Supabase offline_journal and payments table.
+    //    Stage 1C: when server writes are enabled the ledger insert runs as a
+    //    SECURITY DEFINER RPC (idempotent on correlation_id, tenant bound by the
+    //    JWT). Otherwise the original anon-REST create flow is preserved.
+    this._syncPaymentToCloud(dg, paymentRecord, paymentId, targetTenantId, cid, now.toISOString());
 
     // 4. Publish platform event
     platformEventBus.publish('payment:recorded', {
@@ -183,6 +169,65 @@ class PaymentModel {
     });
 
     return paymentRecord;
+  }
+
+  /**
+   * Stage 1C cloud persistence for a payment. Mirrors invoiceModel: RPC when
+   * server writes are enabled + online, else fall back to the prior dg.create
+   * flow (payments row + SYNCED journal). Fire-and-forget to keep recordPayment
+   * synchronous for UI callers.
+   */
+  _syncPaymentToCloud(dg, paymentRecord, paymentId, targetTenantId, cid, nowIso) {
+    const useServer = runtimeConfig.isServerWritesEnabled()
+      && dg
+      && typeof dg.rpc === 'function'
+      && typeof dg.isOnline !== 'undefined' && dg.isOnline;
+
+    const fallbackCreate = () => {
+      if (!dg || typeof dg.create !== 'function') return;
+      dg.create('payments', paymentRecord).catch(e => console.warn('[paymentModel] Cloud payment sync error:', e.message));
+      const journalEntry = {
+        job_id: 'job_' + paymentId,
+        job_type: 'PAYMENT_RECORDED',
+        tenant_id: targetTenantId,
+        entity_name: 'payments',
+        payload: paymentRecord,
+        device_id: typeof navigator !== 'undefined' ? navigator.userAgent.substring(0, 30) : 'POS-TERMINAL-01',
+        actor: paymentRecord.receivedByName,
+        correlation_id: cid,
+        sync_state: 'SYNCED',
+        created_at: nowIso
+      };
+      dg.create('offline_journal', journalEntry).catch(e => console.warn('[paymentModel] Cloud journal sync error:', e.message));
+    };
+
+    if (!useServer) {
+      fallbackCreate();
+      return;
+    }
+
+    dg.rpc('rpc_record_payment', {
+      p_tenant_id: targetTenantId,
+      p_session_id: paymentRecord.sessionId,
+      p_invoice_number: paymentRecord.invoiceNumber,
+      p_amount: paymentRecord.amount,
+      p_payment_method: paymentRecord.paymentMethod,
+      p_correlation_id: cid,
+      p_payload: paymentRecord
+    }).then(res => {
+      const data = res && res.success && res.data ? (res.data[0] || res.data) : null;
+      if (!data || !data.id) {
+        throw new Error((res && res.error) || 'RPC_RECORD_PAYMENT_EMPTY');
+      }
+      // Reconcile the server-minted payment id back into the local record.
+      const list = (offlineStore.getCollection('payments') || []).map(p =>
+        (p.id === paymentId || p.paymentId === paymentId) ? { ...p, id: data.id, paymentId: data.id } : p
+      );
+      offlineStore.setCollection('payments', list);
+    }).catch(err => {
+      console.warn('[paymentModel] rpc_record_payment failed, falling back to REST create:', err.message);
+      fallbackCreate();
+    });
   }
 }
 

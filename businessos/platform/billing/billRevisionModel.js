@@ -185,26 +185,17 @@ class BillRevisionModel {
       correlationId: cid
     };
 
-    // 2. Write to local offline store
-    offlineStore.appendItem('bill_revisions', revisionRecord);
-
-    // 3. Sync to Supabase cloud table & offline_journal / DataGateway
+    // 2-3. Single write path (Stage 3): route the revision through
+    // DataGateway.create, which writes the local store via its adapter AND syncs
+    // to the cloud, and queues a real offline_journal job itself if the write
+    // fails. The previous code both appended locally and hand-wrote a fake
+    // sync_state='SYNCED' journal row (a second competing notion of truth); that
+    // duplicate is removed. When no gateway is present (unit tests / boot) we
+    // still persist locally so nothing is lost.
     if (dg && typeof dg.create === 'function') {
       dg.create('bill_revisions', revisionRecord).catch(e => console.warn('[billRevisionModel] Cloud bill_revisions sync error:', e.message));
-
-      const journalEntry = {
-        job_id: 'job_' + revisionId,
-        job_type: 'BILL_REVISION_CREATED',
-        tenant_id: targetTenantId,
-        entity_name: 'bill_revisions',
-        payload: revisionRecord,
-        device_id: typeof navigator !== 'undefined' ? navigator.userAgent.substring(0, 30) : 'POS-TERMINAL-01',
-        actor: waiterName,
-        correlation_id: cid,
-        sync_state: 'SYNCED',
-        created_at: now
-      };
-      dg.create('offline_journal', journalEntry).catch(e => console.warn('[billRevisionModel] Cloud journal sync error:', e.message));
+    } else {
+      offlineStore.appendItem('bill_revisions', revisionRecord);
     }
 
     // 4. Publish platform event

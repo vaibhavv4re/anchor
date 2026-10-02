@@ -12,13 +12,33 @@
 import { menuMasterModel } from '../../../../../businessos/platform/ordering/menuMasterModel.js';
 
 export class MenuBrowserView {
-  constructor({ onSelectItem, draftItems = [] } = {}) {
+  constructor({ onSelectItem, draftItems = [], initialState = null, onStateChange = null } = {}) {
     this.onSelectItem = onSelectItem || (() => {});
     this.draftItems = draftItems;
-    this.activeCategoryId = 'ALL';
-    this.searchQuery = '';
+    // Navigation state can be restored by the host (e.g. ActiveSessionView) so a
+    // full re-render after "add to cart" keeps the waiter on the same tab.
+    this.activeCategoryId = (initialState && initialState.activeCategoryId) || 'ALL';
+    this.searchQuery = (initialState && initialState.searchQuery) || '';
+    // Top-level navigation domain: 'FOOD' | 'BAR'. Keeps bar categories out of
+    // the way while a waiter is taking a food order (and vice-versa).
+    this.domain = (initialState && initialState.domain) || 'FOOD';
+    this.onStateChange = onStateChange || null;
     this.container = null;
     this.currentItems = [];
+  }
+
+  /**
+   * Notify the host of the current navigation state so it can restore the same
+   * domain/category/search after it re-renders this view (e.g. on add-to-cart).
+   */
+  _emitState() {
+    if (typeof this.onStateChange === 'function') {
+      this.onStateChange({
+        domain: this.domain,
+        activeCategoryId: this.activeCategoryId,
+        searchQuery: this.searchQuery
+      });
+    }
   }
 
   setDraftItems(draftItems) {
@@ -39,9 +59,9 @@ export class MenuBrowserView {
   }
 
   updateContent() {
-    const rawCategories = menuMasterModel.getAllCategories();
+    const rawCategories = menuMasterModel.getAllCategories(this.domain);
     const categories = [
-      { id: 'ALL', name: '🌟 All Dishes' },
+      { id: 'ALL', name: '🌟 All Dishes', shortName: this.domain === 'BAR' ? '🌟 All Bar Items' : '🌟 All Dishes', count: null },
       ...rawCategories
     ];
 
@@ -49,27 +69,41 @@ export class MenuBrowserView {
       this.activeCategoryId = 'ALL';
     }
 
-    const allItems = menuMasterModel.getAllMenuItems();
+    const availableCount = menuMasterModel.getItemsByCategory('ALL', this.domain).length;
 
     this.container.innerHTML = `
+      <!-- Food / Bar domain switch -->
+      <div class="domain-toggle" role="tablist" aria-label="Menu section">
+        <button type="button" class="domain-btn ${this.domain === 'FOOD' ? 'active' : ''}" data-domain="FOOD" role="tab" aria-selected="${this.domain === 'FOOD'}">🍽️ Food</button>
+        <button type="button" class="domain-btn ${this.domain === 'BAR' ? 'active' : ''}" data-domain="BAR" role="tab" aria-selected="${this.domain === 'BAR'}">🍹 Bar</button>
+      </div>
+
       <!-- Fast Search & Filter Header -->
       <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; width:100%;">
         <div style="flex:1; min-width:220px; position:relative;">
-          <input type="text" id="inp-menu-search" value="${this.searchQuery}" placeholder="🔍 Search dishes, ingredients (e.g. Ghee Roast, Soup, Solkadhi)..." style="width:100%; padding:10px 14px; font-size:0.9rem; border-radius:8px; border:1px solid var(--border-subtle); background:var(--bg-surface-1); color:var(--text-main); box-sizing:border-box;">
+          <input type="text" id="inp-menu-search" value="${this.searchQuery}" placeholder="🔍 Search dishes, ingredients (e.g. Ghee Roast, Soup, Solkadhi)..." style="width:100%; padding:10px 14px; font-size:0.9rem; border-radius:8px; border:1px solid var(--border-subtle); background:var(--bg-surface-1); color:var(--text-primary); box-sizing:border-box;">
           ${this.searchQuery ? `<button id="btn-clear-search" style="position:absolute; right:10px; top:50%; transform:translateY(-50%); font-size:0.85rem; color:var(--text-muted); padding:4px 8px; cursor:pointer;">✕</button>` : ''}
         </div>
         <div style="font-size:0.8rem; color:var(--text-secondary); font-weight:600; white-space:nowrap;">
-          <strong>${allItems.length}</strong> Dishes Available
+          <strong>${availableCount}</strong> ${this.domain === 'BAR' ? 'Bar Items' : 'Dishes'} Available
         </div>
       </div>
 
-      <!-- Category Filter Pills (Horizontal Scroll) -->
-      <div class="category-pills-bar" style="display:flex; gap:8px; overflow-x:auto; padding-bottom:6px; scrollbar-width:thin; width:100%;">
-        ${categories.map(c => `
-          <button class="cat-tab ${c.id === this.activeCategoryId && !this.searchQuery ? 'active' : ''}" data-cat-id="${c.id}" style="padding:7px 14px; border-radius:20px; font-size:0.8rem; font-weight:600; color:var(--text-secondary); background:var(--bg-surface-1); border:1px solid var(--border-subtle); white-space:nowrap; cursor:pointer; transition:all 0.15s ease;">
-            ${c.name}
-          </button>
-        `).join('')}
+      <!-- Category Filter Bar (tablet-friendly: large chips, item counts, scroll arrows + edge fades) -->
+      <div class="category-filter-wrap">
+        <button type="button" class="cat-scroll-btn cat-scroll-left" id="cat-scroll-left" aria-label="Scroll categories left">‹</button>
+        <div class="category-pills-bar" id="category-pills-bar">
+          ${categories.map(c => {
+            const count = c.id === 'ALL' ? availableCount : (c.count ?? menuMasterModel.getItemsByCategory(c.id, this.domain).length);
+            const isActive = c.id === this.activeCategoryId && !this.searchQuery;
+            return `
+              <button type="button" class="cat-tab ${isActive ? 'active' : ''}" data-cat-id="${c.id}" title="${c.name}">
+                <span class="cat-tab-label">${c.shortName || c.name}</span>
+                <span class="cat-tab-count">${count}</span>
+              </button>`;
+          }).join('')}
+        </div>
+        <button type="button" class="cat-scroll-btn cat-scroll-right" id="cat-scroll-right" aria-label="Scroll categories right">›</button>
       </div>
 
       <!-- Menu Items Responsive Grid -->
@@ -78,16 +112,31 @@ export class MenuBrowserView {
       </div>
 
       <style>
-        .cat-tab:hover {
-          color: var(--text-main) !important;
-          border-color: var(--accent-primary) !important;
-        }
-        .cat-tab.active {
-          color: #000 !important;
-          background-color: var(--accent-primary) !important;
-          border-color: var(--accent-primary) !important;
-          font-weight: 700 !important;
-        }
+        .domain-toggle { display:inline-flex; gap:6px; padding:5px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); border-radius:26px; width:100%; max-width:340px; box-sizing:border-box; }
+        .domain-btn { flex:1 1 0; min-height:44px; padding:10px 16px; border-radius:22px; font-size:0.98rem; font-weight:700; cursor:pointer; border:1px solid transparent; background:transparent; color:var(--text-secondary); transition:all 0.15s ease; display:inline-flex; align-items:center; justify-content:center; gap:6px; }
+        .domain-btn:hover { color:var(--text-primary); }
+        .domain-btn.active { background:var(--accent-primary); color:#000; border-color:var(--accent-primary); box-shadow:0 2px 8px rgba(0,0,0,0.25); }
+        .category-filter-wrap { position:relative; width:100%; }
+        .category-pills-bar { display:flex; gap:10px; overflow-x:auto; scroll-behavior:smooth; padding:4px 2px 10px; width:100%; scrollbar-width:none; -ms-overflow-style:none; }
+        .category-pills-bar::-webkit-scrollbar { display:none; }
+        .cat-tab { flex:0 0 auto; display:inline-flex; align-items:center; gap:8px; min-height:44px; padding:10px 16px; border-radius:24px; font-size:0.95rem; font-weight:600; color:var(--text-secondary); background:var(--bg-surface-1); border:1px solid var(--border-subtle); white-space:nowrap; cursor:pointer; transition:all 0.15s ease; }
+        .cat-tab:hover { color:var(--text-primary); border-color:var(--accent-primary); }
+        .cat-tab:active { transform:scale(0.97); }
+        .cat-tab.active { color:#000; background-color:var(--accent-primary); border-color:var(--accent-primary); font-weight:800; }
+        .cat-tab-label { line-height:1; }
+        .cat-tab-count { font-size:0.72rem; font-weight:700; background:var(--bg-surface-2); color:var(--text-muted); padding:2px 8px; border-radius:12px; min-width:24px; text-align:center; }
+        .cat-tab.active .cat-tab-count { background:rgba(0,0,0,0.18); color:#000; }
+        .category-filter-wrap::before, .category-filter-wrap::after { content:''; position:absolute; top:0; bottom:10px; width:44px; pointer-events:none; z-index:1; opacity:0; transition:opacity 0.15s ease; }
+        .category-filter-wrap::before { left:0; background:linear-gradient(to right, var(--bg-dark), transparent); }
+        .category-filter-wrap::after { right:0; background:linear-gradient(to left, var(--bg-dark), transparent); }
+        .category-filter-wrap.fade-left::before { opacity:1; }
+        .category-filter-wrap.fade-right::after { opacity:1; }
+        .cat-scroll-btn { display:none; position:absolute; top:calc(50% - 5px); transform:translateY(-50%); z-index:3; width:38px; height:44px; border-radius:50%; border:1px solid var(--border-subtle); background:var(--bg-surface-2); color:var(--text-primary); font-size:1.5rem; line-height:1; align-items:center; justify-content:center; cursor:pointer; box-shadow:0 2px 8px rgba(0,0,0,0.35); }
+        .cat-scroll-btn.show { display:flex; }
+        .cat-scroll-btn:hover { color:var(--accent-primary); border-color:var(--accent-primary); }
+        .cat-scroll-btn:active { transform:translateY(-50%) scale(0.92); }
+        .cat-scroll-left { left:-4px; }
+        .cat-scroll-right { right:-4px; }
         .pos-item-card {
           border: 1px solid var(--border-subtle);
           background: var(--bg-surface-1);
@@ -118,12 +167,13 @@ export class MenuBrowserView {
     `;
 
     this.bindEvents();
+    this._emitState();
   }
 
   renderItemsGrid() {
     this.currentItems = this.searchQuery ? 
-      menuMasterModel.searchItems(this.searchQuery) : 
-      menuMasterModel.getItemsByCategory(this.activeCategoryId);
+      menuMasterModel.searchItems(this.searchQuery, this.domain) : 
+      menuMasterModel.getItemsByCategory(this.activeCategoryId, this.domain);
 
     if (!this.currentItems || !this.currentItems.length) {
       return `
@@ -206,6 +256,19 @@ export class MenuBrowserView {
   }
 
   bindEvents() {
+    // Food / Bar domain switch: re-scope categories, counts and the grid.
+    const domainBtns = this.container.querySelectorAll('.domain-btn');
+    domainBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        const next = btn.dataset.domain;
+        if (!next || next === this.domain) return;
+        this.domain = next;
+        this.activeCategoryId = 'ALL';
+        this.searchQuery = '';
+        this.updateContent();
+      });
+    });
+
     const searchInp = this.container.querySelector('#inp-menu-search');
     if (searchInp) {
       searchInp.addEventListener('input', (e) => {
@@ -213,6 +276,7 @@ export class MenuBrowserView {
         const gridMount = this.container.querySelector('#items-grid-mount');
         if (gridMount) gridMount.innerHTML = this.renderItemsGrid();
         this.bindGridButtons();
+        this._emitState();
       });
     }
 
@@ -235,7 +299,47 @@ export class MenuBrowserView {
       });
     });
 
+    this._setupCategoryScroll();
+
     this.bindGridButtons();
+  }
+
+  /**
+   * Stage: tablet-friendly category bar. Shows left/right scroll arrows + edge
+   * fades only when the row actually overflows, pages the scroll on tap, and
+   * keeps the active chip in view. Re-runs on every updateContent() render.
+   */
+  _setupCategoryScroll() {
+    const bar = this.container.querySelector('#category-pills-bar');
+    if (!bar) return;
+    const leftBtn = this.container.querySelector('#cat-scroll-left');
+    const rightBtn = this.container.querySelector('#cat-scroll-right');
+    const wrap = this.container.querySelector('.category-filter-wrap');
+
+    const update = () => {
+      const maxScroll = bar.scrollWidth - bar.clientWidth;
+      const canLeft = bar.scrollLeft > 4;
+      const canRight = bar.scrollLeft < maxScroll - 4;
+      if (leftBtn) leftBtn.classList.toggle('show', canLeft);
+      if (rightBtn) rightBtn.classList.toggle('show', canRight);
+      if (wrap) {
+        wrap.classList.toggle('fade-left', canLeft);
+        wrap.classList.toggle('fade-right', canRight);
+      }
+    };
+
+    if (leftBtn) leftBtn.addEventListener('click', () => bar.scrollBy({ left: -bar.clientWidth * 0.8, behavior: 'smooth' }));
+    if (rightBtn) rightBtn.addEventListener('click', () => bar.scrollBy({ left: bar.clientWidth * 0.8, behavior: 'smooth' }));
+    bar.addEventListener('scroll', () => requestAnimationFrame(update));
+
+    // Bring the active chip into horizontal view (block:'nearest' avoids any
+    // vertical page jump), then compute the initial arrow/fade state.
+    const active = bar.querySelector('.cat-tab.active');
+    if (active && typeof active.scrollIntoView === 'function') {
+      try { active.scrollIntoView({ inline: 'center', block: 'nearest' }); } catch (_) { /* older engines */ }
+    }
+    update();
+    setTimeout(update, 60);
   }
 
   bindGridButtons() {

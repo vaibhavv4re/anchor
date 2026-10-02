@@ -1,5 +1,6 @@
 import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
+import { runtimeConfig } from '../cloud/runtimeConfig.js';
 
 /**
  * Authentication Engine (PD-017 / PD-034 Platform Architecture).
@@ -40,6 +41,13 @@ export class AuthEngine {
   }
 
   async authenticate(pin, deviceId = 'LOCAL-POS-01') {
+    // Stage 1A rollout gate: when server auth is enabled, verify the PIN via
+    // the pin-login Edge Function and adopt its JWT. Otherwise fall through to
+    // the legacy local path unchanged (non-breaking default).
+    if (runtimeConfig.isServerAuthEnabled()) {
+      return this._authenticateViaServer(pin, deviceId);
+    }
+
     const sPin = String(pin || '').trim();
     let emp = null;
     let identity = null;
@@ -187,6 +195,80 @@ export class AuthEngine {
     };
   }
 
+  async _authenticateViaServer(pin, deviceId) {
+    const sPin = String(pin || '').trim();
+    try {
+      const resp = await fetch(`${runtimeConfig.getFunctionsUrl()}/pin-login`, {
+        method: 'POST',
+        headers: { 'apikey': runtimeConfig.getAnonKey(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: sPin, deviceId })
+      });
+      if (!resp.ok) {
+        return { success: false, error: resp.status === 429 ? 'Too many attempts, please wait' : 'Invalid PIN or credentials' };
+      }
+      const data = await resp.json();
+      const claims = data.claims || {};
+      runtimeConfig.setAccessToken(data.token);
+
+      const roleId = claims.role_id || 'role-waiter';
+      const tenantId = claims.tenant_id || 'tenant_h0qc7wf';
+      const workspace = claims.workspace || 'waiter';
+
+      let employeeName = 'Employee';
+      try {
+        const emps = (this.dataGateway && await this.dataGateway.getCollection('employees', tenantId)) || [];
+        const match = emps.find(e => (e.id || e.employeeCode) === claims.sub || e.identityId === claims.sub);
+        if (match) employeeName = match.name || match.employeeName || employeeName;
+      } catch (_) { /* name lookup is best-effort only */ }
+      if (roleId === 'role-superadmin') employeeName = 'System Superadmin';
+      else if (roleId === 'role-admin' && employeeName === 'Employee') employeeName = 'General Manager';
+
+      let role = null;
+      if (this.rbacEngine && typeof this.rbacEngine.getRoleById === 'function') role = this.rbacEngine.getRoleById(roleId);
+      const resolvedRoleName = role ? (role.name || role.roleName) : this._defaultRoleName(roleId);
+
+      const session = {
+        sessionId: 'sess-' + Math.random().toString(36).substring(2, 9),
+        employeeId: claims.sub || null,
+        employeeName,
+        tenantId,
+        roleId,
+        roleName: resolvedRoleName,
+        workspace,
+        deviceId,
+        authenticatedAt: new Date().toISOString(),
+        tokenExpiresAt: data.expiresAt || null,
+        status: 'ACTIVE'
+      };
+
+      this.activeSession = session;
+      this._persistSession(session);
+      this._resetLockTimeout();
+      if (this.platformEventBus && typeof this.platformEventBus.publish === 'function') {
+        this.platformEventBus.publish('auth:session_started', session);
+      }
+      return { success: true, session, workspace };
+    } catch (e) {
+      // Fail closed: never silently fall back to client-side trust in server mode.
+      console.warn('[AuthEngine] Server auth failed:', e.message);
+      return { success: false, error: 'Sign-in unavailable. Check connection and try again.' };
+    }
+  }
+
+  _defaultRoleName(roleId) {
+    const map = {
+      'role-owner': 'Restaurant Owner',
+      'role-manager': 'Operations Manager',
+      'role-admin': 'General Manager',
+      'role-superadmin': 'System Superadmin',
+      'role-chef': 'Head Chef',
+      'role-inventory-manager': 'Inventory Manager',
+      'role-cashier': 'Cashier',
+      'role-waiter': 'Floor Server'
+    };
+    return map[roleId] || (roleId ? roleId.replace('role-', '').replace(/-/g, ' ').toUpperCase() : 'Staff');
+  }
+
   getActiveSession() {
     return this.activeSession;
   }
@@ -208,6 +290,7 @@ export class AuthEngine {
       }
     }
     this.activeSession = null;
+    runtimeConfig.setAccessToken(null);
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
         window.localStorage.removeItem('anchor_active_session');

@@ -10,13 +10,33 @@
   <link rel="stylesheet" href="./restaurantos/frontend/styles/base.css">
   <link rel="stylesheet" href="./restaurantos/frontend/styles/components.css">
   <link rel="stylesheet" href="./restaurantos/frontend/styles/utilities.css">
-  <!-- SheetJS Library for Excel (.xlsx / .xls) Importing -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <!--
+    SheetJS Library for Excel (.xlsx / .xls) Importing.
+
+    Stage 4 (deployment) decision: the app entry is the loose ES-module graph
+    (main.js -> bootstrap.js), NOT the legacy bundle.js, so nothing here depends
+    on a bundler. This third-party script was previously a BLOCKING <head> load:
+    when the CDN was unreachable (offline / blocked network) the parser stalled on
+    it and delayed first paint, even though SheetJS is only used later, on a user
+    file-upload. We make it NON-BLOCKING with `defer` so it can never stall boot.
+
+    Every call site already guards on the global (e.g. `if (window.XLSX)` in
+    barMenuImporter.js and the capability views) and degrades to a CSV-only path
+    when it is absent, so an offline load fails gracefully instead of breaking.
+
+    TODO(ops, once egress is permitted): vendor the file locally under
+    ./restaurantos/frontend/vendor/xlsx.full.min.js and repoint this src to
+    eliminate the runtime CDN dependency entirely for a fully offline build.
+  -->
+  <script defer src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 
   <!-- Application Mount Target -->
   <div id="app"></div>
+
+  <!-- Deploy-time cloud config injection (must run before the module entry) -->
+  <script src="./restaurantos/frontend/config/runtime-env.js"></script>
 
   <!-- RestaurantOS Modular Application Bootstrap Entry Point -->
   <script type="module" src="./restaurantos/frontend/main.js"></script>

@@ -2,6 +2,8 @@
  * Supabase Cloud Data Adapter
  * Bridges DataGateway requests to live Supabase REST API endpoints.
  */
+import { reportNonFatal } from '../../observability/errorReporter.js';
+
 export class SupabaseDataAdapter {
   constructor(client) {
     this.client = client;
@@ -225,6 +227,9 @@ export class SupabaseDataAdapter {
       return { success: true, data: list };
     } catch (e) {
       console.warn(`[SupabaseDataAdapter] Exception fetching collection "${collection}":`, e.message);
+      // Stage 4: previously a silent swallow; report so cloud read failures are
+      // visible in production telemetry.
+      reportNonFatal(e, { scope: 'supabaseDataAdapter.getCollection', collection, tenantId, fingerprint: 'cloud-read-failed' });
       return { success: false, error: e.message || String(e), data: null };
     }
   }
@@ -238,38 +243,35 @@ export class SupabaseDataAdapter {
   async create(collection, record) {
     const targetTable = this._resolveTable(collection);
     if (!this.client || targetTable === 'roles' || targetTable === 'sessions') return record;
-    try {
-      const res = await this.client.createRecord(targetTable, record);
-      return res.success ? (res.data || record) : record;
-    } catch (e) {
-      console.warn(`[SupabaseDataAdapter] Cloud create Record for ${targetTable} caught:`, e.message);
-      return record;
-    }
+    // Stage 2B/3: surface real failures instead of swallowing them, so the
+    // DataGateway queues an offline job and the flush retries it. The client
+    // returns { success, ... }; a false success is a failure to propagate.
+    const res = await this.client.createRecord(targetTable, record);
+    if (res && res.success) return res.data || record;
+    const err = new Error((res && res.error) || `CLOUD_CREATE_FAILED:${targetTable}`);
+    err.status = res && res.status;
+    throw err;
   }
 
   async update(collection, id, patch) {
     const targetTable = this._resolveTable(collection);
     if (!this.client || targetTable === 'roles' || targetTable === 'sessions') return patch;
-    try {
-      const res = await this.client.updateRecord(targetTable, id, patch);
-      return res.success ? (res.data || patch) : patch;
-    } catch (e) {
-      console.warn(`[SupabaseDataAdapter] Cloud update Record for ${targetTable} caught:`, e.message);
-      return patch;
-    }
+    const res = await this.client.updateRecord(targetTable, id, patch);
+    if (res && res.success) return res.data || patch;
+    const err = new Error((res && res.error) || `CLOUD_UPDATE_FAILED:${targetTable}`);
+    err.status = res && res.status;
+    throw err;
   }
 
   async delete(collection, id) {
     const targetTable = this._resolveTable(collection);
     if (!this.client || targetTable === 'roles' || targetTable === 'sessions') return true;
-    try {
-      const filter = (this.client && typeof this.client.getFilterKey === 'function') ? this.client.getFilterKey(targetTable, id) : (targetTable === 'tenants' ? `tenant_id=eq.${id}` : `id=eq.${id}`);
-      const res = await this.client.deleteRecords(targetTable, filter);
-      return res.success;
-    } catch (e) {
-      console.warn(`[SupabaseDataAdapter] Cloud delete Record for ${targetTable} caught:`, e.message);
-      return true;
-    }
+    const filter = (this.client && typeof this.client.getFilterKey === 'function') ? this.client.getFilterKey(targetTable, id) : (targetTable === 'tenants' ? `tenant_id=eq.${id}` : `id=eq.${id}`);
+    const res = await this.client.deleteRecords(targetTable, filter);
+    if (res && res.success) return true;
+    const err = new Error((res && res.error) || `CLOUD_DELETE_FAILED:${targetTable}`);
+    err.status = res && res.status;
+    throw err;
   }
 
   async rpc(fnName, params = {}) {

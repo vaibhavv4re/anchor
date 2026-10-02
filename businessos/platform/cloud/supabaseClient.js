@@ -2,21 +2,37 @@
  * SupabaseClient REST API Cloud Adapter (PD-034 Configuration).
  *
  * Handles HTTP requests to Supabase REST endpoints.
- * Supports configurable credentials with fallback defaults.
+ * Credentials come from the centralized runtime config (Stage 0); the
+ * Authorization header reflects the active session JWT once a user logs in.
  */
+import { runtimeConfig } from './runtimeConfig.js';
+
 export class SupabaseClient {
   constructor(config = {}) {
-    this.baseUrl = config.baseUrl || 'https://orlcftjkhqypvqzcmfci.supabase.co/rest/v1';
-    this.anonKey = config.anonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ybGNmdGpraHF5cHZxemNtZmNpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODM5MTU5NzgsImV4cCI6MjA5OTQ5MTk3OH0.Flrz1S766klUE-7vi-X1oga7Ic5KazssXo2vfXjjTzw';
+    this.config = config;
+  }
+
+  get baseUrl() {
+    return this.config.baseUrl || runtimeConfig.getRestUrl();
+  }
+
+  get anonKey() {
+    return this.config.anonKey || runtimeConfig.getAnonKey();
+  }
+
+  setAccessToken(token) {
+    runtimeConfig.setAccessToken(token);
+  }
+
+  getAccessToken() {
+    return runtimeConfig.getAccessToken();
   }
 
   getHeaders() {
-    return {
-      'apikey': this.anonKey,
-      'Authorization': `Bearer ${this.anonKey}`,
+    return runtimeConfig.getAuthHeaders({
       'Content-Type': 'application/json',
       'Prefer': 'return=representation, resolution=merge-duplicates'
-    };
+    });
   }
 
   getFilterKey(tableName, id) {
@@ -175,6 +191,30 @@ export class SupabaseClient {
       return { success: false, error: e.message };
     }
   }
+}
+
+/**
+ * Collision-safe temporary id (Stage 1C).
+ *
+ * formatRecordForTable previously minted primary keys with Math.random(), so two
+ * POS devices issuing concurrently could produce the same id. When the server
+ * write path is enabled the authoritative PK comes from gen_random_uuid() in the
+ * RPC; but for the offline / flag-off path we still need a unique local id here.
+ * crypto.randomUUID() removes the collision risk while keeping the existing
+ * prefix, because getFilterKey() branches on prefixes like 'inv_', 'ord-'.
+ * Falls back to the old random string when crypto is unavailable.
+ * @param {string} prefix preserved table-specific id prefix (e.g. 'inv_')
+ * @param {number} len hex/char length of the random suffix
+ */
+function genTempId(prefix, len = 9) {
+  const c = (typeof globalThis !== 'undefined') ? globalThis.crypto : undefined;
+  if (c && typeof c.randomUUID === 'function') {
+    return prefix + c.randomUUID().replace(/-/g, '').slice(0, len);
+  }
+  // Legacy fallback preserving the original base36 shape.
+  let out = '';
+  while (out.length < len) out += Math.random().toString(36).substring(2);
+  return prefix + out.substring(0, len);
 }
 
 /**
@@ -632,7 +672,7 @@ export function formatRecordForTable(entityName, job) {
       status: p.status || p.orderStatus || rawData?.status || 'CONFIRMED'
     };
     return {
-      id: p.id || p.orderId || ('ord-' + Math.random().toString(36).substring(2, 9)),
+      id: p.id || p.orderId || genTempId('ord-'),
       tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
       order_number: p.orderNumber || p.order_number || ('ORD-' + Math.floor(1000 + Math.random() * 9000)),
       table_id: p.tableId || p.table_id || p.tableCode || p.table_code || null,
@@ -646,7 +686,7 @@ export function formatRecordForTable(entityName, job) {
 
   if (entityName === 'table_sessions') {
     return {
-      id: p.id || p.sessionId || ('sess_' + Math.random().toString(36).substring(2, 9)),
+      id: p.id || p.sessionId || genTempId('sess_'),
       tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
       table_number: p.tableNumber ? parseInt(p.tableNumber) : (p.table_number ? parseInt(p.table_number) : null),
       table_code: p.tableCode || p.table_code || (p.tableNumber ? `T-${String(p.tableNumber).padStart(2, '0')}` : null),
@@ -658,7 +698,7 @@ export function formatRecordForTable(entityName, job) {
 
   if (entityName === 'bill_revisions') {
     return {
-      id: p.id || p.revisionId || ('rev_' + Math.random().toString(36).substring(2, 9)),
+      id: p.id || p.revisionId || genTempId('rev_'),
       tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
       session_id: p.sessionId || p.session_id || '',
       bill_number: p.billNumber || p.bill_number || `BILL-2026-${Math.floor(1000 + Math.random() * 9000)}`,
@@ -671,7 +711,7 @@ export function formatRecordForTable(entityName, job) {
 
   if (entityName === 'invoices') {
     return {
-      id: p.id || ('inv_' + Math.random().toString(36).substring(2, 9)),
+      id: p.id || genTempId('inv_'),
       tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
       session_id: p.sessionId || p.session_id || '',
       invoice_number: p.invoiceNumber || p.invoice_number || '',

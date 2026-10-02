@@ -1,0 +1,81 @@
+# .github/workflows/ci.yml  (Stage 4 - CI)
+#
+# Gate for public-internet go-live. The app ships loose ES modules (index.html
+# -> main.js -> bootstrap.js), so the deterministic, dependency-free safety net
+# is a full-repo ES-module parse check (scratch/ci_check.js). bundle.js is NOT a
+# from-source artifact (scratch/build_bundle.js only string-patches it), so we
+# treat it as legacy and gate the real source instead of diffing the bundle.
+
+name: CI
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+    branches: ['**']
+
+jobs:
+  verify:
+    name: Source verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: ES-module parse check (all businessos/ + restaurantos/ sources)
+        run: node scratch/ci_check.js
+
+      - name: SQL migrations present (Stage 1 security files)
+        run: |
+          test -f supabase/rls_policies.sql   || { echo "missing rls_policies.sql"; exit 1; }
+          test -f supabase/sequences.sql       || { echo "missing sequences.sql"; exit 1; }
+          test -f supabase/backfill_pin_hash.sql || { echo "missing backfill_pin_hash.sql"; exit 1; }
+          test -f supabase/functions/pin-login/index.ts || { echo "missing pin-login function"; exit 1; }
+
+      - name: Guard against committed production secrets
+        # The service_role key must never appear in the shipped source tree.
+        run: |
+          if grep -RIn --include='*.js' -e '"role":"service_role"' -e 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.*service_role' businessos restaurantos 2>/dev/null; then
+            echo "ERROR: a service_role key looks committed into the source tree."; exit 1;
+          fi
+          echo "secret scan: no service_role key found in shipped sources."
+
+      - name: Deploy env injector smoke test (Stage 4 build step)
+        # Runs the same script Vercel runs at deploy, with no env vars set, and
+        # asserts it (a) succeeds, (b) does not bake a service_role key into the
+        # client, and (c) leaves empty values so runtimeConfig uses its defaults.
+        run: |
+          env -u SUPABASE_URL -u SUPABASE_ANON_KEY -u AUTH_MODE -u WRITES_MODE node scratch/inject_runtime_env.js
+          if grep -q 'service_role' restaurantos/frontend/config/runtime-env.js; then
+            echo "ERROR: injector leaked a service_role key into runtime-env.js"; exit 1;
+          fi
+          echo "injector smoke test: clean."
+
+  # Test scripts default to the PRODUCTION project via runtimeConfig. Repointing
+  # them at a STAGING project is done purely with env vars (Stage 4 isolation),
+  # so this job only runs when staging credentials are configured as secrets.
+  staging-tests:
+    name: Staging gateway tests
+    runs-on: ubuntu-latest
+    needs: verify
+    if: ${{ vars.RUN_STAGING_TESTS == 'true' && secrets.SUPABASE_STAGING_URL != '' }}
+    env:
+      SUPABASE_URL: ${{ secrets.SUPABASE_STAGING_URL }}
+      SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_STAGING_ANON_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Run gateway acceptance against staging
+        run: |
+          node scratch/test-data-gateway.js
+          node scratch/test-category-gateway.js
+          node scratch/test-f0-idempotency.js
