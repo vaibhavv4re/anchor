@@ -98,10 +98,15 @@ export class CashierWorkspaceView {
     this.subscribeEvents();
     this.updateContent(sessionUser);
 
-    // Hydrate state asynchronously from Supabase Cloud on render
+    // Phase 6: authoritative cloud fetch on mount so a fresh browser sees
+    // persisted sessions/orders/bills without waiting for boot hydrate.
     if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.dataGateway) {
-      window.__APP__.platform.dataGateway.hydrateCollections(['table_sessions', 'bill_revisions', 'invoices', 'payments', 'orders'])
-        .then(() => this.updateContent(sessionUser))
+      const dg = window.__APP__.platform.dataGateway;
+      const tenantId = (sessionUser && sessionUser.tenantId) || undefined;
+      const refreshFn = typeof dg.refreshForWorkspace === 'function'
+        ? dg.refreshForWorkspace('cashier', ['table_sessions', 'orders', 'bill_revisions', 'invoices', 'payments'], tenantId)
+        : dg.hydrateCollections(['table_sessions', 'bill_revisions', 'invoices', 'payments', 'orders'], tenantId);
+      refreshFn.then(() => this.updateContent(sessionUser))
         .catch(err => console.warn('[CashierWorkspaceView] Hydration error:', err));
     }
 
@@ -392,6 +397,97 @@ export class CashierWorkspaceView {
     `;
   }
 
+  /**
+   * Render the bill breakdown. When the tax engine supplied a fiscal split
+   * (Food/GST vs Bar/VAT) we render each section with its OWN subtotal, tax
+   * lines and section total, then ONE combined grand total - a single payment
+   * settles both. This view only renders the engine's classification; it never
+   * inspects taxCategoryCode/routing itself. Older revisions that predate
+   * fiscalSections fall back to the flat itemized + tax strip layout.
+   */
+  _renderFiscalBillView(ctx = {}) {
+    const {
+      items = [], fiscalSections = [], grossSales = 0, discountsTotal = 0, discountRecords = [],
+      taxableAmount = 0, taxLines = [], charges = [], cgst = 0, sgst = 0, serviceCharge = 0, grandTotal = 0
+    } = ctx;
+
+    const money = (v) => `₹${(Number(v) || 0).toFixed(2)}`;
+    const row = (label, value, color = 'var(--text-secondary)', bold = false) => `
+      <div style="display:flex; justify-content:space-between; color:${color};${bold ? ' font-weight:700;' : ''}">
+        <span>${label}</span><strong>${value}</strong>
+      </div>`;
+    const head = `<thead><tr style="border-bottom:2px solid var(--border-subtle); text-align:left; color:var(--text-secondary); font-size:0.75rem;">
+        <th style="padding:10px 16px;">Item</th>
+        <th style="padding:10px 16px; text-align:center;">Qty</th>
+        <th style="padding:10px 16px; text-align:right;">Unit</th>
+        <th style="padding:10px 16px; text-align:right;">Amount</th>
+      </tr></thead>`;
+    const rows = (list) => (list || []).map(it => `
+      <tr style="border-bottom:1px solid var(--border-subtle);">
+        <td style="padding:10px 16px; font-weight:600;">${it.name || it.itemName || 'Item'}</td>
+        <td style="padding:10px 16px; text-align:center;">${it.quantity || 0}</td>
+        <td style="padding:10px 16px; text-align:right;">${money(it.price || 0)}</td>
+        <td style="padding:10px 16px; text-align:right; font-weight:700;">${money(it.lineTotal || ((it.price || 0) * (it.quantity || 0)))}</td>
+      </tr>`).join('');
+
+    const sectionsWithData = (fiscalSections || []).filter(s => s && Array.isArray(s.items) && s.items.length);
+    if (sectionsWithData.length) {
+      const sectionCards = sectionsWithData.map(s => {
+        const isBar = s.section === 'BAR';
+        const accent = isBar ? 'var(--status-warning)' : 'var(--accent-primary)';
+        const icon = isBar ? '🍸' : '🍽️';
+        const taxStr = (s.taxLines || []).map(t => `${t.type} ${t.rate}%`).join(' + ') || 'No tax';
+        return `
+        <div class="card" style="padding:0; overflow:hidden; border:1px solid var(--border-subtle);">
+          <div style="background:var(--bg-surface-2); padding:10px 16px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border-subtle);">
+            <span style="font-size:0.82rem; font-weight:800; text-transform:uppercase; color:${accent};">${icon} ${s.label || (isBar ? 'Bar & Liquor' : 'Food')}</span>
+            <span style="font-size:0.72rem; color:var(--text-muted); font-weight:700;">${taxStr}</span>
+          </div>
+          <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">${head}<tbody>${rows(s.items)}</tbody></table>
+          <div style="padding:12px 16px; background:var(--bg-surface-1); display:flex; flex-direction:column; gap:5px; font-size:0.82rem; border-top:1px solid var(--border-subtle);">
+            ${row('Section Subtotal', money(s.subtotal))}
+            ${s.discounts > 0 ? row('Discount', '-' + money(s.discounts), 'var(--status-warning)') : ''}
+            ${row('Taxable Value', money(s.taxableAmount), 'var(--text-primary)', true)}
+            ${(s.taxLines || []).map(t => row(`${t.type} (${t.rate}%)`, money(t.amount))).join('')}
+            ${(s.charges || []).map(c => row(`${String(c.type || '').replace('_', ' ')} (${c.rate}%)`, money(c.amount))).join('')}
+            ${row('Section Total', money(s.sectionTotal), accent, true)}
+          </div>
+        </div>`;
+      }).join('');
+
+      return `
+        ${sectionCards}
+        <div class="card" style="background:var(--bg-surface-2); padding:16px; border:1px solid var(--border-subtle);">
+          <div style="display:flex; justify-content:space-between; align-items:center; max-width:360px; margin-left:auto;">
+            <span style="font-size:1.25rem; font-weight:800; color:var(--accent-primary);">GRAND TOTAL</span>
+            <span style="font-size:1.25rem; font-weight:800; color:var(--accent-primary);">${money(grandTotal)}</span>
+          </div>
+          <div style="max-width:360px; margin-left:auto; font-size:0.72rem; color:var(--text-muted); text-align:right; margin-top:6px;">
+            Gross ${money(grossSales)}${discountsTotal > 0 ? ` − discounts ${money(discountsTotal)}` : ''} • one payment settles Food + Bar
+          </div>
+        </div>`;
+    }
+
+    // Fallback: legacy flat layout for revisions without fiscalSections.
+    return `
+      <div class="card" style="padding:0; overflow:hidden; border:1px solid var(--border-subtle);">
+        <div style="background:var(--bg-surface-2); padding:10px 16px; font-size:0.8rem; font-weight:700; text-transform:uppercase; color:var(--text-muted); border-bottom:1px solid var(--border-subtle);">Itemized Order Breakdown (${items.length} Items)</div>
+        <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">${head}<tbody>${rows(items)}</tbody></table>
+      </div>
+      <div class="card" style="background:var(--bg-surface-2); padding:16px; border:1px solid var(--border-subtle); font-size:0.9rem;">
+        <div style="display:flex; flex-direction:column; gap:6px; max-width:360px; margin-left:auto;">
+          ${row('Gross Sales Subtotal:', money(grossSales))}
+          ${discountsTotal > 0 ? (row('Discounts Total:', '-' + money(discountsTotal), 'var(--status-warning)') + (discountRecords || []).map(d => `<div style="font-size:0.75rem; color:var(--text-muted); text-align:right; padding-left:12px;">• ${d.reason || d.discountType} (-₹${parseFloat(d.discountAmount).toFixed(2)})</div>`).join('')) : ''}
+          ${row('Taxable Value:', money(taxableAmount), 'var(--text-primary)', true)}
+          ${taxLines.length > 0 ? taxLines.map(t => row(`${t.type} (${t.rate}%):`, money(t.amount))).join('') : (row('CGST (2.5%):', money(cgst)) + row('SGST (2.5%):', money(sgst)))}
+          ${charges.length > 0 ? charges.map(c => row(`${String(c.type || '').replace('_', ' ')} (${c.rate}%):`, money(c.amount))).join('') : row('Service Charge (5%):', money(serviceCharge))}
+          <div style="display:flex; justify-content:space-between; color:var(--accent-primary); font-size:1.25rem; font-weight:800; border-top:2px solid var(--border-subtle); padding-top:8px; margin-top:4px;">
+            <span>GRAND TOTAL:</span> <span>${money(grandTotal)}</span>
+          </div>
+        </div>
+      </div>`;
+  }
+
   renderBillInspector(sessionId) {
     const proj = sessionProjectionService.getSessionProjection(sessionId);
     const revisions = billRevisionModel.getRevisionsForSession(sessionId);
@@ -424,6 +520,11 @@ export class CashierWorkspaceView {
     const sgst = activeRev ? activeRev.sgstAmount : (proj ? proj.sgstAmount : 0);
     const serviceCharge = activeRev ? activeRev.serviceChargeAmount : (proj ? (proj.serviceChargeAmount || 0) : 0);
     const grandTotal = activeRev ? activeRev.grandTotal : (proj ? proj.grandTotal : 0);
+    // Authoritative Food(GST) vs Bar(VAT) split, computed by the tax engine and
+    // snapshotted on the revision. The view only renders it - it never re-classifies.
+    const fiscalSections = (activeRev && Array.isArray(activeRev.fiscalSections) && activeRev.fiscalSections.length)
+      ? activeRev.fiscalSections
+      : (proj && Array.isArray(proj.fiscalSections) ? proj.fiscalSections : []);
 
     return `
       <div style="display:flex; flex-direction:column; gap:16px; max-width:800px; margin:0 auto; width:100%;">
@@ -481,83 +582,8 @@ export class CashierWorkspaceView {
           </div>
         ` : ''}
 
-        <!-- ITEMIZED ORDER BREAKDOWN TABLE -->
-        <div class="card" style="padding:0; overflow:hidden; border:1px solid var(--border-subtle);">
-          <div style="background:var(--bg-surface-2); padding:10px 16px; font-size:0.8rem; font-weight:700; text-transform:uppercase; color:var(--text-muted); border-bottom:1px solid var(--border-subtle);">
-            Itemized Order Breakdown (${items.length} Items)
-          </div>
-          <table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
-            <thead>
-              <tr style="border-bottom:2px solid var(--border-subtle); text-align:left; color:var(--text-secondary); font-size:0.75rem;">
-                <th style="padding:10px 16px;">Item Description</th>
-                <th style="padding:10px 16px; text-align:center;">Qty</th>
-                <th style="padding:10px 16px; text-align:right;">Unit Price</th>
-                <th style="padding:10px 16px; text-align:right;">Line Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${items.map(it => `
-                <tr style="border-bottom:1px solid var(--border-subtle);">
-                  <td style="padding:10px 16px; font-weight:600;">${it.name || it.itemName}</td>
-                  <td style="padding:10px 16px; text-align:center;">${it.quantity}</td>
-                  <td style="padding:10px 16px; text-align:right;">₹${(it.price || 0).toFixed(2)}</td>
-                  <td style="padding:10px 16px; text-align:right; font-weight:700;">₹${(it.lineTotal || (it.price * it.quantity)).toFixed(2)}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-        </div>
-
-        <!-- CBIC COMPLIANT COMMERCIAL TAX & DISCOUNT BREAKDOWN STRIP -->
-        <div class="card" style="background:var(--bg-surface-2); padding:16px; border:1px solid var(--border-subtle); font-size:0.9rem;">
-          <div style="display:flex; flex-direction:column; gap:6px; max-width:360px; margin-left:auto;">
-            <div style="display:flex; justify-content:space-between; color:var(--text-secondary);">
-              <span>Gross Sales Subtotal:</span> <strong>₹${grossSales.toFixed(2)}</strong>
-            </div>
-            
-            ${discountsTotal > 0 ? `
-              <div style="display:flex; justify-content:space-between; color:var(--status-warning);">
-                <span>Discounts Total:</span> <strong>-₹${discountsTotal.toFixed(2)}</strong>
-              </div>
-              ${discountRecords.map(d => `
-                <div style="font-size:0.75rem; color:var(--text-muted); text-align:right; padding-left:12px;">
-                  • ${d.reason || d.discountType} (-₹${parseFloat(d.discountAmount).toFixed(2)})
-                </div>
-              `).join('')}
-            ` : ''}
-
-            <div style="display:flex; justify-content:space-between; font-weight:700; color:var(--text-primary); border-top:1px solid var(--border-subtle); padding-top:4px; margin-top:2px;">
-              <span>Taxable Value:</span> <strong>₹${taxableAmount.toFixed(2)}</strong>
-            </div>
-
-            ${taxLines.length > 0 ? taxLines.map(t => `
-              <div style="display:flex; justify-content:space-between; color:var(--text-secondary);">
-                <span>${t.type} (${t.rate}%):</span> <strong>₹${t.amount.toFixed(2)}</strong>
-              </div>
-            `).join('') : `
-              <div style="display:flex; justify-content:space-between; color:var(--text-secondary);">
-                <span>CGST (2.5%):</span> <strong>₹${cgst.toFixed(2)}</strong>
-              </div>
-              <div style="display:flex; justify-content:space-between; color:var(--text-secondary);">
-                <span>SGST (2.5%):</span> <strong>₹${sgst.toFixed(2)}</strong>
-              </div>
-            `}
-
-            ${charges.length > 0 ? charges.map(c => `
-              <div style="display:flex; justify-content:space-between; color:var(--text-secondary);">
-                <span>${c.type.replace('_', ' ')} (${c.rate}%):</span> <strong>₹${c.amount.toFixed(2)}</strong>
-              </div>
-            `).join('') : `
-              <div style="display:flex; justify-content:space-between; color:var(--text-secondary);">
-                <span>Service Charge (5%):</span> <strong>₹${serviceCharge.toFixed(2)}</strong>
-              </div>
-            `}
-
-            <div style="display:flex; justify-content:space-between; color:var(--accent-primary); font-size:1.25rem; font-weight:800; border-top:2px solid var(--border-subtle); padding-top:8px; margin-top:4px;">
-              <span>GRAND TOTAL:</span> <span>₹${grandTotal.toFixed(2)}</span>
-            </div>
-          </div>
-        </div>
+        <!-- ITEMIZED / FISCAL BREAKDOWN (engine-driven Food vs Bar split) -->
+        ${this._renderFiscalBillView({ items, fiscalSections, grossSales, discountsTotal, discountRecords, taxableAmount, taxLines, charges, cgst, sgst, serviceCharge, grandTotal })}
 
         <!-- STATE-AWARE ACTION BAR WITH STRICT RECALL GATE -->
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; border-top:1px solid var(--border-subtle); padding-top:16px;">
@@ -1023,10 +1049,20 @@ export class CashierWorkspaceView {
     if (printBtn) {
       printBtn.addEventListener('click', () => {
         if (!this.selectedSessionId) return;
+        const sessionUser = this.authEngine ? this.authEngine.getCurrentSession() : null;
+        const cashierId = sessionUser ? (sessionUser.employeeId || sessionUser.id || 'emp-cashier') : 'emp-cashier';
+        const cashierName = sessionUser ? (sessionUser.employeeName || sessionUser.name || 'Cashier Desk') : 'Cashier Desk';
         const modal = new TaxInvoicePrintModal({
           sessionId: this.selectedSessionId,
           revisionIndex: this.selectedRevisionIndex,
-          onClose: () => {}
+          onClose: () => {},
+          // Persist the Food/Bar split pair only when the cashier actually prints
+          // in split mode. Idempotent, so re-prints reuse the same numbers.
+          onIssueSplit: () => invoiceModel.issueSplitInvoices({
+            sessionId: this.selectedSessionId,
+            cashierId,
+            cashierName
+          })
         });
         const mount = this.container.querySelector('#cashier-modal-mount');
         if (mount) mount.appendChild(modal.render());

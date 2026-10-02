@@ -10,6 +10,8 @@ import { platformEventBus } from '../events/platformEvents.js';
 import { tenantModel } from '../tenant/tenantModel.js';
 import { orderModel } from '../ordering/orderModel.js';
 import { sessionProjectionService } from '../session/sessionProjectionService.js';
+import { taxConfigurationModel } from '../accounting/taxConfigurationModel.js';
+import { menuMasterModel } from '../ordering/menuMasterModel.js';
 
 class BillRevisionModel {
   constructor() {
@@ -27,6 +29,26 @@ class BillRevisionModel {
       return window.__APP__.platform.dataGateway || null;
     }
     return null;
+  }
+
+  /**
+   * Ensure each bill line carries the identity the tax engine needs to resolve
+   * its rule (itemCode + menu category). Falls back to the menu master when an
+   * incoming line lacks a category (older orders, projections, void edits).
+   */
+  _enrichItemsForTax(items = [], tenantId = null) {
+    return (items || []).map(it => {
+      const itemCode = it.itemCode || it.itemId || it.id || null;
+      let category = it.category || it.rawCategory || null;
+      if (!category && itemCode) {
+        try {
+          const mi = menuMasterModel.getItem(itemCode)
+            || menuMasterModel.getAllMenuItems().find(m => m.itemCode === itemCode || m.id === itemCode);
+          if (mi) category = mi.category;
+        } catch (_) {}
+      }
+      return { ...it, itemCode, category };
+    });
   }
 
   _getTenantId(providedTenantId = null) {
@@ -103,31 +125,29 @@ class BillRevisionModel {
       }
     }
 
-    // 1. Financial calculation sequence from Tenant Configuration
-    const itemsSum = finalItems.reduce((sum, it) => sum + (parseFloat(it.lineTotal || (parseFloat(it.price || 0) * (it.quantity || 1))) || 0), 0);
-    const grossSales = finalSubtotal || itemsSum || 0;
-    const discountsTotal = (discountRecords || []).reduce((sum, d) => sum + (parseFloat(d.discountAmount) || 0), 0);
-    const taxableAmount = Math.max(0, grossSales - discountsTotal);
+    // 1. Financial calculation via the Centralized Tax Configuration engine.
+    // Tax is computed PER LINE so food (GST) and explicitly-marked liquor
+    // (State VAT) are taxed correctly, replacing the old whole-bill flat rate.
+    const taxEngineItems = this._enrichItemsForTax(finalItems, targetTenantId);
+    const billTax = taxConfigurationModel.computeBillTax({
+      items: taxEngineItems,
+      discountRecords: discountRecords || [],
+      isIntraState: true,
+      tenantId: targetTenantId
+    });
 
-    const cgstPercent = primaryTenant.cgstPercent !== undefined ? primaryTenant.cgstPercent : 2.5;
-    const sgstPercent = primaryTenant.sgstPercent !== undefined ? primaryTenant.sgstPercent : 2.5;
-    const isServiceChargeEnabled = primaryTenant.isServiceChargeEnabled !== false;
-    const serviceChargePercent = (isServiceChargeEnabled && primaryTenant.serviceChargePercent) ? parseFloat(primaryTenant.serviceChargePercent) : 5.0;
-
-    const cgstAmount = Math.round(taxableAmount * (cgstPercent / 100) * 100) / 100;
-    const sgstAmount = Math.round(taxableAmount * (sgstPercent / 100) * 100) / 100;
-    const serviceChargeAmount = isServiceChargeEnabled ? (Math.round(taxableAmount * (serviceChargePercent / 100) * 100) / 100) : 0;
-
-    const taxLines = [
-      { type: 'CGST', rate: cgstPercent, amount: cgstAmount },
-      { type: 'SGST', rate: sgstPercent, amount: sgstAmount }
-    ];
-
-    const charges = isServiceChargeEnabled ? [
-      { type: 'SERVICE_CHARGE', rate: serviceChargePercent, amount: serviceChargeAmount }
-    ] : [];
-
-    const grandTotal = Math.round((taxableAmount + cgstAmount + sgstAmount + serviceChargeAmount) * 100) / 100;
+    const grossSales = billTax.grossSales || finalSubtotal || 0;
+    const discountsTotal = billTax.discountsTotal || 0;
+    const taxableAmount = billTax.taxableAmount;
+    const cgstPercent = billTax.cgstPercent;
+    const sgstPercent = billTax.sgstPercent;
+    const serviceChargePercent = billTax.serviceChargePercent;
+    const cgstAmount = billTax.cgstAmount;
+    const sgstAmount = billTax.sgstAmount;
+    const serviceChargeAmount = billTax.serviceChargeAmount;
+    const taxLines = billTax.taxLines;
+    const charges = billTax.charges;
+    const grandTotal = billTax.grandTotal;
 
     const revisionRecord = {
       id: revisionId,
@@ -153,6 +173,9 @@ class BillRevisionModel {
       // Dynamic Tax & Charge Arrays
       taxLines,
       charges,
+      // Food(GST) vs Bar(VAT) fiscal split, produced by the tax engine so the
+      // cashier/invoice render separated sections without re-classifying lines.
+      fiscalSections: billTax.fiscalSections || [],
       cgstPercent,
       cgstAmount,
       sgstPercent,
@@ -162,13 +185,20 @@ class BillRevisionModel {
       
       grandTotal,
       grand_total: grandTotal,
-      items: (finalItems || []).map(it => ({
-        itemId: it.itemId || it.id,
-        name: it.name || it.itemName || 'Menu Item',
-        quantity: parseInt(it.quantity || it.qty || 1, 10),
-        price: parseFloat(it.price || it.unitPrice || 0),
-        lineTotal: parseFloat(it.lineTotal || (parseFloat(it.price || 0) * (it.quantity || 1)))
-      })),
+      items: (finalItems || []).map((it, idx) => {
+        const lineTax = (billTax.lineTaxes || [])[idx] || {};
+        return {
+          itemId: it.itemId || it.id,
+          itemCode: it.itemCode || it.itemId || it.id,
+          name: it.name || it.itemName || 'Menu Item',
+          quantity: parseInt(it.quantity || it.qty || 1, 10),
+          price: parseFloat(it.price || it.unitPrice || 0),
+          lineTotal: parseFloat(it.lineTotal || (parseFloat(it.price || 0) * (it.quantity || 1))),
+          category: it.category || it.rawCategory || null,
+          taxCategoryCode: lineTax.taxCategoryCode || null,
+          taxRuleCode: lineTax.taxRuleCode || null
+        };
+      }),
       waiterId: waiterId || 'emp-waiter',
       waiterName: waiterName || 'Staff',
       

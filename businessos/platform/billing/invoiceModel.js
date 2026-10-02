@@ -8,6 +8,7 @@ import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
 import { billRevisionModel } from './billRevisionModel.js';
 import { tenantModel } from '../tenant/tenantModel.js';
+import { taxConfigurationModel } from '../accounting/taxConfigurationModel.js';
 import { runtimeConfig } from '../cloud/runtimeConfig.js';
 
 class InvoiceModel {
@@ -121,6 +122,139 @@ class InvoiceModel {
   }
 
   /**
+   * All invoices for a session (returns both records when a bill was split into
+   * a FOOD/GST invoice and a BAR/VAT invoice sharing one settlement).
+   */
+  getAllInvoicesForSession(sessionId, tenantId = null) {
+    const targetTenantId = this._getTenantId(tenantId);
+    return this.getAllInvoices(targetTenantId)
+      .filter(i => i.sessionId === sessionId || i.session_id === sessionId);
+  }
+
+  /**
+   * Issue a Food/Bar SPLIT: two linked fiscal documents for one settled table.
+   *   - FOOD invoice: GST tax invoice (restaurant GSTIN / letterhead).
+   *   - BAR invoice:  Excise-VAT bill; when a separate licence is configured in
+   *     Tax Setup it is printed under that bar identity, otherwise the restaurant
+   *     identity is reused. Both carry the combined payable + a cross-reference.
+   * Idempotent: re-issues return the already-created pair. A session with no BAR
+   * items falls back to a single consolidated invoice. Both records share one
+   * `settlementId` so a single payment reconciles the two documents.
+   * @returns {Object} { settlementId, combinedGrandTotal, foodInvoice, barInvoice, invoices[] }
+   */
+  issueSplitInvoices({ sessionId, cashierId = 'emp-cashier', cashierName = 'Cashier', tenantId = null } = {}) {
+    const targetTenantId = this._getTenantId(tenantId);
+    const existing = this.getAllInvoicesForSession(sessionId, targetTenantId)
+      .filter(i => i.billClass === 'FOOD' || i.billClass === 'BAR');
+    if (existing.length >= 2) {
+      return this._describeSplit(existing);
+    }
+
+    const rev = billRevisionModel.getLatestRevisionForSession(sessionId, targetTenantId);
+    if (!rev) return this.issueInvoice({ sessionId, cashierId, cashierName, tenantId: targetTenantId });
+
+    const sections = Array.isArray(rev.fiscalSections) ? rev.fiscalSections : [];
+    const foodSec = sections.find(s => s && s.section === 'FOOD' && Array.isArray(s.items) && s.items.length);
+    const barSec = sections.find(s => s && s.section === 'BAR' && Array.isArray(s.items) && s.items.length);
+
+    // No bar (or no food) -> a single consolidated GST invoice is correct.
+    if (!barSec || !foodSec) {
+      const inv = this.issueInvoice({ sessionId, cashierId, cashierName, tenantId: targetTenantId });
+      return { settlementId: inv.correlationId, combinedGrandTotal: inv.grandTotal, foodInvoice: inv, barInvoice: null, invoices: [inv] };
+    }
+
+    const primaryTenant = tenantModel.getPrimaryTenant() || {};
+    const barCfg = taxConfigurationModel.getBarBillingConfig(targetTenantId);
+    const settlementId = rev.correlationId || ('SETTLE-' + Math.floor(10000 + Math.random() * 90000));
+    const combinedGrandTotal = Math.round(((foodSec.sectionTotal || 0) + (barSec.sectionTotal || 0)) * 100) / 100;
+
+    const baseMeta = {
+      tenantId: targetTenantId, tenant_id: targetTenantId,
+      sessionId, session_id: sessionId,
+      billNumber: rev.billNumber, revisionId: rev.id, revisionNumber: rev.revisionNumber,
+      tableNumber: rev.tableNumber, tableCode: rev.tableCode,
+      cashierId, cashierName, waiterId: rev.waiterId, waiterName: rev.waiterName,
+      combinedGrandTotal, settlementId
+    };
+
+    const foodSeq = this.generateNextInvoiceSequence('POS', targetTenantId);
+    const foodInvoice = {
+      ...baseMeta,
+      id: 'inv_' + Math.random().toString(36).substring(2, 9),
+      billClass: 'FOOD',
+      documentTitle: 'TAX INVOICE (RESTAURANT)',
+      financialYear: foodSeq.financialYear, invoiceSeries: foodSeq.invoiceSeries,
+      invoiceSequence: foodSeq.invoiceSequence, invoiceNumber: foodSeq.invoiceNumber, invoice_number: foodSeq.invoiceNumber,
+      items: foodSec.items,
+      grossSales: foodSec.subtotal, discountsTotal: foodSec.discounts || 0, discountRecords: rev.discountRecords || [],
+      taxableAmount: foodSec.taxableAmount, taxLines: foodSec.taxLines || [], charges: foodSec.charges || [],
+      cgstAmount: foodSec.cgstAmount, sgstAmount: foodSec.sgstAmount, igstAmount: foodSec.igstAmount, vatAmount: 0,
+      serviceChargeAmount: foodSec.serviceChargeAmount || 0, sectionTotal: foodSec.sectionTotal, grandTotal: foodSec.sectionTotal,
+      restaurantName: primaryTenant.name || 'Anchor Bistro & Cafe',
+      gstin: primaryTenant.gstin || '29AAAAA0000A1Z5', fssaiLicense: primaryTenant.fssaiLicense || '',
+      address: primaryTenant.address || '', phone: primaryTenant.phone || '',
+      issuedAt: new Date().toISOString(), createdAt: new Date().toISOString(), status: 'ISSUED', correlationId: settlementId
+    };
+
+    // Reserve the FOOD number in the store BEFORE deriving the BAR number, so
+    // generateNextInvoiceSequence's collision check sees it and hands out a
+    // distinct, strictly-sequential number (two records must never share one).
+    offlineStore.appendItem('invoices', foodInvoice);
+
+    const barSeq = this.generateNextInvoiceSequence('BAR', targetTenantId);
+    const barInvoice = {
+      ...baseMeta,
+      id: 'inv_' + Math.random().toString(36).substring(2, 9),
+      billClass: 'BAR',
+      documentTitle: 'BAR BILL (EXCISE VAT)',
+      financialYear: barSeq.financialYear, invoiceSeries: barSeq.invoiceSeries,
+      invoiceSequence: barSeq.invoiceSequence, invoiceNumber: barSeq.invoiceNumber, invoice_number: barSeq.invoiceNumber,
+      items: barSec.items,
+      grossSales: barSec.subtotal, discountsTotal: barSec.discounts || 0, discountRecords: [],
+      taxableAmount: barSec.taxableAmount, taxLines: barSec.taxLines || [], charges: barSec.charges || [],
+      cgstAmount: 0, sgstAmount: 0, igstAmount: 0, vatAmount: barSec.vatAmount,
+      serviceChargeAmount: 0, sectionTotal: barSec.sectionTotal, grandTotal: barSec.sectionTotal,
+      restaurantName: (barCfg.separateExciseLicence && barCfg.licenceName) ? barCfg.licenceName : (primaryTenant.name || 'Anchor Bistro & Cafe'),
+      gstin: (barCfg.separateExciseLicence && barCfg.gstin) ? barCfg.gstin : (primaryTenant.gstin || '29AAAAA0000A1Z5'),
+      exciseLicenceNumber: barCfg.separateExciseLicence ? (barCfg.licenceNumber || '') : '',
+      fssaiLicense: primaryTenant.fssaiLicense || '',
+      address: (barCfg.separateExciseLicence && barCfg.address) ? barCfg.address : (primaryTenant.address || ''),
+      phone: primaryTenant.phone || '',
+      issuedAt: new Date().toISOString(), createdAt: new Date().toISOString(), status: 'ISSUED', correlationId: settlementId
+    };
+
+    // Mark the source revision issued against the primary (FOOD/GST) invoice so
+    // the cashier's recall/issue lock behaves as it does for a consolidated bill.
+    billRevisionModel.markRevisionIssued(sessionId, foodInvoice.invoiceNumber, targetTenantId);
+
+    offlineStore.appendItem('invoices', barInvoice);
+
+    const dg = this._getDataGateway();
+    this._syncInvoiceToCloud(dg, foodInvoice, targetTenantId, settlementId, foodInvoice.issuedAt);
+    this._syncInvoiceToCloud(dg, barInvoice, targetTenantId, settlementId, barInvoice.issuedAt);
+
+    platformEventBus.publish('invoice:issued', {
+      sessionId, tableNumber: baseMeta.tableNumber, settlementId, combinedGrandTotal,
+      invoiceNumbers: [foodInvoice.invoiceNumber, barInvoice.invoiceNumber], split: true,
+      cashierName, timestamp: foodInvoice.issuedAt
+    });
+
+    return { settlementId, combinedGrandTotal, foodInvoice, barInvoice, invoices: [foodInvoice, barInvoice] };
+  }
+
+  /** Normalize already-stored split invoices into the split result shape. */
+  _describeSplit(invoices) {
+    const foodInvoice = invoices.find(i => i.billClass === 'FOOD') || null;
+    const barInvoice = invoices.find(i => i.billClass === 'BAR') || null;
+    const anchor = foodInvoice || barInvoice || invoices[0] || {};
+    return {
+      settlementId: anchor.settlementId || anchor.correlationId || null,
+      combinedGrandTotal: anchor.combinedGrandTotal || anchor.grandTotal || 0,
+      foodInvoice, barInvoice, invoices
+    };
+  }
+
+  /**
    * Finalize bill revision & Issue official Tax Invoice.
    * Consumes sequential invoice number (e.g., INV/26-27/1042).
    * @param {Object} params { sessionId, revisionId, cashierId, cashierName, tenantId, correlationId }
@@ -201,6 +335,7 @@ class InvoiceModel {
       
       taxLines: latestRevision.taxLines || [],
       charges: latestRevision.charges || [],
+      fiscalSections: latestRevision.fiscalSections || [],
       cgstPercent: latestRevision.cgstPercent,
       cgstAmount: latestRevision.cgstAmount,
       sgstPercent: latestRevision.sgstPercent,

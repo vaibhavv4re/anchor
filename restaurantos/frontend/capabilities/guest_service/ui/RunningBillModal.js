@@ -138,14 +138,42 @@ export class RunningBillModal {
               <span style="color:var(--text-muted);">Items Subtotal:</span>
               <strong>₹${(proj.subtotal || 0).toFixed(2)}</strong>
             </div>
-            <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:var(--text-secondary);">
-              <span>CGST (2.5%):</span>
-              <span>₹${(proj.cgstAmount || 0).toFixed(2)}</span>
-            </div>
-            <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:var(--text-secondary);">
-              <span>SGST (2.5%):</span>
-              <span>₹${(proj.sgstAmount || 0).toFixed(2)}</span>
-            </div>
+            ${(() => {
+              const secs = (proj.fiscalSections || []).filter(s => s && Array.isArray(s.items) && s.items.length > 0);
+              if (secs.length === 0) {
+                return `
+                  <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:var(--text-secondary);">
+                    <span>CGST:</span><span>₹${(proj.cgstAmount || 0).toFixed(2)}</span>
+                  </div>
+                  <div style="display:flex; justify-content:space-between; font-size:0.8rem; color:var(--text-secondary);">
+                    <span>SGST:</span><span>₹${(proj.sgstAmount || 0).toFixed(2)}</span>
+                  </div>`;
+              }
+              return secs.map(s => {
+                const taxStr = (s.taxLines || []).map(t => `${t.type === 'LIQUOR_VAT' ? 'VAT' : t.type} ${t.rate}%`).join(' + ');
+                return `
+                  <div style="border:1px solid var(--border-subtle); border-radius:6px; padding:8px 10px; margin-top:2px; background:var(--bg-app);">
+                    <div style="display:flex; justify-content:space-between; align-items:center;">
+                      <span style="font-size:0.72rem; font-weight:800; text-transform:uppercase; color:${s.section === 'BAR' ? '#f59e0b' : 'var(--accent-primary)'};">${s.section === 'BAR' ? '🍸' : '🍽️'} ${s.label}</span>
+                      <span style="font-size:0.65rem; color:var(--text-muted);">${taxStr}</span>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; font-size:0.78rem; color:var(--text-secondary); margin-top:4px;">
+                      <span>Subtotal</span><span>₹${(s.subtotal || 0).toFixed(2)}</span>
+                    </div>
+                    ${(s.taxLines || []).map(t => `
+                      <div style="display:flex; justify-content:space-between; font-size:0.78rem; color:var(--text-secondary);">
+                        <span>${t.type === 'LIQUOR_VAT' ? 'VAT' : t.type} (${t.rate}%)</span><span>₹${(t.amount || 0).toFixed(2)}</span>
+                      </div>`).join('')}
+                    ${(s.charges || []).map(c => `
+                      <div style="display:flex; justify-content:space-between; font-size:0.78rem; color:var(--text-secondary);">
+                        <span>${String(c.type || '').replace('_', ' ')} (${c.rate}%)</span><span>₹${(c.amount || 0).toFixed(2)}</span>
+                      </div>`).join('')}
+                    <div style="display:flex; justify-content:space-between; font-size:0.85rem; font-weight:800; color:var(--text-primary); margin-top:4px;">
+                      <span>Section Total</span><span>₹${(s.sectionTotal || 0).toFixed(2)}</span>
+                    </div>
+                  </div>`;
+              }).join('');
+            })()}
             <div style="border-top:1px dashed var(--border-subtle); margin-top:4px; padding-top:8px; display:flex; justify-content:space-between; font-size:1.1rem; font-weight:800; color:var(--accent-primary);">
               <span>Grand Total:</span>
               <span>₹${(proj.grandTotal || 0).toFixed(2)}</span>
@@ -286,6 +314,19 @@ export class RunningBillModal {
         });
 
         alert(`Bill for Table ${proj.tableNumber} (Revision ${rev.revisionNumber} - Total: ₹${(rev.grandTotal || 0).toFixed(2)}) has been finalised and sent to Cashier! Table status set to PAYMENT_PENDING.`);
+
+        // Cloud-persistence guarantee: the revision create + session BILL_GENERATED
+        // update are fire-and-forget through DataGateway. If the device was briefly
+        // offline (or the write failed), DataGateway queued them in offline_journal.
+        // Drive that queue now (and once more after the awaited writes settle) so the
+        // finalized bill is durably in Supabase and visible to the Cashier on every
+        // device immediately, rather than waiting for the 30s periodic sweep.
+        const dg = (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform)
+          ? window.__APP__.platform.dataGateway : null;
+        if (dg && typeof dg.flushOfflineQueue === 'function') {
+          dg.flushOfflineQueue().catch(() => {});
+          setTimeout(() => dg.flushOfflineQueue().catch(() => {}), 1500);
+        }
         if (this.onBillFinalized) this.onBillFinalized();
         this.updateContent();
       });
