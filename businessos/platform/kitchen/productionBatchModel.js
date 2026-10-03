@@ -22,30 +22,10 @@ class ProductionBatchModel {
   }
 
   _initSeedBatches() {
+    // Ensure the collection exists, but do NOT seed fabricated batches.
+    // The Prep & Production panel shows a real empty state until operators create batches.
     if (!offlineStore.getCollection('production_batches')) {
-      const initialBatches = [
-        {
-          id: 'BATCH-2026-0042',
-          batchNumber: 'BATCH-2026-0042',
-          recipeId: 'rec_butter_chicken',
-          recipeName: 'Signature Butter Chicken',
-          station: 'Curry Station',
-          status: 'COMPLETED', // PLANNED | COMPLETED
-          plannedPortions: 100,
-          actualPortionsProduced: 92,
-          yieldPercent: 92.0,
-          plannedCostPerPortion: 80.00,
-          actualCostPerPortion: 95.65,
-          unitCostLeakage: 15.65,
-          totalYieldLeakageValue: 1439.80,
-          plannedBy: 'Jitu (Store Manager)',
-          completedBy: 'Chef Suresh',
-          completedAt: '2026-08-30T16:00:00.000Z',
-          tenantId: 'tenant_h0qc7wf',
-          createdAt: '2026-08-30T14:00:00.000Z'
-        }
-      ];
-      offlineStore.setCollection('production_batches', initialBatches);
+      offlineStore.setCollection('production_batches', []);
     }
   }
 

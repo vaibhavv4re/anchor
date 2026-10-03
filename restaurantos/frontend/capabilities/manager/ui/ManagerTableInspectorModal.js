@@ -48,6 +48,10 @@ export class ManagerTableInspectorModal {
     const payment = sId ? paymentModel.getPaymentForSession(sId, this.tenantId) : null;
     const auditLogs = sId ? sessionAuditModel.getAuditLogsForSession(sId, this.tenantId) : [];
 
+    // Cache for the drill-down buttons so they render real data (no alert() stubs).
+    this._resolvedSessionId = sId;
+    this._latestRevision = latestRevision;
+
     // Calculate items breakdown
     let totalItems = 0;
     let queuedItems = 0;
@@ -200,6 +204,9 @@ export class ManagerTableInspectorModal {
           <button class="btn-primary" id="btn-close-inspector" style="padding:8px 18px;">Close Inspector</button>
         </div>
 
+        <!-- Drill-down detail mount (populated by View Audit Log / View Bill Revision) -->
+        <div id="mgr-inspector-detail" style="margin-top:8px;"></div>
+
       </div>
     `;
 
@@ -220,17 +227,68 @@ export class ManagerTableInspectorModal {
       if (e.target === this.modalEl) closeModal();
     });
 
+    const detailMount = this.modalEl.querySelector('#mgr-inspector-detail');
+    const renderDetail = (html) => {
+      if (!detailMount) return;
+      detailMount.innerHTML = `<div class="card" style="padding:16px; background:var(--bg-surface-1); border:1px solid var(--border-subtle); margin-top:12px;">${html}</div>`;
+      detailMount.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
+
     const auditBtn = this.modalEl.querySelector('#btn-mgr-audit-log');
     if (auditBtn) {
       auditBtn.addEventListener('click', () => {
-        alert(`📜 Session Audit Log for Table: ${this.tableNumber}`);
+        const sId = this._resolvedSessionId;
+        const logs = sId ? sessionAuditModel.getAuditLogsForSession(sId, this.tenantId) : [];
+        const fmtCur = (v) => '₹' + Number(v || 0).toLocaleString('en-IN');
+        const body = logs.length === 0
+          ? `<div style="font-size:0.85rem; color:var(--text-muted); font-style:italic;">No audit events recorded for this session.</div>`
+          : `
+            <div style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; margin-bottom:10px;">📜 Full Session Audit Log (${logs.length} Events)</div>
+            <div style="display:flex; flex-direction:column; gap:8px; max-height:260px; overflow-y:auto; padding-right:4px;">
+              ${logs.map(log => `
+                <div style="background:var(--bg-surface-2); padding:8px 12px; border-radius:6px; font-size:0.8rem;">
+                  <div style="display:flex; justify-content:space-between;">
+                    <strong style="color:var(--text-primary);">${log.eventType || log.event || 'EVENT'}</strong>
+                    <span style="color:var(--text-muted); font-size:0.72rem;">${new Date(log.timestamp || log.createdAt).toLocaleString()}</span>
+                  </div>
+                  <div style="color:var(--text-secondary); margin-top:3px;">${log.description || '—'}</div>
+                  <div style="color:var(--text-muted); font-size:0.72rem; margin-top:2px;">Actor: ${log.actorName || log.actor || 'System'}${log.actorRole ? ' (' + log.actorRole + ')' : ''}</div>
+                </div>
+              `).join('')}
+            </div>`;
+        renderDetail(body);
       });
     }
 
     const billBtn = this.modalEl.querySelector('#btn-mgr-view-bill');
     if (billBtn) {
       billBtn.addEventListener('click', () => {
-        alert(`🧾 Viewing Bill Revisions for Table: ${this.tableNumber}`);
+        const rev = this._latestRevision;
+        const fmtCur = (v) => '₹' + Number(v || 0).toLocaleString('en-IN');
+        if (!rev) {
+          renderDetail(`<div style="font-size:0.85rem; color:var(--text-muted); font-style:italic;">No bill revision exists for this session yet.</div>`);
+          return;
+        }
+        const discounts = Array.isArray(rev.discountRecords) ? rev.discountRecords : [];
+        const body = `
+          <div style="font-size:0.75rem; font-weight:700; color:var(--text-muted); text-transform:uppercase; margin-bottom:10px;">🧾 Bill Revision #${rev.revisionNumber || 1} Detail</div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:10px; font-size:0.82rem;">
+            <div><span style="color:var(--text-muted); display:block;">Gross Sales</span><strong>${fmtCur(rev.grossSales)}</strong></div>
+            <div><span style="color:var(--text-muted); display:block;">Discounts</span><strong style="color:#ef4444;">-${fmtCur(rev.discountsTotal)}</strong></div>
+            <div><span style="color:var(--text-muted); display:block;">CGST</span><strong>${fmtCur(rev.cgstTotal)}</strong></div>
+            <div><span style="color:var(--text-muted); display:block;">SGST</span><strong>${fmtCur(rev.sgstTotal)}</strong></div>
+            <div><span style="color:var(--text-muted); display:block;">Service Charge</span><strong>${fmtCur(rev.serviceChargeTotal)}</strong></div>
+            <div><span style="color:var(--text-muted); display:block;">Grand Total</span><strong style="color:#10b981;">${fmtCur(rev.grandTotal)}</strong></div>
+            <div><span style="color:var(--text-muted); display:block;">Approval Status</span><strong>${rev.approvalStatus || rev.revisionStatus || 'N/A'}</strong></div>
+            <div><span style="color:var(--text-muted); display:block;">Raised By</span><strong>${rev.waiterName || 'N/A'}</strong></div>
+          </div>
+          ${discounts.length > 0 ? `
+            <div style="margin-top:12px; font-size:0.8rem;">
+              <div style="font-weight:700; color:var(--text-muted); margin-bottom:6px;">DISCOUNT LINES (${discounts.length})</div>
+              ${discounts.map(d => `<div style="background:var(--bg-surface-2); padding:6px 10px; border-radius:4px; margin-bottom:4px;">-${fmtCur(d.discountAmount || d.amount)} · ${d.reason || d.type || 'Discount'}${d.approvedBy ? ' · approved by ' + d.approvedBy : ''}</div>`).join('')}
+            </div>
+          ` : ''}`;
+        renderDetail(body);
       });
     }
   }

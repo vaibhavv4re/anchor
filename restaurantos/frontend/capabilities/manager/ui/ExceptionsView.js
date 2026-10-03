@@ -29,7 +29,6 @@ export class ExceptionsView {
     this.container.className = 'exceptions-view flex-col gap-lg animate-fade-in';
     this.container.style.width = '100%';
 
-    this.subscribePlatformEvents();
     this.updateContent();
 
     if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.dataGateway) {
@@ -43,21 +42,13 @@ export class ExceptionsView {
     return this.container;
   }
 
-  subscribePlatformEvents() {
-    const refresh = () => {
-      if (this.container && document.body.contains(this.container)) {
-        this.updateContent();
-      }
-    };
-    this.unsubscribeEvents = [
-      platformEventBus.subscribe('ticket:status_changed', refresh),
-      platformEventBus.subscribe('bill:revision:created', refresh),
-      platformEventBus.subscribe('discount:approved', refresh),
-      platformEventBus.subscribe('discount:rejected', refresh),
-      platformEventBus.subscribe('exception:resolved', refresh),
-      platformEventBus.subscribe('reconciliation:exception:flagged', refresh),
-      platformEventBus.subscribe('data:changed', refresh)
-    ];
+  refresh() {
+    this.updateContent();
+  }
+
+  destroy() {
+    (this.unsubscribeEvents || []).forEach(u => { if (typeof u === 'function') u(); });
+    this.unsubscribeEvents = [];
   }
 
   renderCaFlaggedSection() {
@@ -173,9 +164,6 @@ export class ExceptionsView {
           <p style="color:var(--text-muted); font-size:0.875rem; margin-top:2px;">Prioritized operational exceptions with full evidence payloads & resolution audit trail.</p>
         </div>
         <div style="display:flex; align-items:center; gap:10px;">
-          <button class="btn-secondary" id="btn-seed-test-exceptions" style="padding:6px 14px; font-size:0.82rem; color:var(--accent-primary); border-color:var(--accent-primary);">
-            ⚡ Seed Test Exceptions (1-Click)
-          </button>
           <div class="badge badge-warning" style="font-size:0.85rem; padding:6px 14px;">
             ${queue.length} Active Exceptions Requiring Action
           </div>
@@ -330,8 +318,8 @@ export class ExceptionsView {
           </div>
 
           ${exp.type !== 'DISCOUNT_APPROVAL' ? `
-            <button class="btn-primary btn-expedite-action" data-exp-id="${exp.id}" data-type="${exp.type}" style="padding:6px 16px; font-size:0.8rem;">
-              🚀 Mark Expedited & Resolved
+            <button class="btn-secondary btn-expedite-action" data-exp-id="${exp.id}" data-type="${exp.type}" data-session-id="${sId || ''}" data-title="${exp.title || exp.label || ''}" style="padding:6px 16px; font-size:0.8rem;">
+              👁 Acknowledge
             </button>
           ` : ''}
         </div>
@@ -463,22 +451,38 @@ export class ExceptionsView {
       });
     });
 
-    // Expedite Action Button
+    // Acknowledge Button - honest: records an acknowledgement in the session audit trail.
+    // It does NOT mutate order/ticket state (no parallel truth is fabricated).
     this.container.querySelectorAll('.btn-expedite-action').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const expId = e.currentTarget.dataset.expId;
-        const type = e.currentTarget.dataset.type;
+        const ds = e.currentTarget.dataset;
+        const expId = ds.expId;
+        const type = ds.type;
+        const sId = ds.sessionId || null;
+        const actor = this.readLiveSession();
+
+        try {
+          sessionAuditModel.logEvent({
+            sessionId: sId || ('exception:' + expId),
+            eventType: 'MANAGER_EXCEPTION_ACKNOWLEDGED',
+            actorId: actor.employeeId || null,
+            actorName: actor.employeeName || 'Manager',
+            actorRole: actor.roleName || 'manager',
+            description: `Manager acknowledged exception ${expId} (${type}). No order state changed.`,
+            metadata: { expId, type },
+            tenantId: this.tenantId
+          });
+        } catch (_) {}
 
         this.resolvedLog.unshift({
-          action: 'SERVICE EXPEDITED',
+          action: 'ACKNOWLEDGED',
           title: `Operational Exception ${expId}`,
-          actor: 'Operations Manager',
-          details: `Intervened & marked expedited (${type})`,
+          actor: actor.employeeName || 'Manager',
+          details: `Acknowledged exception in audit trail (${type})`,
           timestamp: new Date().toISOString()
         });
 
-        platformEventBus.publish('exception:resolved', { expId });
-        alert('🚀 Marked exception expedited & resolved in Shift Audit Log!');
+        platformEventBus.publish('exception:acknowledged', { expId });
         this.updateContent();
       });
     });
@@ -539,102 +543,15 @@ export class ExceptionsView {
         this.updateContent();
       });
     });
-
-    // 1-Click Seed Test Exceptions Button
-    const seedBtn = this.container.querySelector('#btn-seed-test-exceptions');
-    if (seedBtn) {
-      seedBtn.addEventListener('click', () => this.seedTestExceptions());
-    }
   }
 
-  seedTestExceptions() {
-    const nowMs = Date.now();
-    const twentyFiveMinAgo = new Date(nowMs - 25 * 60 * 1000).toISOString();
-    const eightMinAgo = new Date(nowMs - 8 * 60 * 1000).toISOString();
-    const store = (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform) ? window.__APP__.platform.offlineStore : null;
-
-    // 1. Create a session for Table 4
-    const sId = 'sess_test_exp_04';
-    const sessions = (store ? store.getCollection('table_sessions') : []) || [];
-    if (!sessions.some(s => s.id === sId)) {
-      sessions.push({
-        id: sId,
-        sessionId: sId,
-        tableNumber: 4,
-        tableCode: 'T-04',
-        guestCount: 3,
-        assignedWaiterName: 'Suresh',
-        status: 'OCCUPIED',
-        billStatus: 'UNBILLED',
-        createdAt: twentyFiveMinAgo
-      });
-      if (store) store.setCollection('table_sessions', sessions);
+  // Reads the live authenticated manager session (decoupled, same pattern as the
+  // projection service) so audit entries carry a real actor, not a hardcoded name.
+  readLiveSession() {
+    try {
+      return JSON.parse(sessionStorage.getItem('ros_session')) || {};
+    } catch (_) {
+      return {};
     }
-
-    // 2. Delayed KOT Order (25 min ago)
-    const orders = (store ? store.getCollection('orders') : []) || [];
-    if (!orders.some(o => o.id === 'ord_test_exp_01')) {
-      orders.push({
-        id: 'ord_test_exp_01',
-        orderId: 'ord_test_exp_01',
-        orderNumber: 'ORD-2026-4597',
-        sessionId: sId,
-        tableNumber: 4,
-        tableCode: 'T-04',
-        waiterId: 'emp-waiter',
-        status: 'PREPARING',
-        orderStatus: 'PREPARING',
-        subtotal: 1850,
-        items: [
-          { name: 'Green Chicken Soup', quantity: 2, price: 450, itemStatus: 'PREPARING' },
-          { name: 'Smoked Damao Paneer', quantity: 1, price: 950, itemStatus: 'PREPARING' }
-        ],
-        createdAt: twentyFiveMinAgo
-      });
-      if (store) store.setCollection('orders', orders);
-    }
-
-    // 3. Discount Approval Request (Table 7)
-    const sId7 = 'sess_test_exp_07';
-    if (!sessions.some(s => s.id === sId7)) {
-      sessions.push({
-        id: sId7,
-        sessionId: sId7,
-        tableNumber: 7,
-        tableCode: 'T-07',
-        guestCount: 4,
-        assignedWaiterName: 'Suresh',
-        status: 'OCCUPIED',
-        billStatus: 'BILL_GENERATED',
-        createdAt: twentyFiveMinAgo
-      });
-      if (store) store.setCollection('table_sessions', sessions);
-    }
-
-    const revisions = (store ? store.getCollection('bill_revisions') : []) || [];
-    if (!revisions.some(r => r.id === 'rev_test_exp_07')) {
-      revisions.push({
-        id: 'rev_test_exp_07',
-        revisionId: 'rev_test_exp_07',
-        sessionId: sId7,
-        tableNumber: 7,
-        tableCode: 'T-07',
-        billNumber: 'BILL-2026-8812',
-        revisionNumber: 1,
-        grossSales: 4850,
-        discountsTotal: 750,
-        discountRecords: [{ discountAmount: 750, reason: 'Birthday Courtesy' }],
-        grandTotal: 4305,
-        revisionStatus: 'PENDING_APPROVAL',
-        approvalStatus: 'PENDING',
-        waiterName: 'Suresh',
-        createdAt: eightMinAgo
-      });
-      if (store) store.setCollection('bill_revisions', revisions);
-    }
-
-    platformEventBus.publish('ticket:status_changed', {});
-    alert('⚡ 1-Click Test Exceptions Seeded!\n\n1. 🔴 KOT Delayed 25 min (Table 04)\n2. 🔵 Discount Approval Requested (₹750 on Table 07)');
-    this.updateContent();
   }
 }

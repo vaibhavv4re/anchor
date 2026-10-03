@@ -20,29 +20,22 @@ export class OperationsOverviewView {
     this.container.className = 'operations-overview-container flex-col gap-lg animate-fade-in';
     this.container.style.width = '100%';
 
-    this.subscribePlatformEvents();
     this.updateContent();
 
     return this.container;
   }
 
-  subscribePlatformEvents() {
-    const refresh = () => {
-      if (this.container && document.body.contains(this.container)) {
-        this.updateContent();
-      }
-    };
+  // The workspace shell owns the single platform subscription and calls refresh()
+  // on the active view; per-view self-subscription was removed to end the
+  // listener leak (a new view instance was mounted on every nav switch without
+  // ever unsubscribing the previous one).
+  refresh() {
+    this.updateContent();
+  }
 
-    this.unsubscribeEvents = [
-      platformEventBus.subscribe('session:created', refresh),
-      platformEventBus.subscribe('session:milestone:changed', refresh),
-      platformEventBus.subscribe('order:confirmed', refresh),
-      platformEventBus.subscribe('ticket:status_changed', refresh),
-      platformEventBus.subscribe('bill:finalized', refresh),
-      platformEventBus.subscribe('bill:settled', refresh),
-      platformEventBus.subscribe('bill:reopened', refresh),
-      platformEventBus.subscribe('payment:recorded', refresh)
-    ];
+  destroy() {
+    (this.unsubscribeEvents || []).forEach(u => { if (typeof u === 'function') u(); });
+    this.unsubscribeEvents = [];
   }
 
   updateContent() {

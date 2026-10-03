@@ -14,6 +14,26 @@ import { paymentModel } from '../billing/paymentModel.js';
 import { sessionAuditModel } from '../session/sessionAuditModel.js';
 import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
+import { attendanceEngine } from '../attendance/attendanceEngine.js';
+import { taxConfigurationModel } from '../accounting/taxConfigurationModel.js';
+import { inventoryProjectionService } from '../inventory/inventoryProjectionService.js';
+import { inventoryItemModel } from '../inventory/inventoryItemModel.js';
+import { productionBatchModel } from '../kitchen/productionBatchModel.js';
+import { shiftRegisterService } from './shiftRegisterService.js';
+
+/**
+ * Read the live authenticated session the same decoupled way every other
+ * platform service does (taxConfigurationModel, invoiceModel, sessionModel).
+ * Avoids importing authEngine here (which would create a container cycle).
+ */
+function readLiveSession() {
+  if (typeof sessionStorage === 'undefined') return {};
+  try {
+    return JSON.parse(sessionStorage.getItem('ros_session') || '{}') || {};
+  } catch (_) {
+    return {};
+  }
+}
 
 export class ManagerProjectionService {
   /**
@@ -283,9 +303,10 @@ export class ManagerProjectionService {
       const tableLabel = session.tableCode || `Table ${session.tableNumber}`;
       const waiterName = session.assignedWaiterName || session.waiterName || 'Staff';
 
-      const estPrepMin = Math.round((totalPrepTimes.length > 0 ? totalPrepTimes.reduce((a, b) => a + b, 0) / totalPrepTimes.length : 11));
-      const estPickupMin = Math.round((totalPickupLags.length > 0 ? totalPickupLags.reduce((a, b) => a + b, 0) / totalPickupLags.length : 2.5));
-      const estServiceMin = Math.round((totalServiceTimes.length > 0 ? totalServiceTimes.reduce((a, b) => a + b, 0) / totalServiceTimes.length : 15));
+      const mean = (arr) => arr.length > 0 ? Math.round(arr.reduce((a, b) => a + b, 0) / arr.length) : null;
+      const estPrepMin = mean(totalPrepTimes);
+      const estPickupMin = mean(totalPickupLags);
+      const estServiceMin = mean(totalServiceTimes);
 
       pipelineRows.push({
         tableNumber: session.tableNumber,
@@ -300,31 +321,38 @@ export class ManagerProjectionService {
         estPrepMin,
         estPickupMin,
         estServiceMin,
-        latestOrderNo: sessionOrders.length > 0 ? (sessionOrders[sessionOrders.length - 1].orderNumber || sessionOrders[sessionOrders.length - 1].id) : 'ORD-1001'
+        latestOrderNo: sessionOrders.length > 0 ? (sessionOrders[sessionOrders.length - 1].orderNumber || sessionOrders[sessionOrders.length - 1].id) : null
       });
     });
 
-    const avgKitchenPrep = totalPrepTimes.length > 0 ? (totalPrepTimes.reduce((a, b) => a + b, 0) / totalPrepTimes.length).toFixed(1) : '12.4';
-    const avgPickupLag = totalPickupLags.length > 0 ? (totalPickupLags.reduce((a, b) => a + b, 0) / totalPickupLags.length).toFixed(1) : '3.1';
-    const avgOrderToTable = totalServiceTimes.length > 0 ? (totalServiceTimes.reduce((a, b) => a + b, 0) / totalServiceTimes.length).toFixed(1) : '17.8';
+    const avgOf = (arr) => arr.length > 0 ? (arr.reduce((a, b) => a + b, 0) / arr.length).toFixed(1) : null;
+    const avgKitchenPrep = avgOf(totalPrepTimes);
+    const avgPickupLag = avgOf(totalPickupLags);
+    const avgOrderToTable = avgOf(totalServiceTimes);
 
     let bottleneckDiagnostic = {
-      type: 'SMOOTH',
-      label: '🟢 Table Service Flowing Smoothly',
-      subtitle: 'Kitchen prep and server pickup times are within 15 min SLA parameters.'
+      type: 'NO_DATA',
+      label: 'No measured service timing data yet',
+      subtitle: 'Kitchen prep and pickup SLAs will appear once orders start flowing through the pipeline.'
     };
 
     if (parseFloat(avgKitchenPrep) > 15) {
       bottleneckDiagnostic = {
         type: 'KITCHEN_BOTTLENECK',
-        label: '🔴 Kitchen Station Bottleneck Detected',
+        label: 'Kitchen Station Bottleneck Detected',
         subtitle: `Average kitchen preparation lag is ${avgKitchenPrep} min (>15 min SLA target).`
       };
     } else if (parseFloat(avgPickupLag) > 4) {
       bottleneckDiagnostic = {
         type: 'PICKUP_BOTTLENECK',
-        label: '🟠 Waiter Pass Pickup Bottleneck Detected',
+        label: 'Waiter Pass Pickup Bottleneck Detected',
         subtitle: `Dishes are waiting at the pass an average of ${avgPickupLag} min for server pickup.`
+      };
+    } else if (avgKitchenPrep !== null || avgPickupLag !== null) {
+      bottleneckDiagnostic = {
+        type: 'SMOOTH',
+        label: 'Table Service Flowing Smoothly',
+        subtitle: 'Kitchen prep and server pickup times are within 15 min SLA parameters.'
       };
     }
 
@@ -487,6 +515,20 @@ export class ManagerProjectionService {
     const nowMs = Date.now();
     let totalClockedIn = 0;
 
+    // Real attendance truth: auto-logged on PIN login/logout (attendanceEngine).
+    // Latest record per employee keyed by id then name, so clock-in reflects the
+    // actual shift, not the onboarding emp.status flag.
+    const attendance = (typeof attendanceEngine.getTimesheet === 'function') ? (attendanceEngine.getTimesheet() || []) : [];
+    const latestByEmp = new Map();
+    attendance.forEach(a => {
+      const keys = [a.employeeId, a.employeeName].filter(Boolean);
+      keys.forEach(k => {
+        const prev = latestByEmp.get(k);
+        const at = new Date(a.clockInTime || 0).getTime();
+        if (!prev || at >= prev._at) latestByEmp.set(k, { ...a, _at: at });
+      });
+    });
+
     const staffRows = employees.map(emp => {
       const empId = emp.id;
       const empName = emp.name || 'Staff Member';
@@ -521,23 +563,35 @@ export class ManagerProjectionService {
       const empPayments = settledPayments.filter(p => empSessionIds.has(p.sessionId || p.session_id) || p.receivedBy === empId);
       const salesHandled = empPayments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
 
-      const avgPickupLag = totalPickupLags.length > 0 ? (totalPickupLags.reduce((a, b) => a + b, 0) / totalPickupLags.length).toFixed(1) : '2.8';
+      const avgPickupLag = totalPickupLags.length > 0 ? (totalPickupLags.reduce((a, b) => a + b, 0) / totalPickupLags.length).toFixed(1) : null;
 
       const associatedExceptions = exceptionsQueue.filter(exp => {
         const matchTable = assignedTables.some(t => exp.subtitle?.includes(t) || exp.tableLabel === t);
         return matchTable || exp.title?.includes(empName);
       });
 
-      const isClockedIn = emp.status === 'ACTIVE';
+      const attRec = latestByEmp.get(empId) || latestByEmp.get(empName) || null;
+      const isClockedIn = !!(attRec && attRec.status === 'ACTIVE_SHIFT');
       if (isClockedIn) totalClockedIn++;
+
+      const fmtTime = (iso) => iso ? new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : null;
+      let shiftTiming = null;
+      if (attRec && attRec.clockInTime) {
+        if (attRec.status === 'ACTIVE_SHIFT') {
+          shiftTiming = `${fmtTime(attRec.clockInTime)} – now (Active Shift)`;
+        } else if (attRec.clockOutTime) {
+          shiftTiming = `${fmtTime(attRec.clockInTime)} – ${fmtTime(attRec.clockOutTime)}`;
+        }
+      }
 
       return {
         empId,
         name: empName,
         roleName,
-        workspace: emp.workspaceDefault || 'waiter',
+        workspace: attRec ? (attRec.workspace || emp.workspaceDefault || 'waiter') : (emp.workspaceDefault || 'waiter'),
         clockInStatus: isClockedIn ? 'CLOCKED_IN' : 'OFFLINE',
-        shiftTiming: '12:00 – 20:00 (Active Shift)',
+        clockInTime: attRec ? attRec.clockInTime : null,
+        shiftTiming,
         assignedTables,
         assignedTablesCount: assignedTables.length,
         seatedGuests,
@@ -608,17 +662,38 @@ export class ManagerProjectionService {
       paymentCounts[method] = (paymentCounts[method] || 0) + 1;
     });
 
-    const expectedOpeningCash = 5000;
+    // Real cash drawer: opening float + physical count come from the persisted
+    // shift register. Variance is only computed once a count exists, so it can
+    // finally be non-zero (or explicitly null = "not captured") instead of a
+    // hardcoded ₹0 "Balanced".
+    const register = (typeof shiftRegisterService.getActiveRegister === 'function') ? shiftRegisterService.getActiveRegister(tenantId) : null;
+    const expectedOpeningCash = register ? (parseFloat(register.openingFloat) || 0) : null;
     const cashCollectedToday = paymentMix.CASH || 0;
-    const expectedCashInDrawer = expectedOpeningCash + cashCollectedToday;
-    const recordedCashCounted = expectedCashInDrawer;
-    const cashVariance = recordedCashCounted - expectedCashInDrawer;
+    const expectedCashInDrawer = expectedOpeningCash === null ? null : (expectedOpeningCash + cashCollectedToday);
+    const recordedCashCounted = (register && register.countedCash !== null && register.countedCash !== undefined)
+      ? (parseFloat(register.countedCash) || 0)
+      : null;
+    const cashVariance = (expectedCashInDrawer !== null && recordedCashCounted !== null)
+      ? Math.round((recordedCashCounted - expectedCashInDrawer) * 100) / 100
+      : null;
 
     const totalCovers = allSessions.reduce((sum, s) => sum + (parseInt(s.guestCount, 10) || 0), 0);
     const totalTablesServed = allSessions.filter(s => s.status === 'CLOSED' || s.billStatus === 'PAID').length;
     const avgBillCheck = totalTablesServed > 0 ? Math.round(settledRevenue / totalTablesServed) : (allSessions.length > 0 ? Math.round(settledRevenue / allSessions.length) : 0);
     const avgSpendPerGuest = totalCovers > 0 ? Math.round(settledRevenue / totalCovers) : 0;
-    const avgTableDuration = '42 min';
+
+    // Real average table duration from closed session dwell time (open -> close).
+    const dwellDurations = allSessions
+      .filter(s => s.status === 'CLOSED' || s.billStatus === 'PAID')
+      .map(s => {
+        const start = new Date(s.openedAt || s.createdAt || s.startedAt || 0).getTime();
+        const end = new Date(s.closedAt || s.updatedAt || s.endedAt || 0).getTime();
+        return (start && end && end > start) ? Math.round((end - start) / 60000) : null;
+      })
+      .filter(d => d !== null && d > 0);
+    const avgTableDurationMin = dwellDurations.length > 0
+      ? Math.round(dwellDurations.reduce((a, b) => a + b, 0) / dwellDurations.length)
+      : null;
 
     const serviceOpsProj = this.getServiceOperationsProjection(tenantId);
     const delayedOrdersCount = serviceOpsProj.pipelineRows ? serviceOpsProj.pipelineRows.filter(r => r.estPrepMin > 15).length : 0;
@@ -664,6 +739,7 @@ export class ManagerProjectionService {
         totalTxns: settledPayments.length,
         totalSettled: settledRevenue,
         cashDrawer: {
+          registerOpen: !!register,
           expectedOpeningCash,
           cashCollectedToday,
           expectedCashInDrawer,
@@ -671,16 +747,17 @@ export class ManagerProjectionService {
           cashVariance
         }
       },
+      taxRates: this.getTaxRates(tenantId),
       operationsSummary: {
         totalCovers,
         totalOrders: allOrders.length,
         totalTablesServed,
         avgBillCheck,
         avgSpendPerGuest,
-        avgTableDuration,
-        avgKitchenPrep: serviceOpsProj.avgKitchenPrep + ' min',
-        avgPickupLag: serviceOpsProj.avgPickupLag + ' min',
-        avgOrderToTable: serviceOpsProj.avgOrderToTable + ' min',
+        avgTableDuration: avgTableDurationMin === null ? null : (avgTableDurationMin + ' min'),
+        avgKitchenPrep: serviceOpsProj.avgKitchenPrep === null ? null : (serviceOpsProj.avgKitchenPrep + ' min'),
+        avgPickupLag: serviceOpsProj.avgPickupLag === null ? null : (serviceOpsProj.avgPickupLag + ' min'),
+        avgOrderToTable: serviceOpsProj.avgOrderToTable === null ? null : (serviceOpsProj.avgOrderToTable + ' min'),
         delayedOrdersCount,
         recalledBillsCount
       },
@@ -702,22 +779,50 @@ export class ManagerProjectionService {
     const activeSessions = (typeof sessionModel.getActiveSessions === 'function') ? sessionModel.getActiveSessions(tenantId) : [];
 
     const nowMs = Date.now();
-    const clockInTime = new Date(nowMs - 4 * 60 * 60 * 1000).toISOString();
+    const sess = readLiveSession();
+    const managerName = sess.employeeName || sess.name || 'Manager';
+    const managerRole = sess.roleName || 'Operations Manager';
+    const managerId = sess.employeeId || sess.id || null;
+
+    // Real clock-in: prefer the live attendance shift, else the authenticatedAt
+    // stamped at login. Elapsed is computed, never hardcoded.
+    const attendance = (typeof attendanceEngine.getTimesheet === 'function') ? (attendanceEngine.getTimesheet() || []) : [];
+    const myActive = attendance
+      .filter(a => a && a.status === 'ACTIVE_SHIFT' && ((managerId && a.employeeId === managerId) || a.employeeName === managerName))
+      .sort((a, b) => new Date(b.clockInTime || 0) - new Date(a.clockInTime || 0))[0];
+    const clockInTime = (myActive && myActive.clockInTime) ? myActive.clockInTime : (sess.authenticatedAt || null);
+    const shiftElapsedMin = clockInTime ? Math.max(0, Math.floor((nowMs - new Date(clockInTime).getTime()) / 60000)) : null;
+
+    // Register-backed handover. Only the opening float and handover notes are
+    // genuinely captured state; the "at takeover" table/bill/exception counts are
+    // not stored historically, so we expose live values and label them as such.
+    const register = (typeof shiftRegisterService.getActiveRegister === 'function') ? shiftRegisterService.getActiveRegister(tenantId) : null;
+    const occupiedNow = (activeSessions || []).length;
+    const pendingBillsNow = salesProj.billActivity ? salesProj.billActivity.billsAwaitingPaymentCount : 0;
+    const openExceptionsNow = opProj.needsAttentionQueue ? opProj.needsAttentionQueue.length : 0;
 
     return {
       managerInfo: {
-        name: 'Operations Manager',
-        role: 'Shift Operations Manager',
+        name: managerName,
+        role: managerRole,
         clockInTime,
-        shiftElapsedMin: 240,
-        status: 'ACTIVE_SHIFT'
+        shiftElapsedMin,
+        status: clockInTime ? 'ACTIVE_SHIFT' : 'NOT_CLOCKED_IN'
       },
-      inheritedState: {
-        openingCashFloat: 5000,
-        occupiedTablesAtTakeover: 2,
-        pendingBillsAtTakeover: 1,
-        inheritedExceptionsCount: 1,
-        previousManagerNotes: 'All kitchen stations fully prepped. Bar inventory count verified.'
+      register: register ? {
+        id: register.id,
+        openingCashFloat: register.openingFloat,
+        openedAt: register.openedAt,
+        openedBy: register.openedBy,
+        countedCash: register.countedCash,
+        handoverNotes: register.handoverNotes || ''
+      } : null,
+      handoverContext: {
+        openingCashFloat: register ? register.openingFloat : null,
+        previousManagerNotes: register ? (register.handoverNotes || null) : null,
+        occupiedTablesNow: occupiedNow,
+        pendingBillsNow,
+        openExceptionsNow
       },
       currentShiftSnapshot: {
         salesToday: salesProj.financialPosition.grossSales,
@@ -737,6 +842,210 @@ export class ManagerProjectionService {
         unpaidBillsCount: salesProj.billActivity.billsAwaitingPaymentCount,
         cashDrawerVariance: reportsProj.paymentReconciliation.cashDrawer.cashVariance
       },
+      lastUpdated: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Configured tax rates (from taxConfigurationModel), so views render the real
+   * CGST / SGST / VAT / service-charge percentages instead of hardcoded 2.5 / 5.
+   */
+  getTaxRates(tenantId = null) {
+    let cgstRate = 0, sgstRate = 0, igstRate = 0, vatRate = 0, serviceChargeRate = 0;
+    try {
+      const cfg = taxConfigurationModel.getTaxConfiguration(tenantId) || {};
+      const rules = Array.isArray(cfg.taxRules) ? cfg.taxRules : [];
+      const gstRule = rules.find(r => r && r.code === 'GST-FOOD-5' && r.status === 'ACTIVE')
+        || rules.find(r => r && r.taxType === 'GST' && r.status === 'ACTIVE');
+      if (gstRule) {
+        cgstRate = parseFloat(gstRule.cgstRate) || 0;
+        sgstRate = parseFloat(gstRule.sgstRate) || 0;
+        igstRate = parseFloat(gstRule.igstRate) || 0;
+      }
+      const vatRule = rules.find(r => r && r.taxType === 'LIQUOR_VAT' && r.status === 'ACTIVE');
+      if (vatRule) vatRate = parseFloat(vatRule.rate) || 0;
+      if (cfg.serviceCharge) serviceChargeRate = parseFloat(cfg.serviceCharge.rate) || 0;
+    } catch (_) {
+      // Fall through to zeros; the view still shows the (correct) amounts.
+    }
+    return { cgstRate, sgstRate, igstRate, vatRate, serviceChargeRate };
+  }
+
+  /**
+   * Stock & 86 panel (live). On-hand truth comes from the inventory ledger via
+   * inventoryProjectionService; classification uses each item's reorder level.
+   */
+  getStockAlertsProjection(tenantId = null) {
+    let outOfStock = [];
+    let lowStock = [];
+    let totalItems = 0;
+    try {
+      const summary = inventoryProjectionService.getInventoryValuationSummary(tenantId) || { items: [] };
+      const items = summary.items || [];
+      totalItems = items.length;
+      const master = (typeof inventoryItemModel.getAllItems === 'function') ? (inventoryItemModel.getAllItems(tenantId) || []) : [];
+      const reorderById = new Map();
+      master.forEach(m => reorderById.set(m.id, parseFloat(m.reorderLevel) || 0));
+
+      items.forEach(it => {
+        const reorder = reorderById.get(it.id) || 0;
+        const row = {
+          id: it.id,
+          name: it.name,
+          category: it.category,
+          baseUnit: it.baseUnit,
+          onHand: it.currentStock,
+          reorderLevel: reorder,
+          valuation: it.stockValuation
+        };
+        if (it.currentStock <= 0) outOfStock.push(row);
+        else if (reorder > 0 && it.currentStock <= reorder) lowStock.push(row);
+      });
+
+      outOfStock.sort((a, b) => (b.valuation || 0) - (a.valuation || 0));
+      lowStock.sort((a, b) => (a.onHand - a.reorderLevel) - (b.onHand - b.reorderLevel));
+    } catch (_) {
+      // Inventory rows not hydrated yet; empty state is honest, not fabricated.
+    }
+    return {
+      outOfStock,
+      lowStock,
+      outOfStockCount: outOfStock.length,
+      lowStockCount: lowStock.length,
+      totalItems,
+      source: 'ledger',
+      lastUpdated: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Discounts, Voids & Comps oversight (live from orders + bill_revisions).
+   */
+  getVoidsCompsProjection(tenantId = null) {
+    const allOrders = (typeof orderModel.getAllOrders === 'function') ? orderModel.getAllOrders(tenantId) : ((typeof orderModel.getOrders === 'function') ? orderModel.getOrders(tenantId) : []);
+    const allSessions = sessionModel.getAllSessions(tenantId) || [];
+
+    const sessionById = new Map();
+    allSessions.forEach(s => sessionById.set(s.id || s.sessionId, s));
+    const tableFor = (o) => {
+      const s = sessionById.get(o.sessionId || o.session_id);
+      if (s) return s.tableCode || `Table ${s.tableNumber}`;
+      return o.tableNumber ? `Table ${o.tableNumber}` : 'Kitchen';
+    };
+
+    const voidRows = [];
+    let voidValue = 0;
+    allOrders.forEach(o => {
+      (o.items || []).forEach(it => {
+        const status = it.itemStatus || it.status;
+        if (status === 'VOIDED') {
+          const qty = parseInt(it.quantity) || 1;
+          const unit = parseFloat(it.unitPrice || it.price || 0) || 0;
+          const lineValue = Math.round(unit * qty * 100) / 100;
+          voidValue += lineValue;
+          voidRows.push({
+            item: it.name || it.itemName || 'Item',
+            qty,
+            value: lineValue,
+            reason: it.voidReason || 'Voided',
+            voidedAt: it.voidedAt || null,
+            tableLabel: tableFor(o)
+          });
+        }
+      });
+    });
+
+    const discountRows = [];
+    let discountValue = 0;
+    allSessions.forEach(s => {
+      const revs = billRevisionModel.getRevisionsForSession(s.id || s.sessionId, tenantId) || [];
+      const validRev = revs.find(r => r.revisionStatus === 'ACCEPTED' || r.revisionStatus === 'GENERATED' || r.invoiceStatus === 'ISSUED') || revs[revs.length - 1];
+      if (validRev && parseFloat(validRev.discountsTotal) > 0) {
+        discountValue += parseFloat(validRev.discountsTotal) || 0;
+        discountRows.push({
+          tableCode: s.tableCode || `Table ${s.tableNumber}`,
+          amount: parseFloat(validRev.discountsTotal) || 0,
+          reason: validRev.discountReason || 'Manual Discount',
+          waiterName: validRev.waiterName || 'Staff',
+          timestamp: validRev.updatedAt || validRev.createdAt || null
+        });
+      }
+    });
+
+    discountRows.sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+    voidRows.sort((a, b) => new Date(b.voidedAt || 0) - new Date(a.voidedAt || 0));
+
+    return {
+      voidRows,
+      discountRows,
+      voidCount: voidRows.length,
+      voidValue: Math.round(voidValue * 100) / 100,
+      discountCount: discountRows.length,
+      discountValue: Math.round(discountValue * 100) / 100,
+      lastUpdated: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Prep & Production levels. NOTE: production_batches is device-local and NOT
+   * part of the realtime set; the view labels this honestly.
+   */
+  getProductionProjection(tenantId = null) {
+    let batches = [];
+    try {
+      batches = (typeof productionBatchModel.getAllBatches === 'function') ? (productionBatchModel.getAllBatches(tenantId) || []) : [];
+    } catch (_) {
+      batches = [];
+    }
+    // Drop the previously-shipped fabricated demo batch so the panel only shows real data.
+    batches = batches.filter(b => b && b.id !== 'BATCH-2026-0042');
+    const completed = batches.filter(b => b.status === 'COMPLETED');
+    const planned = batches.filter(b => b.status !== 'COMPLETED');
+    const yields = completed.map(b => parseFloat(b.yieldPercent)).filter(v => !isNaN(v));
+    const avgYield = yields.length > 0 ? Math.round((yields.reduce((a, b) => a + b, 0) / yields.length) * 10) / 10 : null;
+    const totalLeakage = completed.reduce((sum, b) => sum + (parseFloat(b.totalYieldLeakageValue) || 0), 0);
+    return {
+      batches: batches
+        .slice()
+        .sort((a, b) => new Date(b.completedAt || b.createdAt || 0) - new Date(a.completedAt || a.createdAt || 0)),
+      activeCount: planned.length,
+      completedCount: completed.length,
+      avgYieldPercent: avgYield,
+      totalLeakageValue: Math.round(totalLeakage * 100) / 100,
+      realtime: false,
+      lastUpdated: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Floor turnover & covers, derived from real session dwell times.
+   */
+  getFloorTurnoverProjection(tenantId = null) {
+    const allSessions = sessionModel.getAllSessions(tenantId) || [];
+    const allTables = tableMasterModel.getAllMasterTables() || [];
+    const closed = allSessions.filter(s => s.status === 'CLOSED' || s.billStatus === 'PAID');
+    const active = allSessions.filter(s => s && s.status !== 'CLOSED');
+
+    const dwellDurations = closed.map(s => {
+      const start = new Date(s.openedAt || s.createdAt || s.startedAt || 0).getTime();
+      const end = new Date(s.closedAt || s.updatedAt || s.endedAt || 0).getTime();
+      return (start && end && end > start) ? Math.round((end - start) / 60000) : null;
+    }).filter(d => d !== null && d > 0);
+
+    const coversToday = allSessions.reduce((sum, s) => sum + (parseInt(s.guestCount, 10) || 0), 0);
+    const totalTables = allTables.length;
+    const turnoverRate = totalTables > 0 ? Math.round((closed.length / totalTables) * 100) / 100 : null;
+    const avgDwell = dwellDurations.length > 0 ? Math.round(dwellDurations.reduce((a, b) => a + b, 0) / dwellDurations.length) : null;
+    const avgCoversPerTable = closed.length > 0 ? Math.round(coversToday / closed.length) : null;
+
+    return {
+      tablesServed: closed.length,
+      tablesActive: active.length,
+      totalTables,
+      coversToday,
+      turnoverRate,
+      avgDwellMin: avgDwell,
+      avgCoversPerTable,
       lastUpdated: new Date().toISOString()
     };
   }

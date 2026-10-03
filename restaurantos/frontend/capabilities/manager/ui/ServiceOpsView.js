@@ -22,24 +22,18 @@ export class ServiceOpsView {
     this.container.className = 'service-ops-view flex-col gap-lg animate-fade-in';
     this.container.style.width = '100%';
 
-    this.subscribePlatformEvents();
     this.updateContent();
 
     return this.container;
   }
 
-  subscribePlatformEvents() {
-    const refresh = () => {
-      if (this.container && document.body.contains(this.container)) {
-        this.updateContent();
-      }
-    };
-    this.unsubscribeEvents = [
-      platformEventBus.subscribe('ticket:status_changed', refresh),
-      platformEventBus.subscribe('order:confirmed', refresh),
-      platformEventBus.subscribe('session:milestone:changed', refresh),
-      platformEventBus.subscribe('table:state:changed', refresh)
-    ];
+  refresh() {
+    this.updateContent();
+  }
+
+  destroy() {
+    (this.unsubscribeEvents || []).forEach(u => { if (typeof u === 'function') u(); });
+    this.unsubscribeEvents = [];
   }
 
   updateContent() {
@@ -48,7 +42,14 @@ export class ServiceOpsView {
     const data = managerProjectionService.getServiceOperationsProjection(this.tenantId);
 
     const bDiagnostic = data.bottleneckDiagnostic;
-    const bColor = bDiagnostic.type === 'KITCHEN_BOTTLENECK' ? '#ef4444' : (bDiagnostic.type === 'PICKUP_BOTTLENECK' ? '#f59e0b' : '#10b981');
+    const isNoData = bDiagnostic.type === 'NO_DATA';
+    const bColor = bDiagnostic.type === 'KITCHEN_BOTTLENECK' ? '#ef4444'
+      : (bDiagnostic.type === 'PICKUP_BOTTLENECK' ? '#f59e0b'
+      : (isNoData ? 'var(--text-muted)' : '#10b981'));
+    // Averages are null until real orders flow; render an em-dash, never "null min".
+    const minFmt = (v) => (v === null || v === undefined) ? '—' : `${v} min`;
+    const pm = (v) => (v === null || v === undefined) ? '—' : `~${v} min`;
+    const orDash = (v) => (v === null || v === undefined || v === '') ? '—' : v;
 
     this.container.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
@@ -56,8 +57,8 @@ export class ServiceOpsView {
           <h2 style="font-size:1.5rem; margin:0;">🍽️ Service Operations (Phase M4)</h2>
           <p style="color:var(--text-muted); font-size:0.875rem; margin-top:2px;">Service Pipeline • Timing SLA Breakdown • Kitchen vs Server Pickup Bottleneck Diagnostic</p>
         </div>
-        <span class="badge" style="background:#10b98122; color:#10b981; border:1px solid #10b981; font-size:0.85rem; padding:6px 14px;">
-          ⚡ Live Service Flow Active
+        <span class="badge" style="background:${isNoData ? 'var(--bg-surface-2)' : '#10b98122'}; color:${isNoData ? 'var(--text-muted)' : '#10b981'}; border:1px solid ${isNoData ? 'var(--border-subtle)' : '#10b981'}; font-size:0.85rem; padding:6px 14px;">
+          ${isNoData ? '⏳ Awaiting live orders' : '⚡ Live Service Flow Active'}
         </span>
       </div>
 
@@ -106,15 +107,15 @@ export class ServiceOpsView {
           <div style="display:flex; gap:20px; flex-wrap:wrap; font-size:0.85rem;">
             <div style="background:var(--bg-surface-2); padding:10px 14px; border-radius:6px; text-align:center;">
               <span style="font-size:0.725rem; color:var(--text-muted); display:block; font-weight:600;">AVG KITCHEN PREP</span>
-              <strong style="font-size:1.2rem; color:#f59e0b;">${data.avgKitchenPrep} min</strong>
+              <strong style="font-size:1.2rem; color:#f59e0b;">${minFmt(data.avgKitchenPrep)}</strong>
             </div>
             <div style="background:var(--bg-surface-2); padding:10px 14px; border-radius:6px; text-align:center;">
               <span style="font-size:0.725rem; color:var(--text-muted); display:block; font-weight:600;">AVG PASS PICKUP LAG</span>
-              <strong style="font-size:1.2rem; color:#ef4444;">${data.avgPickupLag} min</strong>
+              <strong style="font-size:1.2rem; color:#ef4444;">${minFmt(data.avgPickupLag)}</strong>
             </div>
             <div style="background:var(--bg-surface-2); padding:10px 14px; border-radius:6px; text-align:center;">
               <span style="font-size:0.725rem; color:var(--text-muted); display:block; font-weight:600;">AVG ORDER-TO-TABLE SLA</span>
-              <strong style="font-size:1.2rem; color:#10b981;">${data.avgOrderToTable} min</strong>
+              <strong style="font-size:1.2rem; color:#10b981;">${minFmt(data.avgOrderToTable)}</strong>
             </div>
           </div>
         </div>
@@ -150,7 +151,7 @@ export class ServiceOpsView {
                     <td style="padding:12px 10px; font-weight:700; color:var(--text-primary);">${row.tableLabel}</td>
                     <td style="padding:12px 10px; color:var(--text-secondary);">${row.waiterName}</td>
                     <td style="padding:12px 10px;">
-                      <code style="font-size:0.78rem;">${row.latestOrderNo}</code>
+                      <code style="font-size:0.78rem;">${orDash(row.latestOrderNo)}</code>
                       <span style="color:var(--text-muted); font-size:0.75rem; margin-left:4px;">(${row.totalItems} items)</span>
                     </td>
                     <td style="padding:12px 10px;">
@@ -163,7 +164,7 @@ export class ServiceOpsView {
                       ${row.servedCount > 0 ? `<span class="badge" style="background:#6b728022; color:#9ca3af; border:1px solid #6b7280;">⚪ ${row.servedCount} served</span>` : `<span style="color:var(--text-muted);">—</span>`}
                     </td>
                     <td style="padding:12px 10px; font-size:0.8rem; color:var(--text-secondary);">
-                      Kitchen: <strong>~${row.estPrepMin} min</strong> · Pickup: <strong>~${row.estPickupMin} min</strong> · Total: <strong>~${row.estServiceMin} min</strong>
+                      Kitchen: <strong>${pm(row.estPrepMin)}</strong> · Pickup: <strong>${pm(row.estPickupMin)}</strong> · Total: <strong>${pm(row.estServiceMin)}</strong>
                     </td>
                     <td style="padding:12px 10px; text-align:right;">
                       <button class="btn-secondary btn-inspect-service-table" data-table="${row.tableNumber}" data-session-id="${row.sessionId}" style="padding:4px 10px; font-size:0.78rem; color:var(--accent-primary); border-color:var(--accent-primary);">

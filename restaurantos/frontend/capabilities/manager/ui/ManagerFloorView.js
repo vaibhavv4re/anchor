@@ -44,29 +44,19 @@ export class ManagerFloorView {
       this.activeAreaId = areas[0].id;
     }
 
-    this.subscribePlatformEvents();
     this.updateContent();
 
     return this.container;
   }
 
-  subscribePlatformEvents() {
-    const refresh = () => {
-      if (this.container && document.body.contains(this.container)) {
-        this.updateGridContent();
-      }
-    };
-    this.unsubscribeEvents = [
-      platformEventBus.subscribe('table:projection:updated', refresh),
-      platformEventBus.subscribe('table:state:changed', refresh),
-      platformEventBus.subscribe('session:created', refresh),
-      platformEventBus.subscribe('session:milestone:changed', refresh),
-      platformEventBus.subscribe('order:confirmed', refresh),
-      platformEventBus.subscribe('ticket:status_changed', refresh),
-      platformEventBus.subscribe('bill:finalized', refresh),
-      platformEventBus.subscribe('bill:settled', refresh),
-      platformEventBus.subscribe('bill:reopened', refresh)
-    ];
+  refresh() {
+    if (typeof this.updateGridContent === 'function') this.updateGridContent();
+    else this.updateContent();
+  }
+
+  destroy() {
+    (this.unsubscribeEvents || []).forEach(u => { if (typeof u === 'function') u(); });
+    this.unsubscribeEvents = [];
   }
 
   updateContent() {
@@ -131,7 +121,39 @@ export class ManagerFloorView {
       // Get orders for running bill & production stats
       const orders = sId ? orderModel.getOrdersForSession(sId, this.tenantId) : [];
       const latestRevision = sId ? billRevisionModel.getLatestRevisionForSession(sId, this.tenantId) : null;
-      const runningBill = latestRevision ? latestRevision.grandTotal : orders.reduce((sum, o) => sum + (parseFloat(o.subtotal || o.totalAmount) || 0), 0);
+
+      // Live running bill. Once the cashier finalizes a revision we show its
+      // authoritative (tax-inclusive) grand total. Mid-service there is NO revision
+      // yet and the Supabase-synced order rows carry no top-level subtotal, so we
+      // sum the order LINE ITEMS (the same source the waiter running bill and the
+      // inspector use) so the manager sees the total move the instant an item is ordered.
+      const isExcluded = (rowStatus, itemStatus) =>
+        rowStatus === 'CANCELLED' || rowStatus === 'VOIDED' ||
+        itemStatus === 'VOIDED' || itemStatus === 'CANCELLED';
+      const runningBill = (() => {
+        if (latestRevision) {
+          const g = parseFloat(latestRevision.grandTotal != null ? latestRevision.grandTotal : latestRevision.grand_total);
+          if (!Number.isNaN(g)) return g;
+        }
+        let sum = 0;
+        orders.forEach(o => {
+          const rowStatus = o.status || o.orderStatus;
+          const items = Array.isArray(o.items) ? o.items : [];
+          if (items.length) {
+            items.forEach(it => {
+              if (isExcluded(rowStatus, it.itemStatus || it.status)) return;
+              const price = parseFloat(it.price != null ? it.price : (it.unitPrice != null ? it.unitPrice : it.sellingPrice)) || 0;
+              const qty = parseInt(it.quantity != null ? it.quantity : (it.qty || 1), 10) || 1;
+              const line = it.lineTotal != null ? it.lineTotal : (it.total != null ? it.total : price * qty);
+              sum += parseFloat(line) || 0;
+            });
+          } else {
+            if (isExcluded(rowStatus)) return;
+            sum += parseFloat(o.subtotal || o.totalAmount || o.total_amount) || 0;
+          }
+        });
+        return sum;
+      })();
 
       // Kitchen items breakdown
       let prepItems = 0;

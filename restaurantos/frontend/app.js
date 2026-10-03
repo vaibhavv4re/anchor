@@ -196,6 +196,15 @@ export class ApplicationShell {
       platformEventBus: this.platformEventBus
     };
 
+    // Tear down the previous workspace instance before building a new one so its
+    // platform event-bus subscriptions do not leak across full app re-renders
+    // (the shell resets this.appEl.innerHTML, which drops DOM listeners but not
+    // JS bus subscriptions). Only tracked when the workspace exposes destroy().
+    if (this._activeWorkspaceInstance && typeof this._activeWorkspaceInstance.destroy === 'function') {
+      try { this._activeWorkspaceInstance.destroy(); } catch (_) {}
+    }
+    this._activeWorkspaceInstance = null;
+
     if (session.workspace === 'superadmin' || session.roleId === 'role-superadmin') {
       const superAdminWs = new SuperAdminWorkspaceView(opts);
       await superAdminWs.render(rootMount, session);
@@ -204,6 +213,7 @@ export class ApplicationShell {
       await adminWs.render(rootMount, session);
     } else if (session.workspace === 'manager' || session.roleId === 'role-manager') {
       const managerWs = new ManagerWorkspaceView(opts);
+      this._activeWorkspaceInstance = managerWs;
       await managerWs.render(rootMount, session);
     } else if (session.workspace === 'inventory') {
       const inventoryWs = new InventoryWorkspaceView(opts);

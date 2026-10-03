@@ -20,24 +20,18 @@ export class StaffShiftView {
     this.container.className = 'staff-shift-view flex-col gap-lg animate-fade-in';
     this.container.style.width = '100%';
 
-    this.subscribePlatformEvents();
     this.updateContent();
 
     return this.container;
   }
 
-  subscribePlatformEvents() {
-    const refresh = () => {
-      if (this.container && document.body.contains(this.container)) {
-        this.updateContent();
-      }
-    };
-    this.unsubscribeEvents = [
-      platformEventBus.subscribe('session:created', refresh),
-      platformEventBus.subscribe('order:confirmed', refresh),
-      platformEventBus.subscribe('ticket:status_changed', refresh),
-      platformEventBus.subscribe('payment:recorded', refresh)
-    ];
+  refresh() {
+    this.updateContent();
+  }
+
+  destroy() {
+    (this.unsubscribeEvents || []).forEach(u => { if (typeof u === 'function') u(); });
+    this.unsubscribeEvents = [];
   }
 
   updateContent() {
@@ -45,6 +39,9 @@ export class StaffShiftView {
 
     const data = managerProjectionService.getStaffShiftProjection(this.tenantId);
     const formatCurrency = (val) => '₹' + Number(val || 0).toLocaleString('en-IN');
+    // Attendance-derived fields are null until a real shift is clocked in.
+    const orDash = (v) => (v === null || v === undefined || v === '') ? '—' : v;
+    const minFmt = (v) => (v === null || v === undefined) ? '—' : `${v} min`;
 
     this.container.innerHTML = `
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:16px;">
@@ -102,7 +99,7 @@ export class StaffShiftView {
                     </span>
                   </div>
                   <div style="font-size:0.78rem; color:var(--text-muted); margin-top:2px;">
-                    ⏰ ${staff.shiftTiming}
+                    ⏰ ${orDash(staff.shiftTiming)}
                   </div>
                 </div>
               </div>
@@ -143,7 +140,7 @@ export class StaffShiftView {
               </div>
               <div>
                 <span style="color:var(--text-muted); display:block; font-size:0.725rem; font-weight:600;">READY PICKUP AVG</span>
-                <strong style="color:#3b82f6;">${staff.avgPickupLag} min</strong>
+                <strong style="color:#3b82f6;">${minFmt(staff.avgPickupLag)}</strong>
               </div>
             </div>
 

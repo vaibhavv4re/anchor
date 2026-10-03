@@ -19,25 +19,18 @@ export class SalesCashierView {
     this.container.className = 'sales-cashier-view flex-col gap-lg animate-fade-in';
     this.container.style.width = '100%';
 
-    this.subscribePlatformEvents();
     this.updateContent();
 
     return this.container;
   }
 
-  subscribePlatformEvents() {
-    const refresh = () => {
-      if (this.container && document.body.contains(this.container)) {
-        this.updateContent();
-      }
-    };
-    this.unsubscribeEvents = [
-      platformEventBus.subscribe('payment:recorded', refresh),
-      platformEventBus.subscribe('bill:finalized', refresh),
-      platformEventBus.subscribe('bill:settled', refresh),
-      platformEventBus.subscribe('bill:reopened', refresh),
-      platformEventBus.subscribe('discount:approved', refresh)
-    ];
+  refresh() {
+    this.updateContent();
+  }
+
+  destroy() {
+    (this.unsubscribeEvents || []).forEach(u => { if (typeof u === 'function') u(); });
+    this.unsubscribeEvents = [];
   }
 
   updateContent() {
@@ -49,6 +42,8 @@ export class SalesCashierView {
     const counts = data.paymentCounts;
     const ba = data.billActivity;
     const audit = data.managerAudit;
+    // Read configured rates so the labels match the tax config (not hardcoded 2.5/5).
+    const rates = managerProjectionService.getTaxRates(this.tenantId);
 
     const formatCurrency = (val) => '₹' + Number(val || 0).toLocaleString('en-IN');
 
@@ -95,17 +90,17 @@ export class SalesCashierView {
           </div>
 
           <div style="background:var(--bg-surface-2); padding:14px; border-radius:6px;">
-            <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">CGST (2.5%)</div>
+            <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">CGST (${rates.cgstRate}%)</div>
             <div style="font-size:1.3rem; font-weight:700; color:var(--text-primary); margin-top:2px;">${formatCurrency(fp.cgstTotal)}</div>
           </div>
 
           <div style="background:var(--bg-surface-2); padding:14px; border-radius:6px;">
-            <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">SGST (2.5%)</div>
+            <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">SGST (${rates.sgstRate}%)</div>
             <div style="font-size:1.3rem; font-weight:700; color:var(--text-primary); margin-top:2px;">${formatCurrency(fp.sgstTotal)}</div>
           </div>
 
           <div style="background:var(--bg-surface-2); padding:14px; border-radius:6px;">
-            <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">SERVICE CHARGE (5.0%)</div>
+            <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">SERVICE CHARGE (${rates.serviceChargeRate}%)</div>
             <div style="font-size:1.3rem; font-weight:700; color:var(--text-primary); margin-top:2px;">${formatCurrency(fp.serviceChargeTotal)}</div>
           </div>
 

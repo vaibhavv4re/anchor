@@ -21,23 +21,18 @@ export class ReportsDaySummaryView {
     this.container.className = 'reports-day-summary-view flex-col gap-lg animate-fade-in';
     this.container.style.width = '100%';
 
-    this.subscribePlatformEvents();
     this.updateContent();
 
     return this.container;
   }
 
-  subscribePlatformEvents() {
-    const refresh = () => {
-      if (this.container && document.body.contains(this.container)) {
-        this.updateContent();
-      }
-    };
-    this.unsubscribeEvents = [
-      platformEventBus.subscribe('payment:recorded', refresh),
-      platformEventBus.subscribe('bill:finalized', refresh),
-      platformEventBus.subscribe('bill:settled', refresh)
-    ];
+  refresh() {
+    this.updateContent();
+  }
+
+  destroy() {
+    (this.unsubscribeEvents || []).forEach(u => { if (typeof u === 'function') u(); });
+    this.unsubscribeEvents = [];
   }
 
   updateContent() {
@@ -88,6 +83,11 @@ export class ReportsDaySummaryView {
   }
 
   renderActiveReportTab(ss, pr, os, audit, formatCurrency) {
+    // Tax labels are config-driven (from taxConfigurationModel via the projection), not hardcoded.
+    const rates = managerProjectionService.getTaxRates(this.tenantId);
+    const dash = (v) => (v === null || v === undefined) ? '—' : v;
+    const money = (v) => (v === null || v === undefined) ? '—' : formatCurrency(v);
+
     if (this.activeReportTab === 'sales_summary') {
       return `
         <div class="card" style="padding:20px; background:var(--bg-surface-1);">
@@ -108,15 +108,15 @@ export class ReportsDaySummaryView {
               <strong style="font-size:1.5rem; display:block; color:var(--accent-primary); margin-top:4px;">${formatCurrency(ss.taxableSales)}</strong>
             </div>
             <div style="background:var(--bg-surface-2); padding:14px; border-radius:6px;">
-              <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">CGST (2.5%)</span>
+              <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">CGST (${rates.cgstRate}%)</span>
               <strong style="font-size:1.3rem; display:block; color:var(--text-primary); margin-top:4px;">${formatCurrency(ss.cgst)}</strong>
             </div>
             <div style="background:var(--bg-surface-2); padding:14px; border-radius:6px;">
-              <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">SGST (2.5%)</span>
+              <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">SGST (${rates.sgstRate}%)</span>
               <strong style="font-size:1.3rem; display:block; color:var(--text-primary); margin-top:4px;">${formatCurrency(ss.sgst)}</strong>
             </div>
             <div style="background:var(--bg-surface-2); padding:14px; border-radius:6px;">
-              <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">SERVICE CHARGE (5%)</span>
+              <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">SERVICE CHARGE (${rates.serviceChargeRate}%)</span>
               <strong style="font-size:1.3rem; display:block; color:var(--text-primary); margin-top:4px;">${formatCurrency(ss.serviceCharge)}</strong>
             </div>
             <div style="background:var(--bg-surface-2); padding:14px; border-radius:6px; border-left:4px solid #3b82f6;">
@@ -136,6 +136,29 @@ export class ReportsDaySummaryView {
       `;
     } else if (this.activeReportTab === 'payment_recon') {
       const cd = pr.cashDrawer;
+      // Honest drawer states: no register opened / counted-but-variance / not-counted-yet.
+      let varianceBlock;
+      if (!cd.registerOpen) {
+        varianceBlock = `
+          <div style="display:flex; justify-content:space-between; background:var(--bg-surface-2); color:var(--text-muted); padding:12px 14px; border-radius:6px; font-weight:700; border:1px dashed var(--border-subtle);">
+            <span>CASH DRAWER</span>
+            <span>No shift register opened</span>
+          </div>`;
+      } else if (cd.cashVariance === null || cd.cashVariance === undefined) {
+        varianceBlock = `
+          <div style="display:flex; justify-content:space-between; background:var(--bg-surface-2); color:#f59e0b; padding:12px 14px; border-radius:6px; font-weight:700; border:1px solid #f59e0b;">
+            <span>CASH DRAWER VARIANCE</span>
+            <span>Not counted yet</span>
+          </div>`;
+      } else {
+        const balanced = cd.cashVariance === 0;
+        const tone = balanced ? '#10b981' : '#ef4444';
+        varianceBlock = `
+          <div style="display:flex; justify-content:space-between; background:${tone}22; color:${tone}; padding:12px 14px; border-radius:6px; font-weight:700; border:1px solid ${tone};">
+            <span>CASH DRAWER VARIANCE</span>
+            <span>${formatCurrency(cd.cashVariance)} (${balanced ? 'Balanced \uD83D\uDFE2' : (cd.cashVariance > 0 ? 'Over \uD83D\uDD3A' : 'Short \uD83D\uDD34')})</span>
+          </div>`;
+      }
       return `
         <div class="grid grid-cols-2 gap-md">
           <!-- Payment Mix Table -->
@@ -184,24 +207,21 @@ export class ReportsDaySummaryView {
             <div style="display:flex; flex-direction:column; gap:10px; margin-top:12px; font-size:0.85rem;">
               <div style="display:flex; justify-content:space-between; background:var(--bg-surface-2); padding:10px 14px; border-radius:6px;">
                 <span>Expected Opening Cash Float</span>
-                <strong>${formatCurrency(cd.expectedOpeningCash)}</strong>
+                <strong>${money(cd.expectedOpeningCash)}</strong>
               </div>
               <div style="display:flex; justify-content:space-between; background:var(--bg-surface-2); padding:10px 14px; border-radius:6px;">
                 <span>Cash Collected Today</span>
-                <strong style="color:#f59e0b;">+${formatCurrency(cd.cashCollectedToday)}</strong>
+                <strong style="color:#f59e0b;">+${money(cd.cashCollectedToday)}</strong>
               </div>
               <div style="display:flex; justify-content:space-between; background:var(--bg-surface-2); padding:10px 14px; border-radius:6px; font-weight:700;">
                 <span>Expected Cash in Drawer</span>
-                <span>${formatCurrency(cd.expectedCashInDrawer)}</span>
+                <span>${money(cd.expectedCashInDrawer)}</span>
               </div>
-              <div style="display:flex; justify-content:space-between; background:var(--bg-surface-2); padding:10px 14px; border-radius:6px; border:1px solid var(--accent-primary);">
+              <div style="display:flex; justify-content:space-between; background:var(--bg-surface-2); padding:10px 14px; border-radius:6px; border:1px solid var(--border-subtle);">
                 <span>Recorded Cash Counted (Shift End)</span>
-                <strong style="color:var(--accent-primary);">${formatCurrency(cd.recordedCashCounted)}</strong>
+                <strong>${money(cd.recordedCashCounted)}</strong>
               </div>
-              <div style="display:flex; justify-content:space-between; background:#10b98122; color:#10b981; padding:12px 14px; border-radius:6px; font-weight:700; border:1px solid #10b981;">
-                <span>CASH DRAWER VARIANCE</span>
-                <span>${formatCurrency(cd.cashVariance)} (Balanced 🟢)</span>
-              </div>
+              ${varianceBlock}
             </div>
           </div>
         </div>
@@ -235,15 +255,15 @@ export class ReportsDaySummaryView {
             </div>
             <div style="background:var(--bg-surface-2); padding:14px; border-radius:6px;">
               <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">AVG DWELL DURATION</span>
-              <strong style="font-size:1.4rem; display:block; color:var(--text-primary); margin-top:2px;">${os.avgTableDuration}</strong>
+              <strong style="font-size:1.4rem; display:block; color:var(--text-primary); margin-top:2px;">${dash(os.avgTableDuration)}</strong>
             </div>
             <div style="background:var(--bg-surface-2); padding:14px; border-radius:6px;">
               <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">AVG KITCHEN PREP</span>
-              <strong style="font-size:1.4rem; display:block; color:#f59e0b; margin-top:2px;">${os.avgKitchenPrep}</strong>
+              <strong style="font-size:1.4rem; display:block; color:#f59e0b; margin-top:2px;">${dash(os.avgKitchenPrep)}</strong>
             </div>
             <div style="background:var(--bg-surface-2); padding:14px; border-radius:6px;">
               <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">ORDER-TO-TABLE SLA</span>
-              <strong style="font-size:1.4rem; display:block; color:#10b981; margin-top:2px;">${os.avgOrderToTable}</strong>
+              <strong style="font-size:1.4rem; display:block; color:#10b981; margin-top:2px;">${dash(os.avgOrderToTable)}</strong>
             </div>
           </div>
         </div>
@@ -287,9 +307,76 @@ export class ReportsDaySummaryView {
 
     const exportBtn = this.container.querySelector('#btn-export-day-summary');
     if (exportBtn) {
-      exportBtn.addEventListener('click', () => {
-        alert('📥 Anchor Shift Day Summary Report exported cleanly for CA / Accounting system!');
-      });
+      exportBtn.addEventListener('click', () => this.exportDaySummaryCsv());
     }
+  }
+
+  // Real CSV export (Blob download) built from the same accounting-ledger projection
+  // that is rendered on screen - no alert() placeholder.
+  exportDaySummaryCsv() {
+    const data = managerProjectionService.getReportsDaySummaryProjection(this.tenantId);
+    const ss = data.salesSummary;
+    const pr = data.paymentReconciliation;
+    const os = data.operationsSummary;
+    const cd = pr.cashDrawer || {};
+
+    const esc = (v) => {
+      const s = (v === null || v === undefined) ? '' : String(v);
+      return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s;
+    };
+    const rows = [];
+    rows.push(['Anchor RestaurantOS - Day Summary Report']);
+    rows.push(['Generated At', new Date().toISOString()]);
+    rows.push([]);
+    rows.push(['SALES SUMMARY']);
+    rows.push(['Gross Sales', ss.grossSales]);
+    rows.push(['Discounts', ss.discounts]);
+    rows.push(['Net Taxable Sales', ss.taxableSales]);
+    rows.push(['CGST', ss.cgst]);
+    rows.push(['SGST', ss.sgst]);
+    rows.push(['Service Charge', ss.serviceCharge]);
+    rows.push(['Invoiced Total', ss.invoiced]);
+    rows.push(['Settled Revenue', ss.settled]);
+    rows.push(['Outstanding Pending', ss.outstanding]);
+    rows.push([]);
+    rows.push(['PAYMENT RECONCILIATION']);
+    rows.push(['Cash', (pr.paymentMix.CASH || 0)]);
+    rows.push(['UPI', (pr.paymentMix.UPI || 0)]);
+    rows.push(['Card', (pr.paymentMix.CARD || 0)]);
+    rows.push(['Total Settled', pr.totalSettled]);
+    rows.push([]);
+    rows.push(['CASH DRAWER']);
+    rows.push(['Register Open', cd.registerOpen ? 'Yes' : 'No']);
+    rows.push(['Expected Opening Cash Float', cd.expectedOpeningCash]);
+    rows.push(['Cash Collected Today', cd.cashCollectedToday]);
+    rows.push(['Expected Cash In Drawer', cd.expectedCashInDrawer]);
+    rows.push(['Recorded Cash Counted', cd.recordedCashCounted]);
+    rows.push(['Cash Variance', cd.cashVariance]);
+    rows.push([]);
+    rows.push(['OPERATIONS SUMMARY']);
+    rows.push(['Guest Covers', os.totalCovers]);
+    rows.push(['Confirmed Orders', os.totalOrders]);
+    rows.push(['Tables Served', os.totalTablesServed]);
+    rows.push(['Avg Check Per Table', os.avgBillCheck]);
+    rows.push(['Avg Spend Per Guest', os.avgSpendPerGuest]);
+    rows.push(['Avg Dwell Duration', os.avgTableDuration]);
+    rows.push(['Avg Kitchen Prep', os.avgKitchenPrep]);
+    rows.push(['Order-To-Table SLA', os.avgOrderToTable]);
+    rows.push([]);
+    rows.push(['AUDIT LEDGER']);
+    rows.push(['Time', 'Event', 'Table', 'Actor', 'Details']);
+    (data.auditLedger || []).forEach(a => rows.push([a.time, a.event, a.tableLabel, a.actor, a.details]));
+
+    const csv = rows.map(r => r.map(esc).join(',')).join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `day-summary-${stamp}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   }
 }
