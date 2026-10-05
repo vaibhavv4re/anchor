@@ -131,6 +131,15 @@ class InvoiceModel {
       .filter(i => i.sessionId === sessionId || i.session_id === sessionId);
   }
 
+  /** True when a revision's engine-provided fiscalSections carry BOTH a
+   *  non-empty FOOD and a non-empty BAR section (mixed Food+Bar bill). */
+  _hasMixedFiscalSections(rev) {
+    const sections = Array.isArray(rev && rev.fiscalSections) ? rev.fiscalSections : [];
+    const foodSec = sections.find(s => s && s.section === 'FOOD' && Array.isArray(s.items) && s.items.length);
+    const barSec = sections.find(s => s && s.section === 'BAR' && Array.isArray(s.items) && s.items.length);
+    return !!(foodSec && barSec);
+  }
+
   /**
    * Issue a Food/Bar SPLIT: two linked fiscal documents for one settled table.
    *   - FOOD invoice: GST tax invoice (restaurant GSTIN / letterhead).
@@ -140,9 +149,13 @@ class InvoiceModel {
    * Idempotent: re-issues return the already-created pair. A session with no BAR
    * items falls back to a single consolidated invoice. Both records share one
    * `settlementId` so a single payment reconciles the two documents.
+   * Now the DEFAULT issue path for mixed bills: issueInvoice() routes here, so
+   * the cashier never selects a split. `_skipMixedRouting` is the internal flag
+   * that lets the single-document fallback call issueInvoice without re-entering
+   * the mixed-bill routing (prevents any delegation loop).
    * @returns {Object} { settlementId, combinedGrandTotal, foodInvoice, barInvoice, invoices[] }
    */
-  issueSplitInvoices({ sessionId, cashierId = 'emp-cashier', cashierName = 'Cashier', tenantId = null } = {}) {
+  issueSplitInvoices({ sessionId, cashierId = 'emp-cashier', cashierName = 'Cashier', tenantId = null, _skipMixedRouting = false } = {}) {
     const targetTenantId = this._getTenantId(tenantId);
     const existing = this.getAllInvoicesForSession(sessionId, targetTenantId)
       .filter(i => i.billClass === 'FOOD' || i.billClass === 'BAR');
@@ -151,7 +164,7 @@ class InvoiceModel {
     }
 
     const rev = billRevisionModel.getLatestRevisionForSession(sessionId, targetTenantId);
-    if (!rev) return this.issueInvoice({ sessionId, cashierId, cashierName, tenantId: targetTenantId });
+    if (!rev) return this.issueInvoice({ sessionId, cashierId, cashierName, tenantId: targetTenantId, _skipMixedRouting: true });
 
     const sections = Array.isArray(rev.fiscalSections) ? rev.fiscalSections : [];
     const foodSec = sections.find(s => s && s.section === 'FOOD' && Array.isArray(s.items) && s.items.length);
@@ -159,7 +172,7 @@ class InvoiceModel {
 
     // No bar (or no food) -> a single consolidated GST invoice is correct.
     if (!barSec || !foodSec) {
-      const inv = this.issueInvoice({ sessionId, cashierId, cashierName, tenantId: targetTenantId });
+      const inv = this.issueInvoice({ sessionId, cashierId, cashierName, tenantId: targetTenantId, _skipMixedRouting: true });
       return { settlementId: inv.correlationId, combinedGrandTotal: inv.grandTotal, foodInvoice: inv, barInvoice: null, invoices: [inv] };
     }
 
@@ -229,6 +242,14 @@ class InvoiceModel {
 
     offlineStore.appendItem('invoices', barInvoice);
 
+    // Annotate the FOOD anchor with split metadata so single-record callers
+    // (payment modal, register, print preview) can show both numbers and the
+    // combined payable without re-querying the pair.
+    foodInvoice.split = true;
+    foodInvoice.barInvoiceNumber = barInvoice.invoiceNumber;
+    barInvoice.split = true;
+    barInvoice.foodInvoiceNumber = foodInvoice.invoiceNumber;
+
     const dg = this._getDataGateway();
     this._syncInvoiceToCloud(dg, foodInvoice, targetTenantId, settlementId, foodInvoice.issuedAt);
     this._syncInvoiceToCloud(dg, barInvoice, targetTenantId, settlementId, barInvoice.issuedAt);
@@ -260,7 +281,7 @@ class InvoiceModel {
    * @param {Object} params { sessionId, revisionId, cashierId, cashierName, tenantId, correlationId }
    * @returns {Object} Tax Invoice Record
    */
-  issueInvoice({ sessionId, revisionId = null, cashierId = 'emp-cashier', cashierName = 'Cashier', tenantId = null, correlationId = null, operationId = null }) {
+  issueInvoice({ sessionId, revisionId = null, cashierId = 'emp-cashier', cashierName = 'Cashier', tenantId = null, correlationId = null, operationId = null, _skipMixedRouting = false }) {
     const targetTenantId = this._getTenantId(tenantId);
     const existingInvoice = this.getInvoiceForSession(sessionId, targetTenantId);
     if (existingInvoice) {
@@ -297,6 +318,23 @@ class InvoiceModel {
         waiterId: sess ? (sess.assignedWaiterId || 'emp-waiter') : 'emp-waiter',
         waiterName: 'Staff'
       });
+    }
+
+    // Auto-split default: a mixed Food+Bar bill always issues the linked
+    // FOOD(GST) + BAR(VAT) invoice pair behind the one consolidated guest
+    // document. The cashier never selects anything; food-only / bar-only /
+    // legacy drafts without fiscalSections keep issuing a single invoice.
+    if (!_skipMixedRouting && this._hasMixedFiscalSections(latestRevision)) {
+      const splitRes = this.issueSplitInvoices({
+        sessionId, cashierId, cashierName, tenantId: targetTenantId, _skipMixedRouting: true
+      });
+      const anchor = splitRes.foodInvoice || splitRes.barInvoice;
+      if (anchor) {
+        anchor.split = true;
+        anchor.barInvoiceNumber = splitRes.barInvoice ? splitRes.barInvoice.invoiceNumber : null;
+        anchor.combinedGrandTotal = splitRes.combinedGrandTotal;
+      }
+      return anchor;
     }
 
     if (!cid) {

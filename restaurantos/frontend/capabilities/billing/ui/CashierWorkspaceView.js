@@ -927,9 +927,19 @@ export class CashierWorkspaceView {
     this.container.querySelectorAll('.btn-reprint-invoice').forEach(btn => {
       btn.addEventListener('click', () => {
         const sid = btn.dataset.sessionId;
+        const sessionUser = this.authEngine ? this.authEngine.getCurrentSession() : null;
+        const cashierId = sessionUser ? (sessionUser.employeeId || sessionUser.id || 'emp-cashier') : 'emp-cashier';
+        const cashierName = sessionUser ? (sessionUser.employeeName || sessionUser.name || 'Cashier Desk') : 'Cashier Desk';
         const modal = new TaxInvoicePrintModal({
           sessionId: sid,
-          onClose: () => {}
+          onClose: () => {},
+          // Sessions issued before auto-split may still be single-doc; printing
+          // a mixed one commits the linked FOOD/BAR pair idempotently.
+          onIssueSplit: () => invoiceModel.issueSplitInvoices({
+            sessionId: sid,
+            cashierId,
+            cashierName
+          })
         });
         const mount = this.container.querySelector('#cashier-modal-mount');
         if (mount) mount.appendChild(modal.render());
@@ -1084,7 +1094,13 @@ export class CashierWorkspaceView {
           cashierName
         });
 
-        alert(`📜 Official GST Tax Invoice ${invRecord.invoiceNumber} (FY ${invRecord.financialYear}) Finalized & Issued! Recall to Waiter is now locked.`);
+        // Mixed Food+Bar bills now auto-issue the linked GST + VAT pair behind
+        // the one consolidated bill; show both numbers, one settlement.
+        if (invRecord && invRecord.split) {
+          alert(`📜 Mixed bill issued as two linked invoices:\nFood GST ${invRecord.invoiceNumber} + Bar VAT ${invRecord.barInvoiceNumber}\nCombined payable ₹${(invRecord.combinedGrandTotal || 0).toFixed(2)} on one settlement. Recall to Waiter is now locked.`);
+        } else {
+          alert(`📜 Official GST Tax Invoice ${invRecord.invoiceNumber} (FY ${invRecord.financialYear}) Finalized & Issued! Recall to Waiter is now locked.`);
+        }
         this.updateContent(sessionUser);
       });
     }
@@ -1158,16 +1174,26 @@ export class CashierWorkspaceView {
     const latestRev = revisions.length > 0 ? revisions[revisions.length - 1] : null;
     const invoice = invoiceModel.getInvoiceForSession(sessionId);
 
-    const amount = invoice ? invoice.grandTotal : (latestRev ? latestRev.grandTotal : (proj ? proj.grandTotal : 0));
+    // Amount due: mixed settlements carry combinedGrandTotal on the invoice
+    // records (each record's own grandTotal is only its section subtotal).
+    let amount = (invoice && invoice.combinedGrandTotal)
+      ? invoice.combinedGrandTotal
+      : (invoice ? invoice.grandTotal : (latestRev ? latestRev.grandTotal : (proj ? proj.grandTotal : 0)));
     
     // Ensure invoice is issued or retrieve existing invoice number
     let invoiceNo = invoice ? invoice.invoiceNumber : (latestRev ? latestRev.invoiceNumber : null);
+    let barInvoiceNo = invoice ? (invoice.barInvoiceNumber || null) : null;
     if (!invoiceNo) {
       const sessionUser = this.authEngine ? this.authEngine.getCurrentSession() : null;
       const cashierId = sessionUser ? (sessionUser.employeeId || sessionUser.id || 'emp-cashier') : 'emp-cashier';
       const cashierName = sessionUser ? (sessionUser.employeeName || sessionUser.name || 'Cashier') : 'Cashier Desk';
       const issued = invoiceModel.issueInvoice({ sessionId, cashierId, cashierName });
       invoiceNo = issued.invoiceNumber;
+      barInvoiceNo = issued.barInvoiceNumber || null;
+      if (issued && issued.combinedGrandTotal) {
+        // Auto-split issued the FOOD+BAR pair — settle the combined payable.
+        amount = issued.combinedGrandTotal;
+      }
     }
 
     const tableNo = proj ? proj.tableNumber : (latestRev ? latestRev.tableNumber : 1);
@@ -1184,7 +1210,7 @@ export class CashierWorkspaceView {
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; border-bottom:1px solid var(--border-subtle); padding-bottom:12px;">
           <div>
             <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">RECORD PAYMENT SETTLEMENT</div>
-            <h3 style="font-size:1.3rem; margin:2px 0 0; font-weight:800;">Table ${tableNo} • Invoice ${invoiceNo}</h3>
+            <h3 style="font-size:1.3rem; margin:2px 0 0; font-weight:800;">Table ${tableNo} • Invoice ${invoiceNo}${barInvoiceNo ? ' + ' + barInvoiceNo : ''}</h3>
           </div>
           <button id="btn-close-pay-modal" class="btn-secondary" style="padding:4px 10px; cursor:pointer;">✕</button>
         </div>

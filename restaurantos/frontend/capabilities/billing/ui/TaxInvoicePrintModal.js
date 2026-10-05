@@ -1,9 +1,11 @@
 /**
  * Capability Group 5 - Official Tax Invoice Browser Print Modal
  * Generates an official GST Tax Invoice print preview populated dynamically from TenantModel config & InvoiceModel.
- * ZERO financial state mutation on preview (toggling/printing never consumes invoice
- * numbers or alters payments until the cashier actually issues a split, which is done
- * once via the injected onIssueSplit callback on the print action).
+ * One consolidated guest slip (Food + Bar fiscal sections, one grand total).
+ * For a mixed Food+Bar bill the first print commits the linked FOOD(GST) +
+ * BAR(VAT) invoice pair via the injected onIssueSplit callback (idempotent),
+ * so the slip always carries both real invoice numbers while the settlement
+ * stays single. Previewing/toggling never consumes invoice numbers.
  */
 
 import { sessionProjectionService } from '../../../../../businessos/platform/session/sessionProjectionService.js';
@@ -11,7 +13,6 @@ import { billRevisionModel } from '../../../../../businessos/platform/billing/bi
 import { invoiceModel } from '../../../../../businessos/platform/billing/invoiceModel.js';
 import { paymentModel } from '../../../../../businessos/platform/billing/paymentModel.js';
 import { tenantModel } from '../../../../../businessos/platform/tenant/tenantModel.js';
-import { taxConfigurationModel } from '../../../../../businessos/platform/accounting/taxConfigurationModel.js';
 
 export class TaxInvoicePrintModal {
   constructor({ sessionId, revisionIndex = null, onClose = null, onIssueSplit = null }) {
@@ -22,7 +23,6 @@ export class TaxInvoicePrintModal {
     // pair and returns { foodInvoice, barInvoice, combinedGrandTotal }.
     this.onIssueSplit = onIssueSplit;
     this.modalEl = null;
-    this.splitMode = false;
   }
 
   render() {
@@ -32,12 +32,6 @@ export class TaxInvoicePrintModal {
     this.modalEl.style.display = 'flex';
     this.modalEl.style.alignItems = 'center';
     this.modalEl.style.justifyContent = 'center';
-
-    // Pre-select split when the tenant configured it as their default workflow.
-    try {
-      const barCfg = taxConfigurationModel.getBarBillingConfig();
-      this.splitMode = !!(barCfg && barCfg.splitByDefault);
-    } catch (_) { this.splitMode = false; }
 
     this.modalEl.innerHTML = `
       <div class="card animate-fade-in printable-invoice-card" style="max-width:560px; width:92%; max-height:92vh; display:flex; flex-direction:column; padding:0; overflow:hidden; background:#ffffff; color:#000000; border-radius:12px; box-shadow:0 20px 40px rgba(0,0,0,0.4);">
@@ -57,15 +51,6 @@ export class TaxInvoicePrintModal {
           </div>
         </div>
 
-        <!-- BILL LAYOUT TOGGLE (combined vs split) -->
-        <div id="bill-mode-toggle" style="background:#f1f5f9; padding:10px 20px; display:flex; align-items:center; justify-content:space-between; gap:12px; border-bottom:1px solid #cbd5e1; flex-wrap:wrap;">
-          <span style="font-size:0.8rem; font-weight:700; color:#334155;">Guest bill layout:</span>
-          <div style="display:flex; gap:8px;">
-            <button type="button" id="btn-mode-combined" class="mode-btn" style="padding:6px 12px; font-weight:700; font-size:0.8rem; border-radius:6px; cursor:pointer; border:1px solid #0f172a; background:#0f172a; color:#fff;">One consolidated bill</button>
-            <button type="button" id="btn-mode-split" class="mode-btn" style="padding:6px 12px; font-weight:700; font-size:0.8rem; border-radius:6px; cursor:pointer; border:1px solid #cbd5e1; background:#fff; color:#0f172a;">Split Food &amp; Bar bills</button>
-          </div>
-        </div>
-
         <!-- DOCUMENTS SCROLL AREA -->
         <div id="invoice-docs" style="flex:1; overflow-y:auto; padding:20px; font-family:'Courier New', Courier, monospace; color:#000000; background:#ffffff;"></div>
       </div>
@@ -79,12 +64,16 @@ export class TaxInvoicePrintModal {
   /**
    * Gather the authoritative bill data once. The engine's fiscalSections drive
    * the Food(GST)/Bar(VAT) grouping; the UI never re-classifies any line.
+   * A mixed settlement stores two linked invoice records; the FOOD/GST record
+   * is the display anchor and the BAR/VAT number rides along as a cross-ref.
    */
   _readModel() {
     const proj = sessionProjectionService.getSessionProjection(this.sessionId);
     const revisions = billRevisionModel.getRevisionsForSession(this.sessionId);
     const latestRev = revisions.length > 0 ? revisions[revisions.length - 1] : null;
-    const invoice = invoiceModel.getInvoiceForSession(this.sessionId);
+    const allInvoices = invoiceModel.getAllInvoicesForSession(this.sessionId);
+    const barInv = allInvoices.find(i => i.billClass === 'BAR') || null;
+    const invoice = allInvoices.find(i => i.billClass === 'FOOD') || allInvoices.find(i => i.billClass !== 'BAR') || allInvoices[0] || null;
     const payment = paymentModel.getPaymentForSession(this.sessionId);
 
     const activeRev = (this.revisionIndex !== null && revisions[this.revisionIndex])
@@ -111,7 +100,13 @@ export class TaxInvoicePrintModal {
     const taxLines = activeRev ? (activeRev.taxLines || []) : [];
     const charges = activeRev ? (activeRev.charges || []) : [];
     const serviceCharge = parseFloat(activeRev ? activeRev.serviceChargeAmount : (invoice ? (invoice.serviceChargeAmount || 0) : 0)) || 0;
-    const grandTotal = parseFloat(activeRev ? activeRev.grandTotal : (invoice ? invoice.grandTotal : (proj ? proj.grandTotal : 0))) || 0;
+    let grandTotal = parseFloat(activeRev ? activeRev.grandTotal : (invoice ? invoice.grandTotal : (proj ? proj.grandTotal : 0))) || 0;
+    if (invoice && invoice.combinedGrandTotal) {
+      // Mixed settlement: the slip shows the combined payable across both records.
+      grandTotal = parseFloat(invoice.combinedGrandTotal) || grandTotal;
+    } else if (invoice && barInv) {
+      grandTotal = Math.round(((parseFloat(invoice.grandTotal) || 0) + (parseFloat(barInv.grandTotal) || 0)) * 100) / 100;
+    }
 
     const fiscalSections = (activeRev && Array.isArray(activeRev.fiscalSections) && activeRev.fiscalSections.length)
       ? activeRev.fiscalSections
@@ -122,7 +117,10 @@ export class TaxInvoicePrintModal {
     const invoiceNo = invoice ? invoice.invoiceNumber : (payment ? payment.invoiceNumber : (activeRev && activeRev.invoiceNumber ? activeRev.invoiceNumber : 'DRAFT PREVIEW'));
     const isPaid = payment !== null;
 
-    return { restaurantName, gstin, fssai, address, phone, tableNo, tableCode, waiterName, items, grossSales, discountsTotal, discountRecords, taxableAmount, taxLines, charges, serviceCharge, grandTotal, fiscalSections, invoiceNo, isPaid };
+    return { restaurantName, gstin, fssai, address, phone, tableNo, tableCode, waiterName, items, grossSales, discountsTotal, discountRecords, taxableAmount, taxLines, charges, serviceCharge, grandTotal, fiscalSections, invoiceNo, isPaid,
+      barInvoiceNo: barInv ? barInv.invoiceNumber : null,
+      settlementId: (invoice && (invoice.settlementId || invoice.correlationId)) || (barInv && barInv.correlationId) || null,
+      hasIssuedInvoice: !!invoice || !!barInv };
   }
 
   /** Section grouping of line items for the item table. */
@@ -153,16 +151,16 @@ export class TaxInvoicePrintModal {
   }
 
   /**
-   * Build one bill document. Used for the consolidated bill (all sections, the
-   * combined totals) and, in split mode, for a single section (its own totals +
-   * the shared combined amount payable for reconciliation across the two slips).
+   * Build the consolidated guest bill document: all fiscal sections, one
+   * grand total. For mixed Food+Bar settlements the linked BAR/VAT invoice
+   * number and shared settlement id ride along as cross-reference lines.
    */
   _buildDoc(o) {
     const {
-      name, gstin, fssai, address, phone, licence, title, invoiceNo, isDraft,
+      name, gstin, fssai, address, phone, title, invoiceNo, isDraft,
       tableNo, tableCode, waiterName, isPaid,
       sections, items, grossSales, discountsTotal, discountRecords, taxableAmount,
-      taxLines, charges, serviceCharge, docTotal, combinedTotal, crossRef
+      taxLines, charges, serviceCharge, docTotal, barInvoiceNo, settlementId
     } = o;
 
     const itemRows = (sections && sections.length) ? this._itemsTableHtml({ items }, sections) : this._itemsTableHtml({ items }, []);
@@ -174,7 +172,7 @@ export class TaxInvoicePrintModal {
           <div style="font-size:1.3rem; font-weight:900; letter-spacing:1px; text-transform:uppercase;">${name}</div>
           <div style="font-size:0.8rem;">${address || ''}</div>
           <div style="font-size:0.8rem; font-weight:700;">TEL: ${phone || ''}</div>
-          <div style="font-size:0.8rem; font-weight:700; margin-top:4px;">GSTIN: ${gstin || ''}${fssai ? ' • FSSAI: ' + fssai : ''}${licence ? '<br/>EXCISE LICENCE: ' + licence : ''}</div>
+          <div style="font-size:0.8rem; font-weight:700; margin-top:4px;">GSTIN: ${gstin || ''}${fssai ? ' • FSSAI: ' + fssai : ''}</div>
           <div style="font-size:1rem; font-weight:800; text-transform:uppercase; margin-top:8px; border:1px solid #000; display:inline-block; padding:2px 10px;">
             ${isDraft ? 'DRAFT ' + title : title}
           </div>
@@ -183,6 +181,8 @@ export class TaxInvoicePrintModal {
         <div style="display:flex; justify-content:space-between; font-size:0.8rem; border-bottom:1px dashed #000; padding-bottom:8px; margin-bottom:12px;">
           <div>
             <div><strong>INVOICE NO:</strong> ${invoiceNo}</div>
+            ${barInvoiceNo ? `<div><strong>BAR TAX INVOICE:</strong> ${barInvoiceNo}</div>` : ''}
+            ${settlementId ? `<div><strong>SETTLEMENT:</strong> ${settlementId}</div>` : ''}
             <div><strong>TABLE:</strong> Table ${tableNo} (${tableCode})</div>
             <div><strong>WAITER:</strong> ${waiterName}</div>
           </div>
@@ -218,13 +218,12 @@ export class TaxInvoicePrintModal {
             <div style="display:flex; justify-content:space-between;"><span>${String(c.type || '').replace('_', ' ')} (${c.rate}%):</span> <span>₹${(c.amount || 0).toFixed(2)}</span></div>`).join('')}
           ${(!(charges || []).length && serviceCharge > 0) ? `
             <div style="display:flex; justify-content:space-between;"><span>SERVICE CHARGE:</span> <span>₹${(serviceCharge || 0).toFixed(2)}</span></div>` : ''}
-          <div style="display:flex; justify-content:space-between; font-size:1.15rem; font-weight:900; border-top:2px solid #000; margin-top:6px; padding-top:6px;"><span>${docTotal && docTotal !== combinedTotal ? 'THIS BILL TOTAL:' : 'GRAND TOTAL:'}</span> <span>₹${(docTotal || 0).toFixed(2)}</span></div>
+          <div style="display:flex; justify-content:space-between; font-size:1.15rem; font-weight:900; border-top:2px solid #000; margin-top:6px; padding-top:6px;"><span>GRAND TOTAL:</span> <span>₹${(docTotal || 0).toFixed(2)}</span></div>
         </div>
 
-        ${crossRef ? `
-          <div style="text-align:center; font-size:0.8rem; margin-bottom:10px; padding:8px; border:1px dashed #000; border-radius:6px;">
-            <div><strong>AMOUNT PAYABLE (Table ${tableNo}, both bills):</strong> ₹${(combinedTotal || 0).toFixed(2)}</div>
-            <div style="margin-top:4px;">Settled with companion bill <strong>${crossRef}</strong></div>
+        ${barInvoiceNo ? `
+          <div style="text-align:center; font-size:0.75rem; margin-bottom:10px; padding:6px; border:1px dashed #000; border-radius:6px;">
+            Food (GST) &amp; Bar (VAT) invoiced separately under one settlement of ₹${(docTotal || 0).toFixed(2)}
           </div>` : ''}
 
         <div style="text-align:center; font-size:0.75rem;">
@@ -241,71 +240,37 @@ export class TaxInvoicePrintModal {
     if (!container) return;
     const m = this._readModel();
 
-    // Reflect the active mode on the toggle buttons.
-    const combinedBtn = this.modalEl.querySelector('#btn-mode-combined');
-    const splitBtn = this.modalEl.querySelector('#btn-mode-split');
-    if (combinedBtn && splitBtn) {
-      const active = { background: '#0f172a', color: '#fff', borderColor: '#0f172a' };
-      const inactive = { background: '#fff', color: '#0f172a', borderColor: '#cbd5e1' };
-      const st = this.splitMode ? inactive : active;
-      const sp = this.splitMode ? active : inactive;
-      Object.assign(combinedBtn.style, st);
-      Object.assign(splitBtn.style, sp);
-    }
-
     const sections = m.fiscalSections || [];
     const barSec = sections.find(s => s && s.section === 'BAR' && Array.isArray(s.items) && s.items.length);
     const foodSec = sections.find(s => s && s.section === 'FOOD' && Array.isArray(s.items) && s.items.length);
-    // Split only makes sense when BOTH a food and a bar section exist.
-    const canSplit = !!(barSec && foodSec);
+    const isMixed = !!(barSec && foodSec);
 
-    if (!this.splitMode || !canSplit) {
-      container.innerHTML = this._buildDoc({
-        name: m.restaurantName, gstin: m.gstin, fssai: m.fssai, address: m.address, phone: m.phone, licence: '',
-        title: 'TAX INVOICE', invoiceNo: m.invoiceNo, isDraft: String(m.invoiceNo).startsWith('DRAFT'),
-        tableNo: m.tableNo, tableCode: m.tableCode, waiterName: m.waiterName, isPaid: m.isPaid,
-        sections: sections, items: m.items, grossSales: m.grossSales, discountsTotal: m.discountsTotal,
-        discountRecords: m.discountRecords, taxableAmount: m.taxableAmount, taxLines: m.taxLines,
-        charges: m.charges, serviceCharge: m.serviceCharge, docTotal: m.grandTotal, combinedTotal: m.grandTotal, crossRef: null
-      });
-      return;
+    // For a mixed bill the linked invoice pair is committed on first print
+    // (idempotent via onIssueSplit); until then both numbers show as drafts.
+    const split = this._splitResult || null;
+    let invoiceNo = m.invoiceNo;
+    let barInvoiceNo = m.barInvoiceNo;
+    let settlementId = m.settlementId;
+    this._mixedPending = isMixed && !m.hasIssuedInvoice;
+    if (split && split.foodInvoice) {
+      invoiceNo = split.foodInvoice.invoiceNumber;
+      barInvoiceNo = split.barInvoice ? split.barInvoice.invoiceNumber : barInvoiceNo;
+      settlementId = split.settlementId || settlementId;
+      this._mixedPending = false;
+    } else if (this._mixedPending) {
+      invoiceNo = 'DRAFT-FOOD (issue on print)';
+      barInvoiceNo = 'DRAFT-BAR (issue on print)';
     }
 
-    // Split mode: two documents. Numbers are provisional until the cashier prints
-    // (which triggers onIssueSplit); pass this._splitResult if already issued.
-    const split = this._splitResult || null;
-    const foodNo = split ? split.foodInvoice.invoiceNumber : 'DRAFT-FOOD (issue on print)';
-    const barNo = split ? split.barInvoice.invoiceNumber : 'DRAFT-BAR (issue on print)';
-    const combined = split ? split.combinedGrandTotal : m.grandTotal;
-
-    let barName = m.restaurantName, barGstin = m.gstin, barAddress = m.address, barLicence = '';
-    try {
-      const cfg = taxConfigurationModel.getBarBillingConfig();
-      if (cfg && cfg.separateExciseLicence) {
-        barName = cfg.licenceName || m.restaurantName;
-        barGstin = cfg.gstin || m.gstin;
-        barAddress = cfg.address || m.address;
-        barLicence = cfg.licenceNumber || '';
-      }
-    } catch (_) {}
-
-    container.innerHTML =
-      this._buildDoc({
-        name: m.restaurantName, gstin: m.gstin, fssai: m.fssai, address: m.address, phone: m.phone, licence: '',
-        title: 'TAX INVOICE (RESTAURANT)', invoiceNo: foodNo, isDraft: !split,
-        tableNo: m.tableNo, tableCode: m.tableCode, waiterName: m.waiterName, isPaid: m.isPaid,
-        sections: [foodSec], items: [], grossSales: foodSec.subtotal, discountsTotal: foodSec.discounts || 0,
-        discountRecords: m.discountRecords, taxableAmount: foodSec.taxableAmount, taxLines: foodSec.taxLines,
-        charges: foodSec.charges, serviceCharge: foodSec.serviceChargeAmount || 0, docTotal: foodSec.sectionTotal, combinedTotal: combined, crossRef: barNo
-      }) +
-      this._buildDoc({
-        name: barName, gstin: barGstin, fssai: '', address: barAddress, phone: m.phone, licence: barLicence,
-        title: 'BAR BILL (EXCISE VAT)', invoiceNo: barNo, isDraft: !split,
-        tableNo: m.tableNo, tableCode: m.tableCode, waiterName: m.waiterName, isPaid: m.isPaid,
-        sections: [barSec], items: [], grossSales: barSec.subtotal, discountsTotal: 0,
-        discountRecords: [], taxableAmount: barSec.taxableAmount, taxLines: barSec.taxLines,
-        charges: barSec.charges, serviceCharge: 0, docTotal: barSec.sectionTotal, combinedTotal: combined, crossRef: foodNo
-      });
+    container.innerHTML = this._buildDoc({
+      name: m.restaurantName, gstin: m.gstin, fssai: m.fssai, address: m.address, phone: m.phone,
+      title: 'TAX INVOICE', invoiceNo, isDraft: String(invoiceNo).startsWith('DRAFT'),
+      tableNo: m.tableNo, tableCode: m.tableCode, waiterName: m.waiterName, isPaid: m.isPaid,
+      sections: sections, items: m.items, grossSales: m.grossSales, discountsTotal: m.discountsTotal,
+      discountRecords: m.discountRecords, taxableAmount: m.taxableAmount, taxLines: m.taxLines,
+      charges: m.charges, serviceCharge: m.serviceCharge, docTotal: m.grandTotal,
+      barInvoiceNo, settlementId
+    });
   }
 
   bindEvents() {
@@ -317,20 +282,15 @@ export class TaxInvoicePrintModal {
       });
     }
 
-    const combinedBtn = this.modalEl.querySelector('#btn-mode-combined');
-    const splitBtn = this.modalEl.querySelector('#btn-mode-split');
-    if (combinedBtn) combinedBtn.addEventListener('click', () => { this.splitMode = false; this.paintDocuments(); });
-    if (splitBtn) splitBtn.addEventListener('click', () => { this.splitMode = true; this.paintDocuments(); });
-
     const printBtn = this.modalEl.querySelector('#btn-do-browser-print');
     if (printBtn) {
       printBtn.addEventListener('click', () => {
-        // Committing a split print persists the two linked invoices (idempotent),
-        // so the printed slips carry real GST/VAT invoice numbers.
-        if (this.splitMode && typeof this.onIssueSplit === 'function' && !this._splitResult) {
+        // First print of a mixed bill commits the linked FOOD/BAR invoice pair
+        // (idempotent), so the printed slip carries real GST + VAT numbers.
+        if (this._mixedPending && typeof this.onIssueSplit === 'function' && !this._splitResult) {
           try {
             const res = this.onIssueSplit();
-            if (res && res.foodInvoice && res.barInvoice) this._splitResult = res;
+            if (res && res.foodInvoice) this._splitResult = res;
           } catch (err) { console.warn('[TaxInvoicePrintModal] split issue error:', err && err.message); }
           this.paintDocuments();
         }
