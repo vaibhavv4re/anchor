@@ -190,8 +190,12 @@ export class ConnectivityComponent {
     let statusBadge = '<span style="background:#064e3b; color:#34d399; padding:4px 10px; border-radius:12px; font-weight:700; font-size:0.85rem;">🟢 ONLINE</span>';
     let dataSrcLabel = 'SUPABASE';
     let dataSrcSub = 'Cloud Authoritative';
-    let syncStatusText = 'All changes synchronized';
-    let whatNextText = 'All operational reads and writes are interacting live with Supabase cloud. Changes are instantly persisted across devices.';
+    let syncStatusText = currentDiag.pendingSyncCount > 0
+      ? `${currentDiag.pendingSyncCount} ${currentDiag.pendingSyncCount === 1 ? 'change' : 'changes'} queued for sync`
+      : 'All changes synchronized';
+    let whatNextText = currentDiag.pendingSyncCount > 0
+      ? 'You are online, but some local writes have not landed in Supabase yet. Press "Sync Now" to push them immediately.'
+      : 'All operational reads and writes are interacting live with Supabase cloud. Changes are instantly persisted across devices.';
 
     if (currentDiag.networkState === NetworkStates.OFFLINE) {
       statusBadge = '<span style="background:#7f1d1d; color:#fca5a5; padding:4px 10px; border-radius:12px; font-weight:700; font-size:0.85rem;">🔴 OFFLINE</span>';
@@ -305,6 +309,14 @@ export class ConnectivityComponent {
         if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform && window.__APP__.platform.dataGateway) {
           const dg = window.__APP__.platform.dataGateway;
           try {
+            // PUSH first: retry queued/failed offline writes (the "Pending
+            // Offline Changes" count). Previously Sync Now only re-downloaded
+            // cloud rows, so the pending journal never drained and the button
+            // appeared to do nothing.
+            if (typeof dg.flushOfflineQueue === 'function') {
+              await dg.flushOfflineQueue();
+            }
+            // Then PULL: refresh the local cache from the cloud.
             await dg.hydrateCollections([
               'inventory', 'suppliers', 'purchase_orders', 'goods_receipt_notes',
               'inventory_categories', 'inventory_uoms', 'orders', 'table_sessions',
