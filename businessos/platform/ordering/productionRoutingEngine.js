@@ -11,6 +11,7 @@ import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
 import { resolvedBomEngine } from './resolvedBomEngine.js';
 import { inventoryConsumptionService } from '../inventory/inventoryConsumptionService.js';
+import { preparedHoldModel } from './preparedHoldModel.js';
 
 class ProductionRoutingEngine {
   constructor() {
@@ -281,17 +282,30 @@ class ProductionRoutingEngine {
   }
 
   /**
+   * Cancelled/voided lines are removed from production truth: they never block
+   * status aggregation and never accept further station transitions.
+   */
+  _isRemovedItem(item) {
+    const s = String((item && (item.itemStatus || item.status)) || '').toUpperCase();
+    return s === 'CANCELLED' || s === 'VOIDED';
+  }
+
+  /**
    * Recalculate ticket status based on items status:
    * - All items SERVED => SERVED
    * - All items READY/SERVED => READY
    * - Any item PREPARING/READY => PREPARING
    * - Otherwise => QUEUED
+   * CANCELLED/VOIDED items are excluded (treated as removed, not blockers).
    * @param {Object} ticket
    * @returns {string} Calculated status
    */
   _computeTicketStatus(ticket) {
-    const items = ticket.items || [];
-    if (!items.length) return ticket.status || 'QUEUED';
+    const items = (ticket.items || []).filter(i => !this._isRemovedItem(i));
+    if (!items.length) {
+      const hadItems = (ticket.items || []).length > 0;
+      return hadItems ? 'CANCELLED' : (ticket.status || 'QUEUED');
+    }
 
     const allServed = items.every(i => (i.itemStatus || i.status) === 'SERVED');
     if (allServed) return 'SERVED';
@@ -330,6 +344,11 @@ class ProductionRoutingEngine {
       const items = ticket.items || [];
       const item = items.find((it, idx) => it.lineItemId === lineItemIdOrIndex || it.itemId === lineItemIdOrIndex || idx === lineItemIdOrIndex || String(idx) === String(lineItemIdOrIndex));
       if (item) {
+        // Station transitions are rejected on cancelled/voided lines (cancellation workflow).
+        if (this._isRemovedItem(item)) {
+          console.warn('[productionRoutingEngine] Transition rejected on removed line:', item.lineItemId, item.itemStatus || item.status);
+          return { ticket: null, item: null, rejected: 'LINE_REMOVED' };
+        }
         const prevStatus = item.itemStatus || item.status;
         item.itemStatus = newStatus;
         item.status = newStatus;
@@ -368,7 +387,7 @@ class ProductionRoutingEngine {
         const ticket = orderTickets[matchIdx];
         const items = ticket.items || [];
         const item = items.find((it, idx) => it.lineItemId === lineItemIdOrIndex || it.itemId === lineItemIdOrIndex || idx === lineItemIdOrIndex || String(idx) === String(lineItemIdOrIndex));
-        if (item) {
+        if (item && !this._isRemovedItem(item)) {
           const prevStatus = item.itemStatus || item.status;
           item.itemStatus = newStatus;
           item.status = newStatus;
@@ -389,7 +408,7 @@ class ProductionRoutingEngine {
         (updatedItem && (updatedItem.itemId || updatedItem.itemCode) && (i.itemId === (updatedItem.itemId || updatedItem.itemCode) || i.itemCode === (updatedItem.itemId || updatedItem.itemCode))) ||
         (i.lineItemId === lineItemIdOrIndex || i.itemId === lineItemIdOrIndex)
       );
-      if (orderItem) {
+      if (orderItem && !this._isRemovedItem(orderItem)) {
         orderItem.itemStatus = newStatus;
         orderItem.status = newStatus;
       }
@@ -440,16 +459,28 @@ class ProductionRoutingEngine {
         // Deduct on READY (normal flow) and also on a direct SERVED transition (waiter serve-all without
         // bartender READY). Operation-id idempotency in the consumption service prevents double deduction.
         if ((newStatus === 'READY' || newStatus === 'SERVED') && prevItemStatus !== 'READY' && prevItemStatus !== 'SERVED') {
-          inventoryConsumptionService.consumeForOrderLine({
-            tenantId: targetTenantId,
-            orderId: updatedTicket.orderId || updatedTicket.id,
-            orderLineId: updatedItem.lineItemId || updatedItem.itemId || lineItemIdOrIndex,
-            item: updatedItem,
-            occurredAt: now,
-            performedBy: actor
-          }).catch(err => {
-            console.error('[productionRoutingEngine] Error during sale consumption for item READY:', err);
-          });
+          if (updatedItem.fulfilledByHoldId) {
+            // Reuse path (Model B): the line is fulfilled by a HELD prepared item, so the
+            // BOM was already consumed at the original READY - skip a second consumption
+            // and close out the hold instead.
+            preparedHoldModel.confirmReuseOnReady(updatedItem.fulfilledByHoldId, {
+              orderId: updatedTicket.orderId || updatedTicket.id,
+              orderLineId: updatedItem.lineItemId || updatedItem.itemId || lineItemIdOrIndex,
+              ticketId,
+              actor: { id: actor }
+            }, targetTenantId);
+          } else {
+            inventoryConsumptionService.consumeForOrderLine({
+              tenantId: targetTenantId,
+              orderId: updatedTicket.orderId || updatedTicket.id,
+              orderLineId: updatedItem.lineItemId || updatedItem.itemId || lineItemIdOrIndex,
+              item: updatedItem,
+              occurredAt: now,
+              performedBy: actor
+            }).catch(err => {
+              console.error('[productionRoutingEngine] Error during sale consumption for item READY:', err);
+            });
+          }
         } else if (newStatus === 'PREPARING' && prevItemStatus === 'READY') {
           inventoryConsumptionService.reverseConsumptionForOrderLine({
             tenantId: targetTenantId,
@@ -503,10 +534,12 @@ class ProductionRoutingEngine {
 
     let itemsToDeduct = [];
     let itemsToReverse = [];
+    let itemsToReuseHold = [];
     if (tIdx >= 0) {
       tickets[tIdx].status = newStatus;
       tickets[tIdx].updatedAt = now;
       (tickets[tIdx].items || []).forEach(it => {
+        if (this._isRemovedItem(it)) return; // cancelled lines drop out of the cascade
         const prevItemStatus = it.itemStatus || it.status;
         it.itemStatus = newStatus;
         it.status = newStatus;
@@ -514,7 +547,8 @@ class ProductionRoutingEngine {
         if (newStatus === 'SERVED') it.servedAt = now;
         // Deduct on first entry into READY or SERVED (direct SERVED must not escape consumption)
         if ((newStatus === 'READY' || newStatus === 'SERVED') && prevItemStatus !== 'READY' && prevItemStatus !== 'SERVED') {
-          itemsToDeduct.push(it);
+          if (it.fulfilledByHoldId) itemsToReuseHold.push(it);
+          else itemsToDeduct.push(it);
         }
         if (newStatus === 'PREPARING' && prevItemStatus === 'READY') {
           itemsToReverse.push(it);
@@ -549,13 +583,15 @@ class ProductionRoutingEngine {
         orderTickets[matchIdx].status = newStatus;
         orderTickets[matchIdx].updatedAt = now;
         (orderTickets[matchIdx].items || []).forEach(it => {
+          if (this._isRemovedItem(it)) return; // cancelled lines drop out of the cascade
           const prevItemStatus = it.itemStatus || it.status;
           it.itemStatus = newStatus;
           it.status = newStatus;
           if (newStatus === 'READY') it.readyAt = now;
           if (newStatus === 'SERVED') it.servedAt = now;
-          if ((newStatus === 'READY' || newStatus === 'SERVED') && prevItemStatus !== 'READY' && prevItemStatus !== 'SERVED' && !itemsToDeduct.some(x => (x.lineItemId || x.itemId) === (it.lineItemId || it.itemId))) {
-            itemsToDeduct.push(it);
+          if ((newStatus === 'READY' || newStatus === 'SERVED') && prevItemStatus !== 'READY' && prevItemStatus !== 'SERVED' && !itemsToDeduct.some(x => (x.lineItemId || x.itemId) === (it.lineItemId || it.itemId)) && !itemsToReuseHold.some(x => (x.lineItemId || x.itemId) === (it.lineItemId || it.itemId))) {
+            if (it.fulfilledByHoldId) itemsToReuseHold.push(it);
+            else itemsToDeduct.push(it);
           }
           if (newStatus === 'PREPARING' && prevItemStatus === 'READY' && !itemsToReverse.some(x => (x.lineItemId || x.itemId) === (it.lineItemId || it.itemId))) {
             itemsToReverse.push(it);
@@ -572,7 +608,7 @@ class ProductionRoutingEngine {
           (it.lineItemId && i.lineItemId === it.lineItemId) ||
           ((it.itemId || it.itemCode) && (i.itemId === (it.itemId || it.itemCode) || i.itemCode === (it.itemId || it.itemCode)))
         );
-        if (orderItem) {
+        if (orderItem && !this._isRemovedItem(orderItem)) {
           orderItem.itemStatus = newStatus;
           orderItem.status = newStatus;
         }
@@ -633,6 +669,16 @@ class ProductionRoutingEngine {
         });
       }
 
+      // Hold-fulfilled lines skip a second BOM consumption; just close out the hold.
+      itemsToReuseHold.forEach(it => {
+        preparedHoldModel.confirmReuseOnReady(it.fulfilledByHoldId, {
+          orderId: updatedTicket.orderId || updatedTicket.id,
+          orderLineId: it.lineItemId || it.itemId,
+          ticketId,
+          actor: { id: actor }
+        }, targetTenantId);
+      });
+
       if (itemsToReverse.length > 0) {
         itemsToReverse.forEach(it => {
           inventoryConsumptionService.reverseConsumptionForOrderLine({
@@ -661,8 +707,11 @@ class ProductionRoutingEngine {
   }
 
   _computeTicketStatus(ticket) {
-    const items = ticket?.items || [];
-    if (!items.length) return ticket?.status || 'QUEUED';
+    const allItems = ticket?.items || [];
+    const items = allItems.filter(it => !this._isRemovedItem(it));
+    if (!items.length) {
+      return allItems.length ? 'CANCELLED' : (ticket?.status || 'QUEUED');
+    }
     const statuses = items.map(it => it.itemStatus || it.status || 'QUEUED');
     if (statuses.every(s => s === 'SERVED')) return 'SERVED';
     if (statuses.every(s => s === 'READY' || s === 'SERVED')) return 'READY';
@@ -672,11 +721,15 @@ class ProductionRoutingEngine {
   }
 
   _computeOrderStatus(order) {
-    const allItems = (order?.items && order.items.length > 0)
+    const rawItems = (order?.items && order.items.length > 0)
       ? order.items
       : (order?.tickets || []).flatMap(t => t.items || []);
-    
-    if (!allItems.length) return order?.status || order?.orderStatus || 'CONFIRMED';
+    const allItems = rawItems.filter(it => !this._isRemovedItem(it));
+
+    if (!allItems.length) {
+      if (rawItems.length) return 'CANCELLED';
+      return order?.status || order?.orderStatus || 'CONFIRMED';
+    }
     const statuses = allItems.map(it => it.itemStatus || it.status || 'QUEUED');
     if (statuses.every(s => s === 'SERVED')) return 'SERVED';
     if (statuses.every(s => s === 'READY' || s === 'SERVED')) return 'READY';

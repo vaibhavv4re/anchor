@@ -12,6 +12,8 @@ import { tableMasterModel } from '../layout/tableMasterModel.js';
 import { tenantModel } from '../tenant/tenantModel.js';
 import { taxConfigurationModel } from '../accounting/taxConfigurationModel.js';
 import { menuMasterModel } from '../ordering/menuMasterModel.js';
+import { cancellationModel } from '../ordering/cancellationModel.js';
+import { preparedHoldModel } from '../ordering/preparedHoldModel.js';
 
 /**
  * Resolve an order line's menu category for tax classification, falling back to
@@ -71,6 +73,19 @@ class SessionProjectionService {
         if (projection) platformEventBus.publish('session:projection:updated', projection);
       }
     });
+
+    // Cancellation workflow: refresh the waiter projection whenever a request or
+    // disposition moves (REQUESTED chip, cancelled line removal, hold buckets).
+    ['cancellation:requested', 'cancellation:decided', 'cancellation:reversed', 'cancellation:projection_refresh'].forEach(eventName => {
+      platformEventBus.subscribe(eventName, (envelope) => {
+        const payload = envelope.payload || envelope;
+        const sessionId = payload.sessionId || payload.request?.sessionId || payload.originalRequestId || null;
+        if (sessionId) {
+          const projection = this.getSessionProjection(sessionId);
+          if (projection) platformEventBus.publish('session:projection:updated', projection);
+        }
+      });
+    });
   }
 
   /**
@@ -98,6 +113,9 @@ class SessionProjectionService {
     const preparingItems = [];
     const queuedItems = [];
     const servedItems = [];
+    const cancelledItems = [];
+
+    const isRemovedStatus = (s) => ['CANCELLED', 'VOIDED'].includes(String(s || '').toUpperCase());
 
     // Extract items from dispatched tickets
     tickets.forEach(t => {
@@ -115,6 +133,7 @@ class SessionProjectionService {
           itemStatus: itemStatus,
           ticketId: t.ticketId || t.id,
           ticketType: t.ticketType,
+          orderId: t.orderId || t.id,
           stationName: item.stationName || t.destination || 'KITCHEN',
           createdAt,
           elapsedMinutes: elapsedMins,
@@ -124,6 +143,13 @@ class SessionProjectionService {
           isQueued: itemStatus === 'QUEUED',
           isServed: itemStatus === 'SERVED'
         };
+
+        // Cancelled lines drop out of live buckets and the bill; they surface
+        // through the cancelledItems bucket only (strike-through in the UI).
+        if (isRemovedStatus(itemStatus)) {
+          cancelledItems.push(entry);
+          return;
+        }
 
         if (t.ticketType === 'BOT' || t.destination === 'BAR' || item.routing === 'BAR_LINE') {
           drinkItems.push(entry);
@@ -148,6 +174,19 @@ class SessionProjectionService {
       orders.forEach(o => {
         (o.items || []).forEach(item => {
           const itemStatus = item.itemStatus || o.orderStatus || 'CONFIRMED';
+          if (isRemovedStatus(itemStatus)) {
+            cancelledItems.push({
+              lineItemId: item.lineItemId || item.itemId,
+              itemId: item.itemId,
+              name: item.name || item.itemName || 'Dish',
+              quantity: item.quantity || 1,
+              status: itemStatus,
+              itemStatus: itemStatus,
+              orderId: o.orderId || o.id,
+              stationName: item.routing === 'BAR_LINE' ? 'BAR' : 'KITCHEN'
+            });
+            return;
+          }
           const entry = {
             lineItemId: item.lineItemId || item.itemId,
             itemId: item.itemId,
@@ -155,6 +194,8 @@ class SessionProjectionService {
             quantity: item.quantity || 1,
             status: itemStatus,
             itemStatus: itemStatus,
+            ticketId: null,
+            orderId: o.orderId || o.id,
             stationName: item.routing === 'BAR_LINE' ? 'BAR' : 'KITCHEN',
             notes: item.notes || '',
             isReady: itemStatus === 'READY',
@@ -177,9 +218,12 @@ class SessionProjectionService {
     }
 
     // Build consolidated itemized list from all orders in session
+    // (cancelled/voided lines are excluded so the running bill drops them automatically)
     const itemizedList = [];
     orders.forEach(o => {
       (o.items || []).forEach(item => {
+        const itemStatus = item.itemStatus || o.orderStatus || 'CONFIRMED';
+        if (isRemovedStatus(itemStatus)) return;
         const itemPrice = parseFloat(item.price || item.unitPrice || item.sellingPrice || 0);
         const itemQty = parseInt(item.quantity || item.qty || 1, 10);
         const lineTotal = parseFloat(item.lineTotal || item.total || (itemPrice * itemQty));
@@ -193,7 +237,7 @@ class SessionProjectionService {
           quantity: itemQty,
           lineTotal,
           orderId: o.orderId || o.id,
-          status: item.itemStatus || o.orderStatus || 'CONFIRMED'
+          status: itemStatus
         });
       });
     });
@@ -202,6 +246,8 @@ class SessionProjectionService {
     if (itemizedList.length === 0 && tickets.length > 0) {
       tickets.forEach(t => {
         (t.items || []).forEach(item => {
+          const itemStatus = item.itemStatus || t.status || 'CONFIRMED';
+          if (isRemovedStatus(itemStatus)) return;
           const itemPrice = parseFloat(item.price || item.unitPrice || item.sellingPrice || 0);
           const itemQty = parseInt(item.quantity || item.qty || 1, 10);
           const lineTotal = parseFloat(item.lineTotal || item.total || (itemPrice * itemQty));
@@ -215,7 +261,7 @@ class SessionProjectionService {
             quantity: itemQty,
             lineTotal,
             orderId: t.orderId || t.id,
-            status: item.itemStatus || t.status || 'CONFIRMED'
+            status: itemStatus
           });
         });
       });
@@ -269,6 +315,14 @@ class SessionProjectionService {
     const canonicalTableCode = session.tableCode || session.table_code || (master ? master.tableCode : `T-${String(session.tableNumber || 1).padStart(2, '0')}`);
     const canonicalTableNum = session.tableNumber || (master ? master.tableNumber : null);
 
+    // Cancellation workflow buckets for the waiter tablet (amber REQUESTED chips,
+    // struck CANCELLED rows, hold awareness).
+    const sessionRequests = cancellationModel.getRequestsForSession(session.id || session.sessionId, targetTenantId);
+    const pendingCancellationRequests = sessionRequests.filter(r =>
+      ['REQUESTED', 'PENDING_MANAGER_DISPOSITION'].includes(r.status));
+    const holds = preparedHoldModel.getHolds(targetTenantId)
+      .filter(h => h.sourceSessionId === (session.id || session.sessionId));
+
     return {
       sessionId: session.id || session.sessionId,
       tableId: session.tableId || (master ? master.id : `tbl_${canonicalTableNum || 1}`),
@@ -290,6 +344,9 @@ class SessionProjectionService {
       preparingItems,
       queuedItems,
       servedItems,
+      cancelledItems,
+      pendingCancellationRequests,
+      holds,
       isPartiallyReady,
       isFullyReady,
       guestScript,

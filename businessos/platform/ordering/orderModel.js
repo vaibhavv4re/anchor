@@ -7,7 +7,7 @@
 import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
 import { productionRoutingEngine } from './productionRoutingEngine.js';
-import { inventoryConsumptionService } from '../inventory/inventoryConsumptionService.js';
+import { cancellationModel, CANCELLATION_REASON_CODES } from './cancellationModel.js';
 import { tableMasterModel } from '../layout/tableMasterModel.js';
 
 class OrderModel {
@@ -349,128 +349,83 @@ class OrderModel {
   }
 
   /**
-   * Void an individual item in an order. If item was in READY status, reverses consumption.
+   * Void an individual item in an order.
+   * Now delegates to the station-controlled cancellation governance layer:
+   * QUEUED lines auto-approve instantly; PREPARING/READY lines create a REQUESTED
+   * record for the owning station. Consumption is NEVER reversed on cancel (Model B).
    */
   async voidOrderItem(orderId, lineItemId, reason = 'ORDER_ITEM_VOIDED', tenantId = null) {
     const order = this.getOrder(orderId, tenantId);
     if (!order) return null;
 
-    const targetTenantId = tenantId || order.tenantId || 'tenant_h0qc7wf';
-    const now = new Date().toISOString();
+    const line = (order.items || []).find(i => i.lineItemId === lineItemId || i.itemId === lineItemId);
+    if (!line) return null;
 
-    // 1. Find line item in order.items
-    const item = (order.items || []).find(i => i.lineItemId === lineItemId || i.itemId === lineItemId);
-    let wasReady = item && (item.itemStatus === 'READY' || item.status === 'READY');
-    if (!wasReady) {
-      (order.tickets || []).forEach(t => {
-        (t.items || []).forEach(ti => {
-          if (ti.lineItemId === lineItemId || ti.itemId === lineItemId) {
-            if (ti.itemStatus === 'READY' || ti.status === 'READY') {
-              wasReady = true;
-            }
-          }
-        });
-      });
-    }
-
-    if (item) {
-      item.itemStatus = 'VOIDED';
-      item.status = 'VOIDED';
-      item.voidReason = reason;
-      item.voidedAt = now;
-    }
-
-    // 2. Also find in tickets
-    (order.tickets || []).forEach(t => {
-      (t.items || []).forEach(ti => {
-        if (ti.lineItemId === lineItemId || ti.itemId === lineItemId) {
-          ti.itemStatus = 'VOIDED';
-          ti.status = 'VOIDED';
-          ti.voidReason = reason;
-          ti.voidedAt = now;
-        }
-      });
+    const reasonCode = CANCELLATION_REASON_CODES.includes(reason) ? reason : 'OTHER';
+    const result = cancellationModel.requestCancellation({
+      orderId,
+      orderLineId: line.lineItemId || lineItemId,
+      quantity: parseFloat(line.quantity) || 1,
+      reasonCode,
+      reasonText: CANCELLATION_REASON_CODES.includes(reason) ? '' : String(reason || ''),
+      tenantId
     });
 
-    order.updatedAt = now;
-    const dg = this._getDataGateway();
-    if (dg) {
-      dg.update('orders', order.id, order).catch(e => console.warn('[orderModel] Cloud void item sync error:', e.message));
+    if (!result.success) {
+      console.warn('[orderModel] voidOrderItem blocked:', result.error);
+      return null;
     }
-
-    // 3. Reverse inventory consumption if the item was already prepared/READY
-    if (wasReady) {
-      await inventoryConsumptionService.reverseConsumptionForOrderLine({
-        tenantId: targetTenantId,
-        orderId: order.orderId || order.id,
-        orderLineId: lineItemId,
-        reason,
-        occurredAt: now,
-        performedBy: 'System'
-      });
-    }
-
-    platformEventBus.publish('order:item:voided', { orderId, lineItemId, reason, tenantId: targetTenantId });
-    return order;
+    return this.getOrder(orderId, tenantId);
   }
 
   /**
-   * Cancel entire order. Reverses consumption for all items that were in READY status.
+   * Cancel an entire order: manager authority + reason required, implemented as a
+   * batch of line-item cancellations (no generic order.status = CANCELLED shortcut,
+   * no blanket consumption reversal). READY-stage lines run the mandatory
+   * disposition-policy gate per line.
    */
-  async cancelOrder(orderId, reason = 'ORDER_CANCELLED', tenantId = null) {
+  async cancelOrder(orderId, reason = 'ORDER_CANCELLED', tenantId = null, actor = null) {
     const order = this.getOrder(orderId, tenantId);
     if (!order) return null;
 
-    const targetTenantId = tenantId || order.tenantId || 'tenant_h0qc7wf';
-    const now = new Date().toISOString();
-
-    order.orderStatus = 'CANCELLED';
-    order.status = 'CANCELLED';
-    order.cancelReason = reason;
-    order.cancelledAt = now;
-    order.updatedAt = now;
-
-    // Collect all items that were in READY status
-    const readyItems = [];
-    (order.items || []).forEach(i => {
-      if (i.itemStatus === 'READY' || i.status === 'READY') {
-        readyItems.push(i);
-      }
-      i.itemStatus = 'CANCELLED';
-      i.status = 'CANCELLED';
-    });
-
-    (order.tickets || []).forEach(t => {
-      t.status = 'CANCELLED';
-      t.updatedAt = now;
-      (t.items || []).forEach(ti => {
-        if ((ti.itemStatus === 'READY' || ti.status === 'READY') && !readyItems.some(x => (x.lineItemId || x.itemId) === (ti.lineItemId || ti.itemId))) {
-          readyItems.push(ti);
-        }
-        ti.itemStatus = 'CANCELLED';
-        ti.status = 'CANCELLED';
-      });
-    });
-
-    const dg = this._getDataGateway();
-    if (dg) {
-      dg.update('orders', order.id, order).catch(e => console.warn('[orderModel] Cloud order cancel sync error:', e.message));
+    if (!reason || !String(reason).trim()) {
+      return { success: false, error: 'REASON_REQUIRED' };
+    }
+    const finalActor = actor || cancellationModel._actorFromSession();
+    if (!cancellationModel._canActor(finalActor, 'CANCEL_REVERSE')) {
+      return { success: false, error: 'MANAGER_AUTHORITY_REQUIRED' };
     }
 
-    // Reverse consumption for each ready item
-    for (const rItem of readyItems) {
-      await inventoryConsumptionService.reverseConsumptionForOrderLine({
-        tenantId: targetTenantId,
-        orderId: order.orderId || order.id,
-        orderLineId: rItem.lineItemId || rItem.itemId,
-        reason,
-        occurredAt: now,
-        performedBy: 'System'
-      });
+    const reasonCode = CANCELLATION_REASON_CODES.includes(reason) ? reason : 'OTHER';
+    const activeLines = (order.items || []).filter(i => {
+      const s = String(i.itemStatus || i.status || '').toUpperCase();
+      return s !== 'CANCELLED' && s !== 'VOIDED' && s !== 'SERVED';
+    });
+
+    const results = activeLines.map(line => cancellationModel.requestCancellation({
+      sessionId: order.sessionId || order.session_id || null,
+      orderId,
+      orderLineId: line.lineItemId || line.itemId,
+      quantity: parseFloat(line.quantity) || 1,
+      reasonCode,
+      reasonText: String(reason || ''),
+      actor: finalActor,
+      tenantId,
+      autoApprove: true // manager override: station request window bypassed
+    }));
+
+    const failed = results.filter(r => !r.success);
+    if (failed.length === results.length && results.length > 0) {
+      return { success: false, error: failed[0].error, results: failed };
     }
 
-    platformEventBus.publish('order:cancelled', { orderId, reason, tenantId: targetTenantId });
-    return order;
+    platformEventBus.publish('order:cancel_batch', {
+      orderId,
+      reason,
+      cancelledLines: results.filter(r => r.success).length,
+      tenantId: tenantId || order.tenantId
+    });
+    return this.getOrder(orderId, tenantId);
   }
 
   _broadcastChange(type, data) {

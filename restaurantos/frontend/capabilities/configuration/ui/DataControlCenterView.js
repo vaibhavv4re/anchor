@@ -16,6 +16,7 @@ import { incrementalUpsertEngine } from '../../../../../businessos/platform/inve
 import { importAuditLedger } from '../../../../../businessos/platform/audit/importAuditLedger.js';
 import { coastalBistroStagingPackage } from '../../../../../businessos/platform/inventory/coastalBistroStagingPackage.js';
 import { coastalBistroSourceAudit } from '../../../../../businessos/platform/inventory/coastalBistroSourceAudit.js';
+import { dispositionPolicyModel } from '../../../../../businessos/platform/ordering/dispositionPolicyModel.js';
 
 export class DataControlCenterView {
   constructor(deps = {}) {
@@ -114,6 +115,9 @@ export class DataControlCenterView {
             <button class="nav-control-btn ${this.activeSubView === 'menus' ? 'active' : ''}" data-sub="menus">🍽️ Food & Bar Menus</button>
             <button class="nav-control-btn ${this.activeSubView === 'recipes' ? 'active' : ''}" data-sub="recipes">🧾 Recipes & BOM Control</button>
             <button class="nav-control-btn ${this.activeSubView === 'production' ? 'active' : ''}" data-sub="production">⚙️ Batch Production Recipes</button>
+
+            <div style="font-size:0.68rem; color:var(--text-muted); font-weight:800; text-transform:uppercase; margin-top:12px; margin-bottom:4px; padding-left:4px;">ORDER GOVERNANCE</div>
+            <button class="nav-control-btn ${this.activeSubView === 'disposition_policies' ? 'active' : ''}" data-sub="disposition_policies">🧊 Cancellation Disposition Policies</button>
 
             <div style="font-size:0.68rem; color:var(--text-muted); font-weight:800; text-transform:uppercase; margin-top:12px; margin-bottom:4px; padding-left:4px;">STAGE 3: BASELINE & AUDIT</div>
             <button class="nav-control-btn ${this.activeSubView === 'opening_stock' ? 'active' : ''}" data-sub="opening_stock">📊 Opening Stock Baseline</button>
@@ -224,6 +228,8 @@ export class DataControlCenterView {
       this.renderWipeSubView(mount);
     } else if (this.activeSubView === 'certification') {
       this.renderCertificationSubView(mount, health);
+    } else if (this.activeSubView === 'disposition_policies') {
+      this.renderDispositionPolicySubView(mount);
     } else {
       mount.innerHTML = `
         <div class="card" style="padding:24px;">
@@ -1056,6 +1062,134 @@ export class DataControlCenterView {
   _getStepClass(subViewName, stepNum) {
     if (this.activeSubView === subViewName) return 'active';
     return '';
+  }
+
+  /**
+   * Disposition policy CRUD (Phase C): station/category/item overrides for what
+   * happens to a prepared (READY-stage) cancelled item - HOLD FOR REUSE or DISCARD.
+   * These drive the MANDATORY gate in cancellationModel; UI never hardcodes them.
+   */
+  renderDispositionPolicySubView(mount) {
+    const saved = dispositionPolicyModel.getSavedPolicies(this.tenantId);
+    const editing = this._editingPolicy || null;
+    const codeDefaults = [
+      { id: 'dp_kitchen_default', station: 'KITCHEN', categoryCode: null, itemCode: null, allowHold: true, holdMinutes: 45, defaultDisposition: 'HOLD', decideBy: 'STATION' },
+      { id: 'dp_bar_default', station: 'BAR', categoryCode: null, itemCode: null, allowHold: true, holdMinutes: 15, defaultDisposition: 'HOLD', decideBy: 'STATION' },
+      { id: 'dp_bar_cocktails', station: 'BAR', categoryCode: 'COCKTAIL', itemCode: null, allowHold: false, holdMinutes: 0, defaultDisposition: 'DISCARD', decideBy: 'STATION' }
+    ];
+    const rowHtml = (p, isDefault) => `
+      <tr style="border-bottom:1px solid var(--border-subtle);">
+        <td style="padding:10px; font-weight:700;">${p.station}</td>
+        <td style="padding:10px;">${p.categoryCode || '<span style="color:var(--text-muted);">— any —</span>'}</td>
+        <td style="padding:10px;">${p.itemCode || '<span style="color:var(--text-muted);">— any —</span>'}</td>
+        <td style="padding:10px;">${p.allowHold ? `✅ ${p.holdMinutes} min` : '🚫 No hold'}</td>
+        <td style="padding:10px;">${p.defaultDisposition}</td>
+        <td style="padding:10px;">${p.decideBy}</td>
+        <td style="padding:10px; text-align:right;">
+          ${isDefault
+            ? '<span class="badge" style="font-size:0.7rem;">system default</span>'
+            : `<button class="btn-secondary dpc-edit" data-id="${p.id}" style="padding:4px 10px; font-size:0.72rem; margin-right:6px;">Edit</button><button class="btn-secondary dpc-del" data-id="${p.id}" style="padding:4px 10px; font-size:0.72rem; color:#ef4444; border-color:#ef4444;">Delete</button>`}
+        </td>
+      </tr>`;
+
+    mount.innerHTML = `
+      <div class="animate-fade-in" style="display:flex; flex-direction:column; gap:20px;">
+        <div>
+          <h3 style="font-size:1.3rem; font-weight:800; margin:0 0 4px 0;">🧊 Cancellation Disposition Policies</h3>
+          <p style="color:var(--text-muted); font-size:0.85rem; margin:0;">Controls what happens when a PREPARED (READY-stage) item is cancelled: offer a reuse HOLD, force DISCARD (waste), or escalate the choice to a manager. Resolution is mandatory on every prepared cancellation - item-level beats category beats station default.</p>
+        </div>
+
+        <!-- ADD / EDIT FORM -->
+        <div class="card" style="background:var(--bg-surface-1); padding:18px; border-radius:10px; border:1px solid var(--border-subtle);">
+          <div style="font-size:0.75rem; font-weight:800; color:var(--text-muted); text-transform:uppercase; margin-bottom:12px;">${editing ? 'Edit Override' : 'Add Tenant Override'}</div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:12px; align-items:end;">
+            <div><label style="font-size:0.72rem; color:var(--text-muted);">STATION</label>
+              <select id="dpc-station" style="width:100%; padding:8px; border-radius:6px; background:var(--bg-surface-2); color:var(--text-main); border:1px solid var(--border-subtle);">
+                <option value="KITCHEN" ${editing && editing.station === 'KITCHEN' ? 'selected' : ''}>KITCHEN</option>
+                <option value="BAR" ${editing && editing.station === 'BAR' ? 'selected' : ''}>BAR</option>
+              </select></div>
+            <div><label style="font-size:0.72rem; color:var(--text-muted);">CATEGORY CODE (optional)</label>
+              <input id="dpc-category" value="${editing ? (editing.categoryCode || '') : ''}" placeholder="e.g. COCKTAILS" style="width:100%; padding:8px; border-radius:6px; background:var(--bg-surface-2); color:var(--text-main); border:1px solid var(--border-subtle); box-sizing:border-box;"></div>
+            <div><label style="font-size:0.72rem; color:var(--text-muted);">ITEM CODE (optional)</label>
+              <input id="dpc-item" value="${editing ? (editing.itemCode || '') : ''}" placeholder="e.g. CHK_TIKKA" style="width:100%; padding:8px; border-radius:6px; background:var(--bg-surface-2); color:var(--text-main); border:1px solid var(--border-subtle); box-sizing:border-box;"></div>
+            <div><label style="font-size:0.72rem; color:var(--text-muted);">ALLOW HOLD</label>
+              <select id="dpc-allowhold" style="width:100%; padding:8px; border-radius:6px; background:var(--bg-surface-2); color:var(--text-main); border:1px solid var(--border-subtle);">
+                <option value="true" ${!editing || editing.allowHold !== false ? 'selected' : ''}>Yes (offer reuse)</option>
+                <option value="false" ${editing && editing.allowHold === false ? 'selected' : ''}>No (discard only)</option>
+              </select></div>
+            <div><label style="font-size:0.72rem; color:var(--text-muted);">HOLD MINUTES</label>
+              <input id="dpc-minutes" type="number" min="0" value="${editing ? (editing.holdMinutes || 0) : 30}" style="width:100%; padding:8px; border-radius:6px; background:var(--bg-surface-2); color:var(--text-main); border:1px solid var(--border-subtle); box-sizing:border-box;"></div>
+            <div><label style="font-size:0.72rem; color:var(--text-muted);">DEFAULT DISPOSITION</label>
+              <select id="dpc-default" style="width:100%; padding:8px; border-radius:6px; background:var(--bg-surface-2); color:var(--text-main); border:1px solid var(--border-subtle);">
+                <option value="HOLD" ${!editing || editing.defaultDisposition !== 'DISCARD' ? 'selected' : ''}>HOLD</option>
+                <option value="DISCARD" ${editing && editing.defaultDisposition === 'DISCARD' ? 'selected' : ''}>DISCARD</option>
+              </select></div>
+            <div><label style="font-size:0.72rem; color:var(--text-muted);">DECIDE BY</label>
+              <select id="dpc-decideby" style="width:100%; padding:8px; border-radius:6px; background:var(--bg-surface-2); color:var(--text-main); border:1px solid var(--border-subtle);">
+                <option value="STATION" ${!editing || editing.decideBy !== 'MANAGER' ? 'selected' : ''}>STATION</option>
+                <option value="MANAGER" ${editing && editing.decideBy === 'MANAGER' ? 'selected' : ''}>MANAGER</option>
+              </select></div>
+            <div style="display:flex; gap:8px;">
+              <button id="dpc-save" class="btn-primary" style="padding:9px 16px; font-weight:800; background:var(--accent-primary); color:#000; border:none; border-radius:6px; cursor:pointer;">${editing ? 'Save Changes' : '＋ Add Policy'}</button>
+              ${editing ? '<button id="dpc-cancel" class="btn-secondary" style="padding:9px 14px;">Cancel</button>' : ''}
+            </div>
+          </div>
+        </div>
+
+        <!-- SAVED TENANT OVERRIDES -->
+        <div class="card" style="background:var(--bg-surface-1); padding:18px; border-radius:10px; border:1px solid var(--border-subtle);">
+          <div style="font-size:0.75rem; font-weight:800; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px;">Tenant Overrides (${saved.length})</div>
+          ${saved.length === 0 ? '<p style="color:var(--text-muted); font-size:0.85rem; margin:0;">No tenant overrides yet — the system defaults below apply.</p>' : `
+            <div class="table-responsive"><table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+              <thead><tr style="text-align:left; background:var(--bg-surface-2);"><th style="padding:10px;">Station</th><th style="padding:10px;">Category</th><th style="padding:10px;">Item</th><th style="padding:10px;">Hold</th><th style="padding:10px;">Default</th><th style="padding:10px;">Decide By</th><th style="padding:10px;"></th></tr></thead>
+              <tbody>${saved.map(p => rowHtml(p, false)).join('')}</tbody>
+            </table></div>`}
+        </div>
+
+        <!-- SYSTEM (CODE) DEFAULTS -->
+        <div class="card" style="background:var(--bg-surface-1); padding:18px; border-radius:10px; border:1px solid var(--border-subtle);">
+          <div style="font-size:0.75rem; font-weight:800; color:var(--text-muted); text-transform:uppercase; margin-bottom:8px;">System Defaults (always available as fallback)</div>
+          <div class="table-responsive"><table style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+            <thead><tr style="text-align:left; background:var(--bg-surface-2);"><th style="padding:10px;">Station</th><th style="padding:10px;">Category</th><th style="padding:10px;">Item</th><th style="padding:10px;">Hold</th><th style="padding:10px;">Default</th><th style="padding:10px;">Decide By</th><th style="padding:10px;"></th></tr></thead>
+            <tbody>${codeDefaults.map(p => rowHtml(p, true)).join('')}</tbody>
+          </table></div>
+        </div>
+      </div>
+    `;
+
+    const readForm = () => ({
+      id: editing ? editing.id : undefined,
+      station: mount.querySelector('#dpc-station').value,
+      categoryCode: (mount.querySelector('#dpc-category').value || '').trim().toUpperCase() || null,
+      itemCode: (mount.querySelector('#dpc-item').value || '').trim().toUpperCase() || null,
+      allowHold: mount.querySelector('#dpc-allowhold').value === 'true',
+      holdMinutes: parseInt(mount.querySelector('#dpc-minutes').value) || 0,
+      defaultDisposition: mount.querySelector('#dpc-default').value,
+      decideBy: mount.querySelector('#dpc-decideby').value
+    });
+
+    const saveBtn = mount.querySelector('#dpc-save');
+    if (saveBtn) saveBtn.onclick = () => {
+      dispositionPolicyModel.savePolicy(readForm(), this.tenantId);
+      this._editingPolicy = null;
+      this.updateContent();
+    };
+    const cancelBtn = mount.querySelector('#dpc-cancel');
+    if (cancelBtn) cancelBtn.onclick = () => { this._editingPolicy = null; this.updateContent(); };
+    mount.querySelectorAll('.dpc-edit').forEach(b => {
+      b.onclick = () => {
+        this._editingPolicy = saved.find(p => p.id === b.dataset.id) || null;
+        this.updateContent();
+      };
+    });
+    mount.querySelectorAll('.dpc-del').forEach(b => {
+      b.onclick = () => {
+        if (window.confirm('Delete this policy override? That scope reverts to the system default.')) {
+          dispositionPolicyModel.deletePolicy(b.dataset.id, this.tenantId);
+          this.updateContent();
+        }
+      };
+    });
   }
 
   bindEvents() {

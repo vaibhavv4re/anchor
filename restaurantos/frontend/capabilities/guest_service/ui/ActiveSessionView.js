@@ -18,7 +18,9 @@ import { MenuBrowserView } from '../../order_management/ui/MenuBrowserView.js';
 import { OrderBuilderDrawer } from '../../order_management/ui/OrderBuilderDrawer.js';
 import { OrderReviewModal } from '../../order_management/ui/OrderReviewModal.js';
 import { ActiveOrdersWidget } from '../../order_management/ui/ActiveOrdersWidget.js';
+import { CancellationModal } from '../../order_management/ui/CancellationModal.js';
 import { RunningBillModal } from './RunningBillModal.js';
+import { toastNotificationManager } from './ToastNotificationManager.js';
 
 export class ActiveSessionView {
   constructor({ sessionId = null, onClose = null } = {}) {
@@ -136,12 +138,18 @@ export class ActiveSessionView {
             const isQueued = item.status === 'QUEUED';
             const isServed = item.status === 'SERVED';
 
-            const borderCol = isReady ? '#10b981' : (isPrep ? '#f59e0b' : (isServed ? '#6b7280' : '#ef4444'));
+            // Amber chip while the station decides an open cancellation request.
+            const openRequest = (projection.pendingCancellationRequests || []).find(r =>
+              r.orderLineId === item.lineItemId || r.orderLineId === item.itemId);
+
+            const borderCol = openRequest ? '#f59e0b' : (isReady ? '#10b981' : (isPrep ? '#f59e0b' : (isServed ? '#6b7280' : '#ef4444')));
             const bgCol = isReady ? 'rgba(16, 185, 129, 0.08)' : 'var(--bg-surface-2)';
-            const statusBadge = isReady ? '<span class="badge" style="background:#10b98122; color:#10b981; border:1px solid #10b981; font-size:0.7rem; font-weight:800;">🟢 READY</span>'
+            const statusBadge = openRequest
+              ? '<span class="badge" style="background:#f59e0b22; color:#f59e0b; border:1px solid #f59e0b; font-size:0.7rem; font-weight:800;">⏳ CANCEL REQUESTED</span>'
+              : (isReady ? '<span class="badge" style="background:#10b98122; color:#10b981; border:1px solid #10b981; font-size:0.7rem; font-weight:800;">🟢 READY</span>'
               : (isPrep ? '<span class="badge" style="background:#f59e0b22; color:#f59e0b; border:1px solid #f59e0b; font-size:0.7rem; font-weight:800;">🔥 PREPARING</span>'
               : (isServed ? '<span class="badge" style="background:#6b728022; color:#9ca3af; border:1px solid #6b7280; font-size:0.7rem;">⚪ SERVED</span>'
-              : '<span class="badge badge-info" style="font-size:0.7rem; font-weight:800;">🔴 QUEUED</span>'));
+              : '<span class="badge badge-info" style="font-size:0.7rem; font-weight:800;">🔴 QUEUED</span>')));
 
             const elapsedStr = item.elapsedMinutes ? `Kitchen elapsed: ${item.elapsedMinutes} min` : 'Just ordered';
 
@@ -155,15 +163,30 @@ export class ActiveSessionView {
                 <div style="display:flex; align-items:center; gap:10px;">
                   <span style="font-size:0.75rem; color:var(--text-muted);">${elapsedStr}</span>
                   ${statusBadge}
-                  ${isReady ? `
+                  ${isReady && !openRequest ? `
                     <button class="btn-primary btn-waiter-serve-item" data-ticket-id="${item.ticketId}" data-line-id="${item.lineItemId || item.itemId || idx}" style="padding:3px 8px; font-size:0.75rem; font-weight:800; background:#10b981; color:#000000; border:none; border-radius:4px; cursor:pointer;">
                       🍽️ Mark Served
+                    </button>
+                  ` : ''}
+                  ${!isServed && !openRequest ? `
+                    <button class="btn-waiter-cancel-item" title="Request cancellation" data-ticket-id="${item.ticketId || ''}" data-line-id="${item.lineItemId || item.itemId || idx}" data-order-id="${item.orderId || ''}" data-item-name="${item.name}" data-qty="${item.quantity || 1}" data-station="${item.stationName === 'BAR' ? 'BAR' : 'KITCHEN'}" style="min-width:44px; min-height:44px; padding:3px 8px; font-size:0.9rem; font-weight:800; background:rgba(239, 68, 68, 0.12); color:#ef4444; border:1px solid #ef4444; border-radius:4px; cursor:pointer;">
+                      🚫
                     </button>
                   ` : ''}
                 </div>
               </div>
             `;
           }).join('')}
+          <!-- Cancelled lines: struck through, dropped from the running bill -->
+          ${(projection.cancelledItems || []).map(c => `
+            <div style="display:flex; justify-content:space-between; align-items:center; background:var(--bg-surface-2); opacity:0.55; padding:8px 12px; border-radius:6px; border-left:3px solid #6b7280;">
+              <div>
+                <span style="font-weight:800;">${c.quantity}x</span> 
+                <span style="font-weight:700; font-size:0.9rem; text-decoration:line-through;">${c.name}</span>
+              </div>
+              <span class="badge" style="background:#6b728022; color:#9ca3af; border:1px solid #6b7280; font-size:0.7rem; font-weight:800;">🚫 CANCELLED</span>
+            </div>
+          `).join('')}
         </div>
 
         <!-- EVENT-DERIVED SERVICE TIMELINE (EXPANDABLE) -->
@@ -204,6 +227,47 @@ export class ActiveSessionView {
         productionRoutingEngine.updateTicketItemStatus(ticketId, lineId, 'SERVED', tenantId);
         platformEventBus.publish('ticket:status_changed', { ticketId, itemId: lineId, status: 'SERVED' });
         this.updateContent();
+      });
+    });
+
+    // Cancellation request entry point (station-controlled workflow): the modal files
+    // REQUESTED with the owning station, or auto-approves instantly while QUEUED.
+    this.container.querySelectorAll('.btn-waiter-cancel-item').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        CancellationModal.open({
+          sessionId: this.sessionId,
+          orderId: btn.dataset.orderId,
+          orderLineId: btn.dataset.lineId,
+          ticketId: btn.dataset.ticketId || null,
+          itemName: btn.dataset.itemName || 'Item',
+          maxQuantity: parseInt(btn.dataset.qty) || 1,
+          station: btn.dataset.station || 'KITCHEN',
+          onResult: (result) => {
+            if (!result || !result.success) {
+              toastNotificationManager.showToast({
+                type: 'info',
+                title: 'Cancellation blocked',
+                message: String((result && result.error) || 'UNKNOWN_ERROR').replace(/_/g, ' ')
+              });
+              return;
+            }
+            if (result.autoApproved) {
+              toastNotificationManager.showToast({
+                type: 'order',
+                title: 'Item cancelled',
+                message: `${btn.dataset.itemName} was still queued — cancelled instantly.`
+              });
+            } else {
+              toastNotificationManager.showToast({
+                type: 'info',
+                title: 'Cancellation requested',
+                message: `Cancellation requested — awaiting ${btn.dataset.station || 'station'} approval.`
+              });
+            }
+            this.updateContent();
+          }
+        });
       });
     });
   }

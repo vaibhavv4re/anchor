@@ -103,6 +103,12 @@ class BillRevisionModel {
 
     // 0-Items Safety Gate: Never allow a ₹0 bill when active orders exist for the session
     let finalItems = Array.isArray(items) ? [...items] : [];
+    // Defensive: cancelled/voided lines never reach the bill snapshot (the session
+    // projection already excludes them; direct order.items callers might not).
+    finalItems = finalItems.filter(it => {
+      const s = String(it.itemStatus || it.status || '').toUpperCase();
+      return s !== 'CANCELLED' && s !== 'VOIDED';
+    });
     let finalSubtotal = parseFloat(subtotal) || 0;
 
     if (finalItems.length === 0) {

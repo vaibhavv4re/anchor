@@ -19,6 +19,8 @@ import { taxConfigurationModel } from '../accounting/taxConfigurationModel.js';
 import { inventoryProjectionService } from '../inventory/inventoryProjectionService.js';
 import { inventoryItemModel } from '../inventory/inventoryItemModel.js';
 import { productionBatchModel } from '../kitchen/productionBatchModel.js';
+import { cancellationModel } from '../ordering/cancellationModel.js';
+import { preparedHoldModel } from '../ordering/preparedHoldModel.js';
 import { shiftRegisterService } from './shiftRegisterService.js';
 
 /**
@@ -151,6 +153,28 @@ export class ManagerProjectionService {
         });
       }
     });
+
+    // E. Open cancellation requests (station-controlled cancellation workflow).
+    // Queued for manager visibility only - decisions stay with the station board;
+    // PENDING_MANAGER_DISPOSITION items are the ones only a manager can action.
+    try {
+      (cancellationModel.getRequests(tenantId) || []).forEach(r => {
+        if (r.status !== 'REQUESTED' && r.status !== 'PENDING_MANAGER_DISPOSITION') return;
+        const session = allSessions.find(s => (s.id || s.sessionId) === r.sessionId);
+        const tableLabel = session ? (session.tableCode || `Table ${session.tableNumber}`) : (r.station || 'Station');
+        needsAttentionQueue.push({
+          id: `exp_cxl_${r.id}`,
+          type: r.status === 'PENDING_MANAGER_DISPOSITION' ? 'CANCEL_DISPOSITION' : 'CANCEL_REQUEST',
+          severity: r.status === 'PENDING_MANAGER_DISPOSITION' ? 'HIGH' : 'MEDIUM',
+          title: r.status === 'PENDING_MANAGER_DISPOSITION'
+            ? `Manager disposition needed: ${r.quantity}x ${r.itemName}`
+            : `Cancellation requested: ${r.quantity}x ${r.itemName}`,
+          subtitle: `${r.station} • ${String(r.reasonCode || 'OTHER').replace(/_/g, ' ')} • by ${r.requestedByName || 'Waiter'}`,
+          tableLabel,
+          timestamp: r.status === 'PENDING_MANAGER_DISPOSITION' ? (r.updatedAt || r.requestedAt) : r.requestedAt
+        });
+      });
+    } catch (_) { /* cancellation layer optional at runtime */ }
 
     // Sort exception queue by severity (HIGH > MEDIUM > LOW)
     const severityRank = { HIGH: 1, MEDIUM: 2, LOW: 3 };
@@ -982,6 +1006,123 @@ export class ManagerProjectionService {
       voidValue: Math.round(voidValue * 100) / 100,
       discountCount: discountRows.length,
       discountValue: Math.round(discountValue * 100) / 100,
+      lastUpdated: new Date().toISOString()
+    };
+  }
+
+  /**
+   * Cancellation & Disposition register (Station Cancellation Workflow, Phase C).
+   * Cost panels are kept STRICTLY separate (locked semantics):
+   *   preparedItemCost - consumedCost across ALL holds (HELD + REUSED + DISCARDED),
+   *   reusedValue      - consumedCost of REUSED holds (offset; contributes zero waste),
+   *   wasteRecognized  - wasteAmount of DISCARDED holds ONLY (recognised on discard).
+   */
+  getCancellationProjection(tenantId = null) {
+    const requests = cancellationModel.getRequests(tenantId) || [];
+    const holds = preparedHoldModel.getHolds(tenantId) || [];
+
+    // Cancelled vs served line quantities across live orders (cancellation rate).
+    const allOrders = (typeof orderModel.getAllOrders === 'function') ? (orderModel.getAllOrders(tenantId) || []) : [];
+    let cancelledQty = 0;
+    let servedQty = 0;
+    allOrders.forEach(o => {
+      (o.items || []).forEach(it => {
+        const s = String(it.itemStatus || it.status || '').toUpperCase();
+        const qty = parseFloat(it.quantity) || 0;
+        if (s === 'CANCELLED' || s === 'VOIDED') cancelledQty += qty;
+        else if (s === 'SERVED') servedQty += qty;
+      });
+    });
+
+    // Order-line unit prices for request value roll-ups (reason / station / waiter).
+    const priceFor = (r) => {
+      const order = allOrders.find(o => String(o.orderId || o.id) === String(r.orderId));
+      const line = order ? (order.items || []).find(i => i.lineItemId === r.orderLineId || String(i.lineItemId || '').startsWith(String(r.orderLineId))) : null;
+      return (parseFloat(line && (line.unitPrice || line.price)) || 0) * (parseFloat(r.quantity) || 0);
+    };
+
+    const byReason = {};
+    const byStation = {};
+    const byWaiter = {};
+    const registerRows = [];
+    requests.forEach(r => {
+      const value = priceFor(r);
+      if (['APPROVED', 'AUTO_APPROVED', 'PENDING_MANAGER_DISPOSITION'].includes(r.status)) {
+        byReason[r.reasonCode] = Math.round(((byReason[r.reasonCode] || 0) + value) * 100) / 100;
+        const st = String(r.station || 'KITCHEN').toUpperCase();
+        byStation[st] = Math.round(((byStation[st] || 0) + value) * 100) / 100;
+        byWaiter[r.requestedByName || 'Staff'] = Math.round(((byWaiter[r.requestedByName || 'Staff'] || 0) + value) * 100) / 100;
+      }
+      registerRows.push({
+        id: r.id,
+        item: r.itemName,
+        qty: parseFloat(r.quantity) || 0,
+        value,
+        station: String(r.station || 'KITCHEN').toUpperCase(),
+        stage: r.stageAtRequest,
+        reason: r.reasonCode,
+        reasonText: r.reasonText || '',
+        status: r.status,
+        requestedByName: r.requestedByName,
+        requestedAt: r.requestedAt,
+        decidedBy: r.decidedBy,
+        decidedAt: r.decidedAt,
+        orderId: r.orderId,
+        orderLineId: r.orderLineId,
+        holdId: r.holdId || null
+      });
+    });
+    registerRows.sort((a, b) => new Date(b.requestedAt || 0) - new Date(a.requestedAt || 0));
+
+    // Held-stock cost panels (strictly separated).
+    let preparedItemCost = 0;
+    let reusedValue = 0;
+    let wasteRecognized = 0;
+    let heldOpenCost = 0;
+    const wasteByStation = {};
+    const wasteByReason = {};
+    holds.forEach(h => {
+      const cost = parseFloat(h.consumedCost) || 0;
+      const waste = parseFloat(h.wasteAmount) || 0;
+      preparedItemCost += cost;
+      if (h.status === 'REUSED') reusedValue += cost;
+      if (h.status === 'DISCARDED') wasteRecognized += waste;
+      if (h.status === 'HELD') heldOpenCost += cost;
+      if (waste > 0) {
+        const st = String(h.station || 'KITCHEN').toUpperCase();
+        wasteByStation[st] = Math.round(((wasteByStation[st] || 0) + waste) * 100) / 100;
+        const req = h.sourceRequestId ? requests.find(r => r.id === h.sourceRequestId) : null;
+        const reason = req ? req.reasonCode : (h.discardReason || 'OTHER');
+        wasteByReason[reason] = Math.round(((wasteByReason[reason] || 0) + waste) * 100) / 100;
+      }
+    });
+
+    const countBy = (status) => requests.filter(r => r.status === status).length;
+
+    return {
+      registerRows,
+      pendingManagerQueue: requests.filter(r => r.status === 'PENDING_MANAGER_DISPOSITION'),
+      reversedRows: requests.filter(r => r.status === 'REVERSED'),
+      counts: {
+        requested: countBy('REQUESTED'),
+        approved: countBy('APPROVED'),
+        autoApproved: countBy('AUTO_APPROVED'),
+        rejected: countBy('REJECTED'),
+        pendingManager: countBy('PENDING_MANAGER_DISPOSITION'),
+        reversed: countBy('REVERSED')
+      },
+      cancelledQty, servedQty,
+      cancellationRate: (cancelledQty + servedQty) > 0
+        ? Math.round((cancelledQty / (cancelledQty + servedQty)) * 1000) / 10 : null,
+      byReason, byStation, byWaiter,
+      panels: {
+        preparedItemCost: Math.round(preparedItemCost * 100) / 100,
+        reusedValue: Math.round(reusedValue * 100) / 100,
+        wasteRecognized: Math.round(wasteRecognized * 100) / 100,
+        heldOpenCost: Math.round(heldOpenCost * 100) / 100
+      },
+      wasteByStation, wasteByReason,
+      holds,
       lastUpdated: new Date().toISOString()
     };
   }

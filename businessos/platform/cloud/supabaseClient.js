@@ -788,6 +788,65 @@ export function formatRecordForTable(entityName, job) {
     };
   }
 
+  if (entityName === 'cancellation_requests') {
+    return {
+      id: p.id || genTempId('cxl_'),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      session_id: p.sessionId || p.session_id || '',
+      order_id: p.orderId || p.order_id || '',
+      order_line_id: p.orderLineId || p.order_line_id || '',
+      ticket_id: p.ticketId || p.ticket_id || null,
+      station: p.station || 'KITCHEN',
+      item_code: p.itemCode || p.item_code || '',
+      item_name: p.itemName || p.item_name || '',
+      quantity: parseFloat(p.quantity) || 0,
+      status: p.status || 'REQUESTED',
+      reason_code: p.reasonCode || p.reason_code || null,
+      decided_by: p.decidedBy || p.decided_by || null,
+      decided_at: p.decidedAt || p.decided_at || null,
+      data: p
+    };
+  }
+
+  if (entityName === 'prepared_item_holds') {
+    return {
+      id: p.id || genTempId('hold_'),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      source_session_id: p.sourceSessionId || p.source_session_id || '',
+      source_order_id: p.sourceOrderId || p.source_order_id || '',
+      source_order_line_id: p.sourceOrderLineId || p.source_order_line_id || '',
+      source_ticket_id: p.sourceTicketId || p.source_ticket_id || null,
+      source_request_id: p.sourceRequestId || p.source_request_id || null,
+      station: p.station || 'KITCHEN',
+      item_code: p.itemCode || p.item_code || '',
+      item_name: p.itemName || p.item_name || '',
+      quantity: parseFloat(p.quantity) || 0,
+      status: p.status || 'HELD',
+      consumed_cost: parseFloat(p.consumedCost || p.consumed_cost) || 0,
+      waste_amount: parseFloat(p.wasteAmount || p.waste_amount) || 0,
+      hold_created_at: p.holdCreatedAt || p.hold_created_at || new Date().toISOString(),
+      hold_expires_at: p.holdExpiresAt || p.hold_expires_at || null,
+      lineage: p.lineage || null,
+      data: p
+    };
+  }
+
+  if (entityName === 'disposition_policies') {
+    return {
+      id: p.id || genTempId('dp_'),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      station: p.station || 'DEFAULT',
+      category_code: p.categoryCode || p.category_code || null,
+      item_code: p.itemCode || p.item_code || null,
+      allow_hold: p.allowHold !== undefined ? p.allowHold !== false : (p.allow_hold !== false),
+      hold_minutes: parseInt(p.holdMinutes || p.hold_minutes) || 0,
+      default_disposition: p.defaultDisposition || p.default_disposition || 'HOLD',
+      decide_by: p.decideBy || p.decide_by || 'STATION',
+      status: p.status || 'ACTIVE',
+      data: p
+    };
+  }
+
   return p;
 }
 
@@ -1025,6 +1084,52 @@ export function formatPatchForTable(entityName, patch) {
     copyIfPresent('invoiceNumber', 'invoice_number');
     copyIfPresent('amount', 'amount', v => parseFloat(v) || 0);
     copyIfPresent('paymentMethod', 'payment_method');
+    copyIfPresent('status', 'status');
+    result.data = { ...(p.data || p), ...(result.status ? { status: result.status } : {}) };
+  } else if (entityName === 'cancellation_requests') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('sessionId', 'session_id');
+    copyIfPresent('orderId', 'order_id');
+    copyIfPresent('orderLineId', 'order_line_id');
+    copyIfPresent('ticketId', 'ticket_id');
+    copyIfPresent('station', 'station');
+    copyIfPresent('itemCode', 'item_code');
+    copyIfPresent('itemName', 'item_name');
+    copyIfPresent('quantity', 'quantity', v => parseFloat(v) || 0);
+    copyIfPresent('status', 'status');
+    copyIfPresent('reasonCode', 'reason_code');
+    copyIfPresent('decidedBy', 'decided_by');
+    copyIfPresent('decidedAt', 'decided_at');
+    result.data = { ...(p.data || p), ...(result.status ? { status: result.status } : {}) };
+  } else if (entityName === 'prepared_item_holds') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('sourceSessionId', 'source_session_id');
+    copyIfPresent('sourceOrderId', 'source_order_id');
+    copyIfPresent('sourceOrderLineId', 'source_order_line_id');
+    copyIfPresent('sourceTicketId', 'source_ticket_id');
+    copyIfPresent('sourceRequestId', 'source_request_id');
+    copyIfPresent('station', 'station');
+    copyIfPresent('itemCode', 'item_code');
+    copyIfPresent('itemName', 'item_name');
+    copyIfPresent('quantity', 'quantity', v => parseFloat(v) || 0);
+    copyIfPresent('status', 'status');
+    copyIfPresent('consumedCost', 'consumed_cost', v => parseFloat(v) || 0);
+    copyIfPresent('wasteAmount', 'waste_amount', v => parseFloat(v) || 0);
+    copyIfPresent('holdExpiresAt', 'hold_expires_at');
+    copyIfPresent('lineage', 'lineage');
+    result.data = { ...(p.data || p), ...(result.status ? { status: result.status } : {}) };
+  } else if (entityName === 'disposition_policies') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('station', 'station');
+    copyIfPresent('categoryCode', 'category_code');
+    copyIfPresent('itemCode', 'item_code');
+    copyIfPresent('allowHold', 'allow_hold', v => v !== false);
+    copyIfPresent('holdMinutes', 'hold_minutes', v => parseInt(v) || 0);
+    copyIfPresent('defaultDisposition', 'default_disposition');
+    copyIfPresent('decideBy', 'decide_by');
     copyIfPresent('status', 'status');
     result.data = { ...(p.data || p), ...(result.status ? { status: result.status } : {}) };
   } else if (entityName === 'stock_transfers') {

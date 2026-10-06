@@ -587,7 +587,7 @@ export class DataGateway {
     return merged;
   }
 
-  async hydrateCollections(collections = ['tenants', 'identities', 'employees', 'table_sessions', 'orders', 'bill_revisions', 'invoices', 'payments', 'session_audit_logs'], tenantId = null) {
+  async hydrateCollections(collections = ['tenants', 'identities', 'employees', 'table_sessions', 'orders', 'bill_revisions', 'invoices', 'payments', 'session_audit_logs', 'cancellation_requests', 'prepared_item_holds', 'disposition_policies'], tenantId = null) {
     if (connectivityManager && typeof connectivityManager.notifySyncStart === 'function') {
       connectivityManager.notifySyncStart();
     }

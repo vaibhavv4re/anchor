@@ -71,6 +71,9 @@ export class ReportsDaySummaryView {
         <button class="btn-secondary report-tab-btn ${this.activeReportTab === 'audit_events' ? 'active' : ''}" data-tab="audit_events" style="padding:8px 14px; font-size:0.85rem;">
           📜 4. Audit & Financial Events Ledger (${audit.length})
         </button>
+        <button class="btn-secondary report-tab-btn ${this.activeReportTab === 'cancellation_waste' ? 'active' : ''}" data-tab="cancellation_waste" style="padding:8px 14px; font-size:0.85rem;">
+          🧊 5. Cancellation & Waste
+        </button>
       </div>
 
       <!-- Active Report Content View -->
@@ -268,6 +271,8 @@ export class ReportsDaySummaryView {
           </div>
         </div>
       `;
+    } else if (this.activeReportTab === 'cancellation_waste') {
+      return this.renderCancellationWasteTab(formatCurrency);
     } else {
       return `
         <div class="card" style="padding:20px; background:var(--bg-surface-1);">
@@ -293,6 +298,73 @@ export class ReportsDaySummaryView {
         </div>
       `;
     }
+  }
+
+  /**
+   * Phase C: prepared-cost vs waste panels kept STRICTLY separate -
+   * "Prepared Item Cost" (consumedCost across all holds), "Reused Value" (offset,
+   * zero waste), "Waste Recognized" (DISCARDED holds only). Never merged.
+   */
+  renderCancellationWasteTab(formatCurrency) {
+    const data = managerProjectionService.getCancellationProjection(this.tenantId);
+    const p = data.panels;
+    const aggTable = (title, map, tone) => {
+      const entries = Object.entries(map || {});
+      if (entries.length === 0) return '';
+      return `
+        <div class="card" style="padding:16px; background:var(--bg-surface-1);">
+          <div style="font-size:0.75rem; font-weight:800; text-transform:uppercase; color:${tone}; margin-bottom:8px;">${title}</div>
+          ${entries.sort((a, b) => b[1] - a[1]).map(([k, v]) => `
+            <div style="display:flex; justify-content:space-between; padding:5px 0; border-bottom:1px solid var(--border-subtle); font-size:0.82rem;">
+              <span>${String(k).replace(/_/g, ' ')}</span><strong>${formatCurrency(v)}</strong>
+            </div>`).join('')}
+        </div>`;
+    };
+    const heldHolds = (data.holds || []).filter(h => h.status === 'HELD');
+
+    return `
+      <div style="display:flex; flex-direction:column; gap:16px;">
+        <div class="grid grid-cols-3 gap-md">
+          <div style="background:var(--bg-surface-2); padding:16px; border-radius:6px; border-left:4px solid #3b82f6;">
+            <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">PREPARED ITEM COST (all cancelled-prepared holds)</span>
+            <strong style="font-size:1.6rem; display:block; color:#3b82f6; margin-top:4px;">${formatCurrency(p.preparedItemCost)}</strong>
+          </div>
+          <div style="background:var(--bg-surface-2); padding:16px; border-radius:6px; border-left:4px solid #10b981;">
+            <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">REUSED VALUE (offset • zero waste)</span>
+            <strong style="font-size:1.6rem; display:block; color:#10b981; margin-top:4px;">${formatCurrency(p.reusedValue)}</strong>
+          </div>
+          <div style="background:var(--bg-surface-2); padding:16px; border-radius:6px; border-left:4px solid #ef4444;">
+            <span style="font-size:0.75rem; color:var(--text-muted); font-weight:600;">WASTE RECOGNIZED (DISCARDED only)</span>
+            <strong style="font-size:1.6rem; display:block; color:#ef4444; margin-top:4px;">${formatCurrency(p.wasteRecognized)}</strong>
+          </div>
+        </div>
+        <div style="font-size:0.78rem; color:var(--text-muted);">
+          ⚖️ Cost semantics: a HELD item carries Prepared Item Cost but is NOT waste yet (${heldHolds.length} open holds worth ${formatCurrency(p.heldOpenCost)}); waste is recognised only when a hold is DISCARDED; reused items offset their cost with zero waste.
+        </div>
+
+        <div class="grid grid-cols-3 gap-md">
+          ${aggTable('Waste Recognized by Station', data.wasteByStation, '#ef4444')}
+          ${aggTable('Waste Recognized by Reason', data.wasteByReason, '#f59e0b')}
+          ${aggTable('Cancelled Value by Station', data.byStation, '#8b5cf6')}
+        </div>
+        <div class="grid grid-cols-2 gap-md">
+          ${aggTable('Cancelled Value by Reason', data.byReason, '#3b82f6')}
+          ${aggTable('Cancelled Value by Waiter', data.byWaiter, '#ec4899')}
+        </div>
+
+        <div class="card" style="padding:16px; background:var(--bg-surface-1);">
+          <div style="font-size:0.75rem; font-weight:800; text-transform:uppercase; color:var(--text-muted); margin-bottom:8px;">Cancellation Counts</div>
+          <div style="font-size:0.85rem; display:flex; gap:18px; flex-wrap:wrap;">
+            <span>Open: <strong>${data.counts.requested}</strong></span>
+            <span>Approved: <strong>${data.counts.approved + data.counts.autoApproved}</strong></span>
+            <span>Rejected: <strong>${data.counts.rejected}</strong></span>
+            <span>Pending manager: <strong>${data.counts.pendingManager}</strong></span>
+            <span>Reversed: <strong>${data.counts.reversed}</strong></span>
+            <span>Rate: <strong>${data.cancellationRate === null ? '—' : data.cancellationRate + '%'}</strong> (cancelled ${data.cancelledQty} vs served ${data.servedQty})</span>
+          </div>
+        </div>
+      </div>
+    `;
   }
 
   bindEvents() {
@@ -362,6 +434,14 @@ export class ReportsDaySummaryView {
     rows.push(['Avg Dwell Duration', os.avgTableDuration]);
     rows.push(['Avg Kitchen Prep', os.avgKitchenPrep]);
     rows.push(['Order-To-Table SLA', os.avgOrderToTable]);
+    rows.push([]);
+    rows.push(['CANCELLATION & WASTE']);
+    const cxl = managerProjectionService.getCancellationProjection(this.tenantId);
+    rows.push(['Prepared Item Cost (all holds)', cxl.panels.preparedItemCost]);
+    rows.push(['Reused Value (zero waste offset)', cxl.panels.reusedValue]);
+    rows.push(['Waste Recognized (DISCARDED only)', cxl.panels.wasteRecognized]);
+    rows.push(['Held Open Cost', cxl.panels.heldOpenCost]);
+    rows.push(['Cancellation Rate %', cxl.cancellationRate]);
     rows.push([]);
     rows.push(['AUDIT LEDGER']);
     rows.push(['Time', 'Event', 'Table', 'Actor', 'Details']);

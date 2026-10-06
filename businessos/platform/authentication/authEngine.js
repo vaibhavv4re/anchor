@@ -24,6 +24,7 @@ export class AuthEngine {
     this.lockTimeoutTimer = null;
     this.lockTimeoutMs = deps.lockTimeoutMs || 300000;
     if (this.activeSession) {
+      this._mirrorRosSession(this.activeSession);
       this._resetLockTimeout();
     }
   }
@@ -316,6 +317,7 @@ export class AuthEngine {
         window.localStorage.removeItem('anchor_active_session');
       } catch (e) {}
     }
+    this._mirrorRosSession(null);
     if (this.lockTimeoutTimer) {
       clearTimeout(this.lockTimeoutTimer);
       this.lockTimeoutTimer = null;
@@ -334,10 +336,29 @@ export class AuthEngine {
         console.warn('[AuthEngine] Failed to write session to localStorage:', e);
       }
     }
+    // The station UIs (KDS/BDS) and cancellationModel._actorFromSession resolve the
+    // acting employee from sessionStorage `ros_session`, a key this engine historically
+    // never wrote - so a real login looked like an empty actor there and every station
+    // decision was denied (STATION AUTHORITY REQUIRED). Mirror the active session so all
+    // ros_session readers see the same role/workspace the in-memory session carries.
+    this._mirrorRosSession(session);
     if (this.dataGateway && typeof this.dataGateway.create === 'function') {
       this.dataGateway.create('sessions', session);
     } else if (this.offlineStore && typeof this.offlineStore.appendItem === 'function') {
       this.offlineStore.appendItem('sessions', session);
+    }
+  }
+
+  _mirrorRosSession(session) {
+    if (typeof sessionStorage === 'undefined') return;
+    try {
+      if (session && session.status === 'ACTIVE') {
+        sessionStorage.setItem('ros_session', JSON.stringify(session));
+      } else {
+        sessionStorage.removeItem('ros_session');
+      }
+    } catch (e) {
+      console.warn('[AuthEngine] Failed to mirror session to ros_session:', e);
     }
   }
 

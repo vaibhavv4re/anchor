@@ -189,6 +189,16 @@ export class SupabaseDataAdapter {
           if (!item.paymentId) item.paymentId = item.id;
         }
 
+        // Cancellation workflow domains: the full camelCase record is carried in the
+        // data JSONB; backfill any camel key missing from the physical snake columns.
+        if (collection === 'cancellation_requests' || collection === 'prepared_item_holds' || collection === 'disposition_policies') {
+          if (item.data && typeof item.data === 'object') {
+            Object.keys(item.data).forEach(k => {
+              if (k !== 'data' && item[k] === undefined) item[k] = item.data[k];
+            });
+          }
+        }
+
         // Inventory Requests domain: inventory_requests
         if (item.request_number && !item.requestNumber) item.requestNumber = item.request_number;
         if (item.request_number && !item.reqCode) item.reqCode = item.request_number;

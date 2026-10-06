@@ -36,7 +36,8 @@ declare
     'stock_transfers','stock_issues','stock_adjustments','stock_counts',
     'stock_balances','stock_operations','stock_transactions','inventory_requests',
     'offline_journal','audit_logs','orders','table_sessions','bill_revisions',
-    'invoices','payments','session_audit_logs','tax_configurations','tax_audit_log'
+    'invoices','payments','session_audit_logs','tax_configurations','tax_audit_log',
+    'cancellation_requests','prepared_item_holds','disposition_policies'
   ];
 begin
   foreach t in array tables loop
@@ -64,7 +65,8 @@ declare
     'stock_transfers','stock_issues','stock_adjustments','stock_counts',
     'stock_balances','stock_operations','stock_transactions','inventory_requests',
     'offline_journal','audit_logs','orders','table_sessions','bill_revisions',
-    'invoices','payments','session_audit_logs','tax_configurations','tax_audit_log'
+    'invoices','payments','session_audit_logs','tax_configurations','tax_audit_log',
+    'cancellation_requests','prepared_item_holds','disposition_policies'
   ];
 begin
   foreach t in array tables loop

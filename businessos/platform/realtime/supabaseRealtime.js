@@ -16,7 +16,7 @@ import { platformEventBus } from '../events/platformEvents.js';
 import { runtimeConfig } from '../cloud/runtimeConfig.js';
 import { getSupabaseClient, destroySupabaseClient } from './supabaseClientFactory.js';
 
-const REALTIME_TABLES = ['orders', 'table_sessions', 'bill_revisions', 'invoices', 'payments', 'stock_balances'];
+const REALTIME_TABLES = ['orders', 'table_sessions', 'bill_revisions', 'invoices', 'payments', 'stock_balances', 'cancellation_requests', 'prepared_item_holds'];
 const CHANNEL_JOIN_TIMEOUT_MS = 5000;
 const POLL_INTERVAL_MS = 10000; // 10s fallback; realtime primary is <1s
 
@@ -65,7 +65,8 @@ export class SupabaseRealtime {
           await dg.hydrateCollections([
             'inventory', 'suppliers', 'purchase_orders', 'goods_receipt_notes',
             'inventory_categories', 'inventory_uoms', 'orders', 'table_sessions',
-            'bill_revisions', 'invoices', 'payments'
+            'bill_revisions', 'invoices', 'payments',
+            'cancellation_requests', 'prepared_item_holds', 'disposition_policies'
           ], 'tenant_h0qc7wf');
           console.log('☁️ [SupabaseRealtime] Full cloud refresh completed on reconnect.');
         } catch (e) {
@@ -642,6 +643,83 @@ export class SupabaseRealtime {
     }
   }
 
+  /** Cancellation workflow: merge cloud cancellation_requests rows into local store. */
+  _syncCloudCancellationRequests(cloudRequests, tenantId) {
+    const localRequests = offlineStore.getCollection('cancellation_requests') || [];
+    const reqMap = new Map();
+    localRequests.forEach(r => reqMap.set(r.id, r));
+
+    let hasChanges = false;
+    cloudRequests.forEach(raw => {
+      const p = (raw && raw.data) ? { ...raw.data, ...raw } : { ...raw };
+      if (!p.id) p.id = raw.id;
+      if (raw.tenant_id) p.tenantId = raw.tenant_id;
+      if (raw.session_id) p.sessionId = raw.session_id;
+      if (raw.order_id) p.orderId = raw.order_id;
+      if (raw.order_line_id) p.orderLineId = raw.order_line_id;
+      if (raw.ticket_id) p.ticketId = raw.ticket_id;
+      if (raw.station) p.station = raw.station;
+      if (raw.item_code) p.itemCode = raw.item_code;
+      if (raw.item_name) p.itemName = raw.item_name;
+      if (raw.quantity !== undefined && raw.quantity !== null) p.quantity = parseFloat(raw.quantity);
+      if (raw.status) p.status = raw.status;
+      if (raw.reason_code) p.reasonCode = raw.reason_code;
+      if (raw.decided_by) p.decidedBy = raw.decided_by;
+      if (raw.decided_at) p.decidedAt = raw.decided_at;
+
+      const existing = reqMap.get(p.id);
+      if (!existing || JSON.stringify(existing) !== JSON.stringify(p)) {
+        hasChanges = true;
+        reqMap.set(p.id, p);
+      }
+    });
+
+    if (hasChanges) {
+      offlineStore.setCollection('cancellation_requests', Array.from(reqMap.values()));
+      platformEventBus.publish('cancellation:synced', { source: 'realtime_sync', tenantId });
+    }
+  }
+
+  /** Cancellation workflow: merge cloud prepared_item_holds rows into local store. */
+  _syncCloudPreparedItemHolds(cloudHolds, tenantId) {
+    const localHolds = offlineStore.getCollection('prepared_item_holds') || [];
+    const holdMap = new Map();
+    localHolds.forEach(h => holdMap.set(h.id, h));
+
+    let hasChanges = false;
+    cloudHolds.forEach(raw => {
+      const p = (raw && raw.data) ? { ...raw.data, ...raw } : { ...raw };
+      if (!p.id) p.id = raw.id;
+      if (raw.tenant_id) p.tenantId = raw.tenant_id;
+      if (raw.source_session_id) p.sourceSessionId = raw.source_session_id;
+      if (raw.source_order_id) p.sourceOrderId = raw.source_order_id;
+      if (raw.source_order_line_id) p.sourceOrderLineId = raw.source_order_line_id;
+      if (raw.source_ticket_id) p.sourceTicketId = raw.source_ticket_id;
+      if (raw.source_request_id) p.sourceRequestId = raw.source_request_id;
+      if (raw.station) p.station = raw.station;
+      if (raw.item_code) p.itemCode = raw.item_code;
+      if (raw.item_name) p.itemName = raw.item_name;
+      if (raw.quantity !== undefined && raw.quantity !== null) p.quantity = parseFloat(raw.quantity);
+      if (raw.status) p.status = raw.status;
+      if (raw.consumed_cost !== undefined && raw.consumed_cost !== null) p.consumedCost = parseFloat(raw.consumed_cost);
+      if (raw.waste_amount !== undefined && raw.waste_amount !== null) p.wasteAmount = parseFloat(raw.waste_amount);
+      if (raw.hold_created_at) p.holdCreatedAt = raw.hold_created_at;
+      if (raw.hold_expires_at) p.holdExpiresAt = raw.hold_expires_at;
+      if (raw.lineage) p.lineage = raw.lineage;
+
+      const existing = holdMap.get(p.id);
+      if (!existing || JSON.stringify(existing) !== JSON.stringify(p)) {
+        hasChanges = true;
+        holdMap.set(p.id, p);
+      }
+    });
+
+    if (hasChanges) {
+      offlineStore.setCollection('prepared_item_holds', Array.from(holdMap.values()));
+      platformEventBus.publish('hold:synced', { source: 'realtime_sync', tenantId });
+    }
+  }
+
   /**
    * Ingests updated payments from Supabase cloud into local memory and fires platform events.
    */
@@ -694,6 +772,10 @@ export class SupabaseRealtime {
       this._syncCloudPayments([newRecord], tId);
     } else if (table === 'stock_balances' && newRecord) {
       this._syncCloudStockBalances([newRecord], tId);
+    } else if (table === 'cancellation_requests' && newRecord) {
+      this._syncCloudCancellationRequests([newRecord], tId);
+    } else if (table === 'prepared_item_holds' && newRecord) {
+      this._syncCloudPreparedItemHolds([newRecord], tId);
     }
 
     if (!isFromBroadcast) {

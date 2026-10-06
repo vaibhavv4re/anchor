@@ -453,6 +453,72 @@ CREATE TABLE IF NOT EXISTS session_audit_logs (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- Cancellation workflow: station-controlled line cancellations (governance layer
+-- over order -> KOT/BOT -> READY consumption; no consumption math stored here).
+CREATE TABLE IF NOT EXISTS cancellation_requests (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT,
+  session_id TEXT,
+  order_id TEXT,
+  order_line_id TEXT,
+  ticket_id TEXT,
+  station TEXT DEFAULT 'KITCHEN',
+  item_code TEXT,
+  item_name TEXT,
+  quantity NUMERIC DEFAULT 0,
+  status TEXT DEFAULT 'REQUESTED',
+  reason_code TEXT,
+  decided_by TEXT,
+  decided_at TIMESTAMPTZ,
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Prepared-item holds: disposition/traceability record for cancelled READY-stage
+-- lines. consumedCost = "Prepared Item Cost" (waste 0 while HELD); waste_amount is
+-- recognised ONLY on the DISCARDED transition. No stock_transactions row per hold.
+CREATE TABLE IF NOT EXISTS prepared_item_holds (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT,
+  source_session_id TEXT,
+  source_order_id TEXT,
+  source_order_line_id TEXT,
+  source_ticket_id TEXT,
+  source_request_id TEXT,
+  station TEXT DEFAULT 'KITCHEN',
+  item_code TEXT,
+  item_name TEXT,
+  quantity NUMERIC DEFAULT 0,
+  status TEXT DEFAULT 'HELD',
+  consumed_cost NUMERIC DEFAULT 0,
+  waste_amount NUMERIC DEFAULT 0,
+  hold_created_at TIMESTAMPTZ DEFAULT NOW(),
+  hold_expires_at TIMESTAMPTZ,
+  lineage TEXT,
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Disposition policies: mandatory READY-stage cancellation gate per station
+-- (allow_hold=false means DISCARD-only; decide_by='MANAGER' parks the request).
+CREATE TABLE IF NOT EXISTS disposition_policies (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT,
+  station TEXT DEFAULT 'DEFAULT',
+  category_code TEXT,
+  item_code TEXT,
+  allow_hold BOOLEAN DEFAULT true,
+  hold_minutes INT DEFAULT 0,
+  default_disposition TEXT DEFAULT 'HOLD',
+  decide_by TEXT DEFAULT 'STATION',
+  status TEXT DEFAULT 'ACTIVE',
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
 -- STEP 2: SECURITY - Row Level Security is enforced by migration.
 -- The former "DISABLE RLS + GRANT FULL ANON ACCESS" block opened the entire
 -- database to the public anon key. It is intentionally REMOVED here. Tenant

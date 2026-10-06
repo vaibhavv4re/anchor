@@ -24,6 +24,10 @@
 
 import { orderModel } from '../../../../../businessos/platform/ordering/orderModel.js';
 import { recipeModel } from '../../../../../businessos/platform/kitchen/recipeModel.js';
+import { cancellationModel } from '../../../../../businessos/platform/ordering/cancellationModel.js';
+import { dispositionPolicyModel } from '../../../../../businessos/platform/ordering/dispositionPolicyModel.js';
+import { preparedHoldModel } from '../../../../../businessos/platform/ordering/preparedHoldModel.js';
+import { offlineStore } from '../../../../../businessos/platform/offline_store/offlineStore.js';
 import { platformEventBus } from '../../../../../businessos/platform/events/platformEvents.js';
 import { BAR_COCKTAIL_CODES } from '../../../../../businessos/platform/bar/barConsumptionMapping.js';
 
@@ -143,7 +147,7 @@ export class BarDisplaySystemView {
     if (dg && typeof dg.hydrateCollections === 'function') {
       this.pollInterval = setInterval(async () => {
         try {
-          await dg.hydrateCollections(['orders'], tenantId);
+          await dg.hydrateCollections(['orders', 'cancellation_requests', 'prepared_item_holds'], tenantId);
           const tickets = this.getBarTickets();
           const currentHash = JSON.stringify(tickets.map(t => `${t.id}_${t.status}_${t.updatedAt || ''}_${(t.items || []).map(i => i.itemStatus).join('-')}`));
           if (currentHash !== this.lastTicketsHash) {
@@ -185,7 +189,21 @@ export class BarDisplaySystemView {
       platformEventBus.subscribe('bot:status_changed', refresh),
       platformEventBus.subscribe('ticket:status_changed', refresh),
       platformEventBus.subscribe('ticket:item_status_changed', refresh),
-      platformEventBus.subscribe('data:changed', refresh)
+      platformEventBus.subscribe('data:changed', refresh),
+      // Cancellation workflow: incoming waiter requests chime + re-render; decisions and
+      // cloud syncs from other devices refresh the request cards too (BAR-scoped).
+      platformEventBus.subscribe('cancellation:requested', (e) => {
+        if (e && e.payload && e.payload.station !== 'BAR') return;
+        this.playChime('NEW_BOT');
+        refresh();
+      }),
+      platformEventBus.subscribe('cancellation:decided', refresh),
+      platformEventBus.subscribe('cancellation:reversed', refresh),
+      platformEventBus.subscribe('cancellation:synced', refresh),
+      // Hold board (Phase B): refresh HELD stock + reuse hints on any hold lifecycle change.
+      platformEventBus.subscribe('hold:created', refresh),
+      platformEventBus.subscribe('hold:reused', refresh),
+      platformEventBus.subscribe('hold:discarded', refresh)
     ];
   }
 
@@ -620,6 +638,27 @@ export class BarDisplaySystemView {
     // Speed Rail aggregation (from active non-served tickets)
     const speedRailItems = this.getSpeedRailAggregation(tickets);
 
+    // Open cancellation requests for the BAR station, keyed by affected BOT ticket.
+    const tenantId = this._getTenantId();
+    const pendingCxls = cancellationModel.getPendingRequests('BAR', tenantId);
+    const requestsByTicket = new Map();
+    const attachedTicketIds = new Set(tickets.map(t => t.ticketId || t.id));
+    const orphanRequests = [];
+    pendingCxls.forEach(r => {
+      if (r.ticketId && attachedTicketIds.has(r.ticketId)) {
+        if (!requestsByTicket.has(r.ticketId)) requestsByTicket.set(r.ticketId, []);
+        requestsByTicket.get(r.ticketId).push(r);
+      } else {
+        orphanRequests.push(r);
+      }
+    });
+    this._requestsByTicket = requestsByTicket;
+
+    // Station holds (Phase B hold board + held-stock reuse hints).
+    const stationHolds = preparedHoldModel.getHolds(tenantId, { station: 'BAR' });
+    const liveHolds = stationHolds.filter(h => h.status === 'HELD');
+    this._heldItemCodes = new Set(liveHolds.map(h => h.itemCode));
+
     this.container.innerHTML = `
       <!-- BDS FULLSCREEN HEADER BAR -->
       <div style="display:flex; justify-content:space-between; align-items:center; background:#1e293b; padding:12px 20px; border-radius:12px; border:1px solid #334155; flex-wrap:wrap; gap:12px;">
@@ -680,6 +719,9 @@ export class BarDisplaySystemView {
         <button class="bds-tab ${this.selectedStatusTab === 'ALL' ? 'active' : ''}" data-tab="ALL" style="flex:1; padding:10px; font-size:0.9rem; font-weight:800; border:none; border-radius:8px; background:${this.selectedStatusTab === 'ALL' ? '#3b82f6' : 'transparent'}; color:${this.selectedStatusTab === 'ALL' ? '#fff' : '#94a3b8'}; cursor:pointer;">
           📋 All Active BOTs (${queued.length + preparing.length + ready.length})
         </button>
+        <button class="bds-tab ${this.selectedStatusTab === 'HELD' ? 'active' : ''}" data-tab="HELD" style="flex:1; padding:10px; font-size:0.9rem; font-weight:800; border:none; border-radius:8px; background:${this.selectedStatusTab === 'HELD' ? '#8b5cf6' : 'transparent'}; color:${this.selectedStatusTab === 'HELD' ? '#fff' : '#94a3b8'}; cursor:pointer;">
+          🧊 Held Items (${liveHolds.length})
+        </button>
       </div>
 
       <!-- SPEED RAIL (CONSOLIDATED DRINK PREP AGGREGATION) -->
@@ -707,7 +749,14 @@ export class BarDisplaySystemView {
         </div>
       ` : ''}
 
+      <!-- ORPHANED CANCELLATION REQUESTS (BOT ticket not in current filtered view) -->
+      ${orphanRequests.map(r => this.renderCancellationRequestCard(r)).join('')}
+
+      <!-- HELD ITEMS BOARD (Phase B): reuse / discard prepared cancellations -->
+      ${this.selectedStatusTab === 'HELD' ? this.renderHoldBoard(stationHolds) : ''}
+
       <!-- BOT TICKET CARDS CONTAINER -->
+      ${this.selectedStatusTab === 'HELD' ? '' : `
       <div style="flex:1; overflow-y:auto; display:grid; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); gap:16px; align-content:start;">
         ${visibleTickets.length > 0 ? visibleTickets.map(t => this.renderBDSTicketCard(t)).join('') : `
           <div style="grid-column:1/-1; text-align:center; padding:60px 20px; background:#1e293b; border-radius:12px; border:1px dashed #334155; color:#94a3b8;">
@@ -716,7 +765,7 @@ export class BarDisplaySystemView {
             <p style="margin:4px 0 0; font-size:0.85rem;">Incoming drink orders from Waiters &amp; POS will appear here instantly with realtime sync.</p>
           </div>
         `}
-      </div>
+      </div>`}
 
       <!-- RECENT BUMPS RECALL DRAWER (SLIDE-OVER) -->
       ${this.showRecentBumpsDrawer ? this.renderRecentBumpsModal() : ''}
@@ -755,8 +804,13 @@ export class BarDisplaySystemView {
     }
 
     const items = Array.isArray(t.items) ? t.items : [];
-    const allItemsReady = items.length > 0 && items.every(i => (i.itemStatus || t.status) === 'READY' || (i.itemStatus || t.status) === 'SERVED');
-    const allItemsQueued = items.length > 0 && items.every(i => (i.itemStatus || t.status) === 'QUEUED');
+    const activeItems = items.filter(i => {
+      const s = i.itemStatus || i.status || t.status || 'QUEUED';
+      return s !== 'CANCELLED' && s !== 'VOIDED';
+    });
+    const allItemsReady = activeItems.length > 0 && activeItems.every(i => (i.itemStatus || t.status) === 'READY' || (i.itemStatus || t.status) === 'SERVED');
+    const allItemsQueued = activeItems.length > 0 && activeItems.every(i => (i.itemStatus || t.status) === 'QUEUED');
+    const ticketRequests = (this._requestsByTicket && this._requestsByTicket.get(t.ticketId || t.id)) || [];
 
     return `
       <div class="bds-card" 
@@ -787,11 +841,27 @@ export class BarDisplaySystemView {
           </div>
         </div>
 
+        <!-- CANCELLATION REQUEST CARDS (BAR station decision) -->
+        ${ticketRequests.map(r => this.renderCancellationRequestCard(r)).join('')}
+
         <!-- DRINK ITEMS LIST (WITH DISCRETE LINE-ITEM BUMP CONTROLS) -->
         <div style="display:flex; flex-direction:column; gap:8px; flex:1; min-height:80px;">
           ${items.map((it, idx) => {
             const lineId = it.lineItemId || it.itemId || idx;
             const itemStatus = it.itemStatus || it.status || t.status || 'QUEUED';
+
+            // Removed lines (cancelled/voided) render struck-through with no actions.
+            if (itemStatus === 'CANCELLED' || itemStatus === 'VOIDED') {
+              return `
+                <div style="display:flex; justify-content:space-between; align-items:center; background:#0f172a; opacity:0.55; padding:8px 10px; border-radius:8px; border-left:3px solid #6b7280;">
+                  <span style="font-size:0.9rem; font-weight:700; color:#94a3b8; text-decoration:line-through;">
+                    <span style="font-weight:900; color:#94a3b8;">×${it.quantity || it.qty || 1}</span> ${it.name || it.itemName}
+                  </span>
+                  <span style="font-size:0.65rem; font-weight:800; padding:1px 5px; border-radius:3px; background:#6b728022; color:#9ca3af;">🚫 ${itemStatus}</span>
+                </div>
+              `;
+            }
+
             const itemCode = String(it.itemCode || it.itemId || '').toUpperCase();
             const catUpper = String(it.category || '').toUpperCase();
             
@@ -835,6 +905,12 @@ export class BarDisplaySystemView {
                 ${isMissingRecipe ? `
                   <div style="font-size:0.7rem; color:#f59e0b; font-weight:700; display:flex; align-items:center; gap:4px; margin-top:2px;">
                     ⚠️ Recipe Missing — Inventory Auto-Deduction Disabled
+                  </div>
+                ` : ''}
+
+                ${(isLineQueued || isLinePrep) && this._heldItemCodes && this._heldItemCodes.has(String(it.itemCode || it.itemId || '')) ? `
+                  <div style="font-size:0.7rem; color:#8b5cf6; background:rgba(139,92,246,0.12); padding:3px 6px; border-radius:4px; font-weight:700; margin-top:2px;">
+                    🧊 Held stock available — a matching prepared item can be reused (see Held Items tab).
                   </div>
                 ` : ''}
 
@@ -892,6 +968,165 @@ export class BarDisplaySystemView {
 
       </div>
     `;
+  }
+
+  // =========================================================================
+  // CANCELLATION REQUEST CARD (BAR station decision + policy gate)
+  // =========================================================================
+
+  /**
+   * Red cancellation-request card. READY-stage requests render the MANDATORY
+   * disposition-policy outcome: HOLD offer (two buttons), DISCARD-only note, or
+   * disabled "awaiting manager" state. PREPARING requests get plain approve/reject.
+   */
+  renderCancellationRequestCard(r) {
+    const tenantId = this._getTenantId();
+    const policy = r.stageAtRequest === 'READY'
+      ? dispositionPolicyModel.resolvePolicy(r.station, r.itemCode, r.categoryCode, tenantId)
+      : null;
+
+    let actionBtns = `
+      <button class="btn-bds-cxl-action" data-request-id="${r.id}" data-action="APPROVE" style="padding:8px 14px; font-size:0.8rem; font-weight:800; background:#10b981; color:#000; border:none; border-radius:6px; cursor:pointer;">
+        ✅ Approve Cancel
+      </button>
+    `;
+    if (policy && policy.outcome === 'DISCARD_ONLY') {
+      actionBtns = `
+        <button class="btn-bds-cxl-action" data-request-id="${r.id}" data-action="APPROVE" title="Discard-only policy: prepared item is recognized as waste" style="padding:8px 14px; font-size:0.8rem; font-weight:800; background:#f97316; color:#fff; border:none; border-radius:6px; cursor:pointer;">
+          ✅ Approve → Discard (per policy)
+        </button>
+      `;
+    } else if (policy && policy.decideBy === 'MANAGER') {
+      // MANAGER_DECISION policy: only a manager/admin may pick HOLD vs DISCARD at the board.
+      const session = typeof sessionStorage !== 'undefined' ? JSON.parse(sessionStorage.getItem('ros_session') || '{}') : {};
+      const isManager = /manager|admin|owner/.test(String(session.role || session.userRole || session.employeeRole || session.roleId || session.roleName || session.workspace || '').toLowerCase());
+      actionBtns = isManager
+        ? `
+        <button class="btn-bds-cxl-action" data-request-id="${r.id}" data-action="APPROVE" data-disposition="HOLD" style="padding:8px 14px; font-size:0.8rem; font-weight:800; background:#3b82f6; color:#fff; border:none; border-radius:6px; cursor:pointer;">
+          ✅ Hold For Reuse
+        </button>
+        <button class="btn-bds-cxl-action" data-request-id="${r.id}" data-action="APPROVE" data-disposition="DISCARD" style="padding:8px 14px; font-size:0.8rem; font-weight:800; background:#f97316; color:#fff; border:none; border-radius:6px; cursor:pointer;">
+          🗑 Discard
+        </button>
+      `
+        : `
+        <button disabled title="Disposition authority: manager" style="padding:8px 14px; font-size:0.8rem; font-weight:800; background:#1e293b; color:#94a3b8; border:1px solid #334155; border-radius:6px; cursor:not-allowed;">
+          ⏳ Awaiting Manager Disposition
+        </button>
+      `;
+    } else if (policy && policy.outcome === 'HOLD_OFFERED') {
+      actionBtns = `
+        <button class="btn-bds-cxl-action" data-request-id="${r.id}" data-action="APPROVE" data-disposition="HOLD" style="padding:8px 14px; font-size:0.8rem; font-weight:800; background:#3b82f6; color:#fff; border:none; border-radius:6px; cursor:pointer;">
+          ✅ Hold For Reuse
+        </button>
+        <button class="btn-bds-cxl-action" data-request-id="${r.id}" data-action="APPROVE" data-disposition="DISCARD" style="padding:8px 14px; font-size:0.8rem; font-weight:800; background:#f97316; color:#fff; border:none; border-radius:6px; cursor:pointer;">
+          🗑 Discard
+        </button>
+      `;
+    }
+
+    return `
+      <div class="animate-fade-in" style="background:rgba(239, 68, 68, 0.10); border:1px solid #ef4444; border-radius:8px; padding:10px 12px; margin-bottom:10px;">
+        <div style="font-size:0.7rem; font-weight:800; color:#ef4444; text-transform:uppercase; letter-spacing:0.5px; margin-bottom:4px;">🚨 Cancellation Request</div>
+        <div style="font-size:0.9rem; font-weight:800; color:#ffffff; margin-bottom:2px;">
+          ${r.quantity}x ${r.itemName} <span style="font-size:0.7rem; color:#fca5a5; font-weight:700;">(${r.stageAtRequest})</span>
+        </div>
+        <div style="font-size:0.75rem; color:#94a3b8; margin-bottom:8px;">
+          Reason: <strong style="color:#e2e8f0;">${String(r.reasonCode || 'OTHER').replace(/_/g, ' ')}</strong>${r.reasonText ? ` — ${r.reasonText}` : ''} • by ${r.requestedByName || 'Waiter'} • <span data-created-at="${r.requestedAt || ''}">${this.getElapsedMinutes(r.requestedAt)}m ago</span>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          ${actionBtns}
+          <button class="btn-bds-cxl-action" data-request-id="${r.id}" data-action="REJECT" style="padding:8px 14px; font-size:0.8rem; font-weight:800; background:transparent; color:#ef4444; border:1px solid #ef4444; border-radius:6px; cursor:pointer;">
+            ❌ Reject
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
+  // =========================================================================
+  // HELD ITEMS BOARD (Phase B: reuse / discard prepared cancellations)
+  // =========================================================================
+
+  /** Held Items board: reuse a HELD prepared item onto a matching active line, or discard it. */
+  renderHoldBoard(holds) {
+    const list = holds || [];
+    const hel = list.filter(h => h.status === 'HELD');
+    const others = list.filter(h => h.status !== 'HELD');
+
+    if (hel.length === 0 && others.length === 0) {
+      return `
+        <div style="text-align:center; padding:60px 20px; background:#1e293b; border-radius:12px; border:1px dashed #334155; color:#94a3b8;">
+          <div style="font-size:3rem; margin-bottom:8px;">🧊</div>
+          <h3 style="margin:0; font-size:1.2rem; color:#f8fafc;">No Held Items</h3>
+          <p style="margin:4px 0 0; font-size:0.85rem;">Prepared (READY-stage) drinks cancelled at this station appear here for reuse or discard.</p>
+        </div>`;
+    }
+
+    return `
+      <div style="flex:1; overflow-y:auto; display:flex; flex-direction:column; gap:12px;">
+        ${hel.length ? `
+          <div style="font-size:0.8rem; font-weight:800; color:#8b5cf6; text-transform:uppercase; letter-spacing:0.5px;">🧊 Available To Reuse (${hel.length})</div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); gap:16px;">${hel.map(h => this._renderHoldCard(h)).join('')}</div>
+        ` : `<div style="font-size:0.9rem; color:#94a3b8;">No currently-HELD items to reuse.</div>`}
+        ${others.length ? `
+          <div style="font-size:0.8rem; font-weight:800; color:#64748b; text-transform:uppercase; letter-spacing:0.5px; margin-top:8px;">Recently Closed Out</div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(340px, 1fr)); gap:16px;">${others.slice(0, 8).map(h => this._renderHoldCard(h)).join('')}</div>
+        ` : ''}
+      </div>`;
+  }
+
+  _renderHoldCard(h) {
+    const req = h.sourceRequestId ? cancellationModel.getRequest(h.sourceRequestId, h.tenantId) : null;
+    const reason = req ? String(req.reasonCode || 'OTHER').replace(/_/g, ' ') : 'CANCELLED_ORDER';
+    const ageMin = this.getElapsedMinutes(h.holdCreatedAt);
+    const expired = preparedHoldModel.isExpired(h);
+    const isHeld = h.status === 'HELD';
+    const border = isHeld ? (expired ? '#f97316' : '#8b5cf6') : '#64748b';
+    const fmt = (v) => '₹' + (parseFloat(v) || 0).toFixed(2);
+    const reuseBtn = (isHeld && !expired)
+      ? `<button class="btn-bds-hold-action" data-hold-id="${h.id}" data-hold-action="USE" style="flex:2; padding:8px; font-size:0.8rem; font-weight:800; background:#8b5cf6; color:#fff; border:none; border-radius:6px; cursor:pointer;">🔁 Use For New Order</button>`
+      : '';
+    const discardBtn = isHeld
+      ? `<button class="btn-bds-hold-action" data-hold-id="${h.id}" data-hold-action="DISCARD" style="flex:1; padding:8px; font-size:0.8rem; font-weight:800; background:#f97316; color:#fff; border:none; border-radius:6px; cursor:pointer;">🗑 Discard</button>`
+      : '';
+
+    return `
+      <div style="background:#1e293b; border-left:4px solid ${border}; border-radius:10px; border-top:1px solid #334155; border-right:1px solid #334155; border-bottom:1px solid #334155; padding:12px; display:flex; flex-direction:column; gap:8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <div style="font-size:1rem; font-weight:800; color:#f8fafc;">${h.quantity}x ${h.itemName}</div>
+          <span style="font-size:0.65rem; font-weight:800; padding:2px 6px; border-radius:3px; background:${isHeld ? '#8b5cf622' : '#64748b22'}; color:${isHeld ? '#a78bfa' : '#94a3b8'};">${expired ? 'EXPIRED' : h.status}</span>
+        </div>
+        <div style="font-size:0.72rem; color:#94a3b8; line-height:1.6;">
+          Held ${ageMin}m ago • Source: ${reason}<br/>
+          Prepared Item Cost: <strong style="color:#e2e8f0;">${fmt(h.consumedCost)}</strong> • Waste Recognized: <strong style="color:#e2e8f0;">${fmt(h.wasteAmount)}</strong>
+          ${expired ? `<div style="color:#f97316; font-weight:800; margin-top:2px;">⏳ Hold window elapsed — discard only.</div>` : ''}
+        </div>
+        ${isHeld ? `<div style="display:flex; gap:8px;">${reuseBtn}${discardBtn}</div>` : `<div style="font-size:0.72rem; color:#64748b; font-weight:700;">${h.lineage || h.status}</div>`}
+      </div>`;
+  }
+
+  /** Find the oldest active QUEUED/PREPARING BAR line with the same item and stamp the hold on it. */
+  _reuseHoldOntoMatchingLine(hold, tenantId) {
+    const tickets = offlineStore.getCollection('tickets') || [];
+    let target = null;
+    for (const t of tickets) {
+      const isBarTicket = t.ticketType === 'BOT' || t.destination === 'BAR';
+      if (!isBarTicket || t.status === 'SERVED' || t.status === 'CANCELLED') continue;
+      for (const it of (t.items || [])) {
+        const s = String(it.itemStatus || it.status || '').toUpperCase();
+        if ((s === 'QUEUED' || s === 'PREPARING') && !it.fulfilledByHoldId &&
+            String(it.itemCode || it.itemId || '') === String(hold.itemCode)) {
+          target = { ticket: t, item: it };
+          break;
+        }
+      }
+      if (target) break;
+    }
+    if (!target) return { success: false, error: 'NO_MATCHING_ACTIVE_LINE' };
+    target.item.fulfilledByHoldId = hold.id;
+    offlineStore.setCollection('tickets', tickets);
+    return { success: true, orderId: target.ticket.orderId, ticketId: target.ticket.ticketId || target.ticket.id, orderLineId: target.item.lineItemId || target.item.itemId };
   }
 
   // =========================================================================
@@ -1079,6 +1314,60 @@ export class BarDisplaySystemView {
         const ticketId = btn.dataset.ticketId;
         const newStatus = btn.dataset.status;
         this.handleTicketAction(ticketId, newStatus);
+      });
+    });
+
+    // Cancellation request decision buttons (BAR station authority enforced in cancellationModel)
+    this.container.querySelectorAll('.btn-bds-cxl-action').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const tenantId = this._getTenantId();
+        const session = typeof sessionStorage !== 'undefined' ? JSON.parse(sessionStorage.getItem('ros_session') || '{}') : {};
+
+        const result = cancellationModel.decideCancellation(
+          btn.dataset.requestId,
+          btn.dataset.action,
+          session,
+          { disposition: btn.dataset.disposition || undefined },
+          tenantId
+        );
+
+        if (!result.success) {
+          window.alert(`Cancellation decision blocked: ${String(result.error).replace(/_/g, ' ')}`);
+          return;
+        }
+        this.broadcastTicketChange('', 'cancellation');
+        this.updateContent(false);
+      });
+    });
+
+    // Held-item actions (Phase B): reuse onto a matching active line, or discard as waste.
+    this.container.querySelectorAll('.btn-bds-hold-action').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const session = typeof sessionStorage !== 'undefined' ? JSON.parse(sessionStorage.getItem('ros_session') || '{}') : {};
+        const tenantId = this._getTenantId();
+        const holdId = btn.dataset.holdId;
+
+        if (btn.dataset.holdAction === 'USE') {
+          const hold = preparedHoldModel.getHold(holdId, tenantId);
+          if (!hold) { window.alert('Hold not found.'); return; }
+          const reuse = this._reuseHoldOntoMatchingLine(hold, tenantId);
+          if (!reuse.success) {
+            window.alert('No matching active line to receive this held item. Create the order line first, then reuse.');
+            return;
+          }
+          const res = preparedHoldModel.reuseHold(holdId, {
+            orderId: reuse.orderId, orderLineId: reuse.orderLineId, ticketId: reuse.ticketId, actor: session
+          }, tenantId);
+          if (!res.success) { window.alert(`Reuse blocked: ${String(res.error).replace(/_/g, ' ')}`); return; }
+        } else if (btn.dataset.holdAction === 'DISCARD') {
+          const res = preparedHoldModel.discardHold(holdId, { actor: session, reason: 'CANCELLED_ORDER' }, tenantId);
+          if (!res.success) { window.alert(`Discard blocked: ${String(res.error).replace(/_/g, ' ')}`); return; }
+        }
+
+        this.broadcastTicketChange('', 'hold');
+        this.updateContent(false);
       });
     });
 

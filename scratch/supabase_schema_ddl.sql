@@ -101,3 +101,69 @@ CREATE POLICY "Anon Full Access" ON public.system_config FOR ALL USING (true);
 CREATE POLICY "Anon Full Access" ON public.orders FOR ALL USING (true);
 CREATE POLICY "Anon Full Access" ON public.tickets FOR ALL USING (true);
 CREATE POLICY "Anon Full Access" ON public.attendance_logs FOR ALL USING (true);
+
+-- ====================================================================
+-- Cancellation workflow tables (Station-Controlled Cancellation + Disposition).
+-- Dashboard-deployable DDL; RLS for these tables is owned by
+-- supabase/rls_policies.sql (tenant_isolation) - do NOT add permissive
+-- "Anon Full Access" policies here.
+-- ====================================================================
+
+CREATE TABLE IF NOT EXISTS public.cancellation_requests (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT,
+  session_id TEXT,
+  order_id TEXT,
+  order_line_id TEXT,
+  ticket_id TEXT,
+  station TEXT DEFAULT 'KITCHEN',
+  item_code TEXT,
+  item_name TEXT,
+  quantity NUMERIC DEFAULT 0,
+  status TEXT DEFAULT 'REQUESTED',
+  reason_code TEXT,
+  decided_by TEXT,
+  decided_at TIMESTAMPTZ,
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.prepared_item_holds (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT,
+  source_session_id TEXT,
+  source_order_id TEXT,
+  source_order_line_id TEXT,
+  source_ticket_id TEXT,
+  source_request_id TEXT,
+  station TEXT DEFAULT 'KITCHEN',
+  item_code TEXT,
+  item_name TEXT,
+  quantity NUMERIC DEFAULT 0,
+  status TEXT DEFAULT 'HELD',
+  consumed_cost NUMERIC DEFAULT 0,
+  waste_amount NUMERIC DEFAULT 0,
+  hold_created_at TIMESTAMPTZ DEFAULT NOW(),
+  hold_expires_at TIMESTAMPTZ,
+  lineage TEXT,
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.disposition_policies (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT,
+  station TEXT DEFAULT 'DEFAULT',
+  category_code TEXT,
+  item_code TEXT,
+  allow_hold BOOLEAN DEFAULT true,
+  hold_minutes INT DEFAULT 0,
+  default_disposition TEXT DEFAULT 'HOLD',
+  decide_by TEXT DEFAULT 'STATION',
+  status TEXT DEFAULT 'ACTIVE',
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
