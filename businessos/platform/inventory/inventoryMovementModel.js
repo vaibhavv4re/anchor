@@ -363,6 +363,12 @@ class InventoryMovementModel {
       sourceType: movementData.sourceType || 'MANUAL',
       sourceId: movementData.sourceId || 'MANUAL-ENTRY',
       operationId: opId,
+      // Packaging audit trail (optional): preserve the original supplier purchase
+      // quantity/unit alongside the canonical stock quantity so the ledger line is
+      // self-describing (e.g. "received 5 PACK = 120 PCS"). Null for non-GRN moves.
+      purchaseQuantity: movementData.purchaseQuantity !== undefined ? movementData.purchaseQuantity : null,
+      purchaseUom: movementData.purchaseUom !== undefined ? movementData.purchaseUom : null,
+      purchaseUnitCost: movementData.purchaseUnitCost !== undefined ? movementData.purchaseUnitCost : null,
       performedBy: movementData.performedBy || 'System User',
       notes: movementData.notes || '',
       tenantId: targetTenantId,

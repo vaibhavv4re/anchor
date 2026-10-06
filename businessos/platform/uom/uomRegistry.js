@@ -7,13 +7,16 @@ export const UOM_REGISTRY = {
   'MG': { code: 'MG', name: 'Milligram', family: 'WEIGHT', isBase: false, baseRatio: 0.001, icon: '⚖️' },
   'G': { code: 'G', name: 'Gram', family: 'WEIGHT', isBase: true, baseRatio: 1, icon: '⚖️' },
   'KG': { code: 'KG', name: 'Kilogram', family: 'WEIGHT', isBase: false, baseRatio: 1000, icon: '⚖️' },
+  'TON': { code: 'TON', name: 'Metric Tonne', family: 'WEIGHT', isBase: false, baseRatio: 1000000, icon: '⚖️' },
 
   // Volume Family (Base: ML)
   'ML': { code: 'ML', name: 'Millilitre', family: 'VOLUME', isBase: true, baseRatio: 1, icon: '🥤' },
   'LTR': { code: 'LTR', name: 'Litre', family: 'VOLUME', isBase: false, baseRatio: 1000, icon: '🥤' },
+  'L': { code: 'L', name: 'Litre', family: 'VOLUME', isBase: false, baseRatio: 1000, icon: '🥤' },
 
   // Count Family (Base: PCS)
   'PCS': { code: 'PCS', name: 'Piece', family: 'COUNT', isBase: true, baseRatio: 1, icon: '📦' },
+  'NOS': { code: 'NOS', name: 'Number / Piece', family: 'COUNT', isBase: false, baseRatio: 1, icon: '📦' },
   'DOZEN': { code: 'DOZEN', name: 'Dozen', family: 'COUNT', isBase: false, baseRatio: 12, icon: '📦' },
   'PACK': { code: 'PACK', name: 'Pack', family: 'COUNT', isBase: false, isContainer: true, icon: '📦' },
   'BOX': { code: 'BOX', name: 'Box', family: 'COUNT', isBase: false, isContainer: true, icon: '📦' },

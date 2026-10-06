@@ -147,9 +147,21 @@ export const BAR_PACK_SIZE_ML = Object.freeze({
 
 /**
  * Resolve configured bottle/pack size in ML for a given inventory item code.
+ * Item-master content wins when present (content_quantity x content_uom); the
+ * legacy hardcoded map is retained as a fallback so existing SKUs are unchanged.
+ * @param {string} itemCode inventory SKU (e.g. BAR0044)
+ * @param {Object} [item] resolved inventory master item (optional)
  */
-export function getBarPackSizeMl(itemCode) {
+export function getBarPackSizeMl(itemCode, item = null) {
   const code = String(itemCode || '').toUpperCase();
+  if (item) {
+    const cq = parseFloat(item.contentQuantity != null ? item.contentQuantity : item.content_quantity) || 0;
+    const cu = String(item.contentUom || item.content_uom || '').toUpperCase().trim();
+    if (cq > 0 && cu) {
+      if (cu === 'ML') return cq;
+      if (cu === 'LTR' || cu === 'L') return cq * 1000;
+    }
+  }
   return BAR_PACK_SIZE_ML[code] || BAR_PACK_SIZE_ML.DEFAULT_BOTTLE;
 }
 
@@ -200,7 +212,19 @@ export function resolveBarConsumption(menuItem, variant = null, options = {}) {
   const mode = isBeerOrBreezer ? 'UNIT' : (isSoftDrink && vName.includes('portion') ? 'UNIT' : 'POUR');
 
   let deductionQtyPerServing = 0;
-  const baseUom = 'LTR'; // Authoritative base UOM for Bar SKUs in inventory master
+  // Resolve the item's canonical stock unit (hybrid packaging model): packaged
+  // beverages may be stocked by count (PCS) while poured spirits/wine are stocked
+  // by volume (LTR). Falls back to LTR when no inventory-master item is supplied.
+  const invItem = options.inventoryItem
+    || (Array.isArray(options.inventoryMaster)
+      ? options.inventoryMaster.find(it => {
+          const c = String(it.itemCode || it.item_code || it.sku || it.id || '').toUpperCase().trim();
+          return c && c === mappedSku;
+        })
+      : null)
+    || null;
+  const stockUom = String((invItem && (invItem.baseUom || invItem.base_uom || invItem.baseUnit)) || 'LTR').toUpperCase().trim();
+  let baseUom = (stockUom === 'L') ? 'LTR' : stockUom; // Authoritative base UOM for this Bar SKU
 
   if (mode === 'POUR') {
     // Determine ML volume from variant serving size
@@ -230,13 +254,16 @@ export function resolveBarConsumption(menuItem, variant = null, options = {}) {
     // Convert ML directly to Base UOM (LTR): 30ml -> 0.030 LTR, 60ml -> 0.060 LTR
     deductionQtyPerServing = servingMl / 1000.0;
   } else {
-    // UNIT mode (Beers, Breezers, Bottled Water, Cans/Bottles)
-    // Invariant: Base UOM is LTR, so deduction derives from configured pack size in ML:
-    //   Carlsberg Elephant (650ml) -> 0.650 LTR
-    //   Corona (330ml) -> 0.330 LTR
-    //   Breezer (275ml) -> 0.275 LTR
-    const packMl = getBarPackSizeMl(mappedSku);
-    deductionQtyPerServing = packMl / 1000.0;
+    // UNIT mode (Beers, Breezers, Bottled Water, Cans/Bottles).
+    //   - Stocked by count (PCS/NOS): deduct 1 stock unit per sold unit (a physical can/bottle).
+    //   - Stocked by volume (LTR, legacy default): deduct the pack content in litres,
+    //     derived from item content when present, else the legacy ml map (e.g. 650ml -> 0.650 LTR).
+    if (baseUom === 'PCS' || baseUom === 'NOS' || baseUom === 'PC') {
+      deductionQtyPerServing = 1;
+    } else {
+      const packMl = getBarPackSizeMl(mappedSku, invItem);
+      deductionQtyPerServing = packMl / 1000.0;
+    }
   }
 
   const totalDeduction = parseFloat((deductionQtyPerServing * orderQty).toFixed(4));

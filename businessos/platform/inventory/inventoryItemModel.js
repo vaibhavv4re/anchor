@@ -473,6 +473,10 @@ class InventoryItemModel {
     // Normalize items for consistent property access (itemName/name, itemCode/sku/id, currentUnitCost/unitValuation)
     const normalized = store.map(i => {
       const code = i.itemCode || i.item_code || i.sku || i.id;
+      // Cloud `inventory` rows carry packaging/content master data inside the
+      // `data` JSONB (only base_uom is a real column); local edits also keep it
+      // top-level. Read from either shape so conversions survive hydration.
+      const d = (i.data && typeof i.data === 'object') ? i.data : {};
       let cost = parseFloat(i.currentUnitCost || i.unitValuation || i.unit_valuation || i.lastPurchasePrice || i.wacCost || i.cost || 0);
       if (cost <= 0 && supplierCatalog.length > 0) {
         const catEntry = supplierCatalog.find(c => 
@@ -491,8 +495,25 @@ class InventoryItemModel {
         name: i.name || i.itemName || i.item_name || 'Untitled Item',
         itemName: i.itemName || i.item_name || i.name || 'Untitled Item',
         category: i.category || i.categoryName || i.category_name || 'RAW_MATERIAL',
-        baseUnit: i.baseUnit || i.baseUom || i.base_uom || 'KG',
+        baseUnit: i.baseUnit || i.baseUom || i.base_uom || d.baseUom || d.base_uom || 'KG',
+        baseUom: i.baseUom || i.base_uom || i.baseUnit || d.baseUom || d.base_uom || 'KG',
         purchaseUnit: i.purchaseUnit || i.purchase_unit || i.baseUnit || 'KG',
+        // Packaging / conversion master data (persisted in the `data` JSONB, no
+        // dedicated column). Surfaced so GRN, the Bar engine and the UI all read
+        // the SAME canonical conversion contract from one place.
+        purchaseUom: i.purchaseUom || i.purchase_uom || d.purchaseUom || d.purchase_uom || i.purchaseUnit || i.purchase_unit || '',
+        conversionFactor: parseFloat(
+          i.conversionFactor !== undefined ? i.conversionFactor
+            : (i.conversion_factor !== undefined ? i.conversion_factor
+              : (d.conversionFactor !== undefined ? d.conversionFactor : d.conversion_factor))
+        ) || 1,
+        contentQuantity: parseFloat(
+          i.contentQuantity !== undefined ? i.contentQuantity
+            : (i.content_quantity !== undefined ? i.content_quantity
+              : (d.contentQuantity !== undefined ? d.contentQuantity : d.content_quantity))
+        ) || 0,
+        contentUom: i.contentUom || i.content_uom || d.contentUom || d.content_uom || '',
+        displayUnit: i.displayUnit || i.display_unit || d.displayUnit || d.display_unit || '',
         currentUnitCost: cost,
         weightedAverageCost: cost,
         reorderLevel: parseFloat(i.reorderLevel || i.reorder_level || 10),

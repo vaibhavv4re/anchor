@@ -12,6 +12,7 @@ import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
 import { inventoryMovementModel } from './inventoryMovementModel.js';
 import { inventoryItemModel } from './inventoryItemModel.js';
+import { resolveCanonicalStockQuantity, isContainerUom } from '../uom/uomConversionEngine.js';
 import { supplierModel } from './supplierModel.js';
 
 class PurchasingModel {
@@ -410,15 +411,46 @@ class PurchasingModel {
 
       const priceVariance = Math.abs(actualInvoicePrice - poUnitPrice) > 0.01;
 
+      // Canonical packaging expansion: a supplier may deliver in PACK / CASE / BAG;
+      // the ledger and stock balance must always record the item's canonical stock
+      // unit. resolveCanonicalStockQuantity is additive - when the item declares no
+      // purchase pack (or the receipt is already in the stock unit) it returns the
+      // accepted quantity untouched, so existing flows are unchanged.
+      const receivingUom = line.uom || (poLine ? poLine.uom : '') || '';
+      const stockItem = inventoryItemModel.getItemById(itemCode, targetTenantId);
+      const canonical = resolveCanonicalStockQuantity(stockItem, acceptedQty, receivingUom);
+      const stockQty = canonical.quantity;
+      const stockUom = canonical.uom || receivingUom || (stockItem ? stockItem.baseUnit : 'KG') || 'KG';
+
+      // Safety guard: receiving in a physical container (CASE / PACK / BOX / CAN ...)
+      // that the item cannot expand would otherwise dump the raw container count into
+      // the base-unit balance (e.g. "5 cases" landing as +5 on a can/litre balance).
+      // Block with actionable guidance instead of silently mis-posting. Receipts in
+      // the stock unit, already-converted packs, and non-container UOMs pass through.
+      const recUomNorm = String(receivingUom || '').toUpperCase().trim();
+      if (isContainerUom(recUomNorm) && !canonical.converted && canonical.reason !== 'ALREADY_STOCK_UOM') {
+        const label = stockItem ? (stockItem.itemName || stockItem.name || itemCode) : itemCode;
+        throw new Error(
+          `GRN blocked: "${label}" was received as ${acceptedQty} ${recUomNorm}, but this item has no matching purchase-pack conversion, so the quantity cannot be turned into stock. Set Purchase UOM = ${recUomNorm} and a Conversion factor (how many ${stockUom || 'stock units'} per ${recUomNorm}) on the Inventory Master, then re-receive; or receive directly in the stock unit.`
+        );
+      }
+
+      // Preserve pack-price economics: total value is unchanged, but the unit cost
+      // is now expressed per canonical stock unit so downstream WAC stays correct.
+      const stockUnitCost = stockQty > 0 ? Math.round((lineTotal / stockQty) * 10000) / 10000 : actualInvoicePrice;
+
       // Directive 7 & 8: Post immutable PURCHASE_RECEIPT movement ONLY for acceptedQty valued at actualInvoicePrice
       let movementRecord = null;
-      if (acceptedQty > 0) {
+      if (stockQty > 0) {
         movementRecord = inventoryMovementModel.recordMovement({
           inventoryItemId: itemCode,
           movementType: 'PURCHASE_RECEIPT',
-          quantity: acceptedQty,
-          unit: line.uom || (poLine ? poLine.uom : 'KG'),
-          unitCost: actualInvoicePrice,
+          quantity: stockQty,
+          unit: stockUom,
+          unitCost: stockUnitCost,
+          purchaseQuantity: acceptedQty,
+          purchaseUom: receivingUom || null,
+          purchaseUnitCost: actualInvoicePrice,
           sourceType: 'GRN',
           sourceId: grnId,
           operationId: `inv-grn-${grnId}-${itemCode}`,
@@ -435,11 +467,12 @@ class PurchasingModel {
         if (existingBal) {
           const oldQty = parseFloat(existingBal.quantity) || 0;
           const oldVal = parseFloat(existingBal.valuation) || (oldQty * (parseFloat(existingBal.unitCost || existingBal.unit_cost) || 0));
-          const newQty = oldQty + acceptedQty;
-          const newVal = oldVal + (acceptedQty * actualInvoicePrice);
-          const newUnitCost = newQty > 0 ? (newVal / newQty) : actualInvoicePrice;
+          const newQty = oldQty + stockQty;
+          const newVal = oldVal + lineTotal;
+          const newUnitCost = newQty > 0 ? (newVal / newQty) : stockUnitCost;
 
           existingBal.quantity = newQty;
+          existingBal.uom = stockUom;
           existingBal.unitCost = newUnitCost;
           existingBal.unit_cost = newUnitCost;
           existingBal.valuation = newVal;
@@ -460,10 +493,11 @@ class PurchasingModel {
             item_code: itemCode,
             locationCode: destLoc,
             location_code: destLoc,
-            quantity: acceptedQty,
-            unitCost: actualInvoicePrice,
-            unit_cost: actualInvoicePrice,
-            valuation: acceptedQty * actualInvoicePrice,
+            quantity: stockQty,
+            uom: stockUom,
+            unitCost: stockUnitCost,
+            unit_cost: stockUnitCost,
+            valuation: lineTotal,
             lastUpdatedAt: new Date().toISOString()
           };
           const gw = this._getDataGateway();

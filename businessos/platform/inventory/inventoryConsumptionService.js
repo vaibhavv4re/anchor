@@ -11,6 +11,7 @@
 import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
 import { resolvedBomEngine } from '../ordering/resolvedBomEngine.js';
+import { inventoryItemModel } from './inventoryItemModel.js';
 import { DataGateway } from '../data/dataGateway.js';
 import { SupabaseClient } from '../cloud/supabaseClient.js';
 import { SupabaseDataAdapter } from '../data/adapters/supabaseDataAdapter.js';
@@ -186,7 +187,7 @@ export class InventoryConsumptionService {
               (!item.variantId && !item.variantName && v.name && String(item.name || item.itemName || '').toLowerCase().includes(String(v.name).toLowerCase())))
           : null);
         
-        const barResult = resolveBarConsumption(menuItem || { itemCode: itemCodeUpper, itemName: item.name || item.itemName }, variantObj, { orderQty: item.quantity || 1 });
+        const barResult = resolveBarConsumption(menuItem || { itemCode: itemCodeUpper, itemName: item.name || item.itemName }, variantObj, { orderQty: item.quantity || 1, inventoryMaster: inventoryItemModel.getAllItems(tId) });
 
         if (barResult && barResult.success && barResult.totalDeduction > 0) {
           resolved = {

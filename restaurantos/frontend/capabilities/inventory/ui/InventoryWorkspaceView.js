@@ -2384,6 +2384,7 @@ export class InventoryWorkspaceView {
               <select id="trf-item-sel" style="flex:3; padding:10px; border-radius:6px; border:1px solid var(--border-subtle);">
                 <!-- Dynamically populated based on selected source location -->
               </select>
+              <select id="trf-uom-sel" style="width:170px; padding:10px; border-radius:6px; border:1px solid var(--border-subtle);"></select>
               <input type="number" id="trf-qty-inp" value="10" min="0.01" step="0.01" style="width:120px; padding:10px; border-radius:6px; border:1px solid var(--border-subtle);" placeholder="Qty">
               <button type="button" id="btn-add-trf-line" class="btn-primary" style="padding:10px 18px; font-weight:700; background:var(--accent-primary); color:#fff; border:none; border-radius:6px; cursor:pointer;">
                 + Add Line Item
@@ -2436,12 +2437,37 @@ export class InventoryWorkspaceView {
       }).join('');
     };
 
+    // Optional pack entry for transfers: offer the item's purchase pack (e.g.
+    // CASE) alongside its base unit (pieces). The factor shown here is the same
+    // item-master conversion used by GRN; picking a case multiplies the typed
+    // quantity into canonical base units, so balances always stay in pieces.
+    const populateTrfUom = () => {
+      const itemSel = mount.querySelector('#trf-item-sel');
+      const uomSel = mount.querySelector('#trf-uom-sel');
+      if (!itemSel || !uomSel) return;
+      const code = itemSel.value;
+      const selOpt = itemSel.options[itemSel.selectedIndex];
+      const base = (selOpt && selOpt.dataset.uom) || 'PCS';
+      const item = inventoryItemModel.getItemById(code, tenantId);
+      const purchase = item ? String(item.purchaseUom || '').toUpperCase().trim() : '';
+      const factor = item ? (parseFloat(item.conversionFactor) || 1) : 1;
+      let opts = `<option value="${base}" data-factor="1">\ud83d\udce6 ${base} (pieces)</option>`;
+      if (purchase && purchase !== base && factor > 1) {
+        opts += `<option value="${purchase}" data-factor="${factor}">\udf73 ${purchase} (= ${factor} ${base})</option>`;
+      }
+      uomSel.innerHTML = opts;
+    };
+
     updateItemOptions();
+    populateTrfUom();
     mount.querySelector('#trf-from-loc').addEventListener('change', () => {
       this.trfDraftLines = [];
       updateItemOptions();
+      populateTrfUom();
       renderDraftLines();
     });
+    const trfItemSelEl = mount.querySelector('#trf-item-sel');
+    if (trfItemSelEl) trfItemSelEl.addEventListener('change', populateTrfUom);
 
     const renderDraftLines = () => {
       const tbody = mount.querySelector('#trf-lines-tbody');
@@ -2457,7 +2483,7 @@ export class InventoryWorkspaceView {
       tbody.innerHTML = this.trfDraftLines.map((l, idx) => `
         <tr style="border-bottom:1px solid var(--border-subtle);">
           <td style="padding:10px; font-weight:600;">${l.itemName} <br><span style="font-size:0.75rem; color:var(--text-muted); font-family:monospace;">${l.itemCode}</span></td>
-          <td style="padding:10px; font-weight:700; color:var(--status-info);">${l.quantity} ${l.baseUom}</td>
+          <td style="padding:10px; font-weight:700; color:var(--status-info);">${l.quantity} ${l.baseUom}${l.inputUom && l.inputUom !== l.baseUom ? ` <span style="font-size:0.72rem; color:var(--text-muted);">(${l.inputQty} ${l.inputUom})</span>` : ''}</td>
           <td style="padding:10px; font-size:0.82rem;">
             <span style="color:var(--text-muted); text-decoration:line-through;">${l.fromBeforeQty}</span>
             ➔ <strong style="color:${l.fromAfterQty === 0 ? 'var(--status-danger)' : 'var(--accent-primary)'};">${l.fromAfterQty} ${l.baseUom}</strong>
@@ -2503,6 +2529,15 @@ export class InventoryWorkspaceView {
         return;
       }
 
+      // Convert an optional pack entry (e.g. 2 CASE) into the canonical base
+      // unit (48 PCS). All availability math and stored lines use base units.
+      const uomSel = mount.querySelector('#trf-uom-sel');
+      const selectedUom = uomSel ? uomSel.value : baseUom;
+      const uomOpt = uomSel ? uomSel.options[uomSel.selectedIndex] : null;
+      const packFactor = uomOpt ? (parseFloat(uomOpt.dataset.factor) || 1) : 1;
+      const usingPack = selectedUom && selectedUom !== baseUom && packFactor > 1;
+      const baseQty = usingPack ? Math.round((requestedQty * packFactor) * 1000) / 1000 : requestedQty;
+
       const availableAtSource = getStockAtLoc(itemCode, fromLoc);
       const availableAtDest = getStockAtLoc(itemCode, toLoc);
 
@@ -2510,10 +2545,10 @@ export class InventoryWorkspaceView {
         .filter(l => l.itemCode === itemCode)
         .reduce((sum, l) => sum + l.quantity, 0);
 
-      const totalRequested = requestedQty + alreadyDraftedQty;
+      const totalRequested = baseQty + alreadyDraftedQty;
 
       if (totalRequested > availableAtSource) {
-        alert(`❌ INSUFFICIENT STOCK AT SOURCE LOCATION (${fromLoc})!\n\nItem: ${itemName} (${itemCode})\nAvailable Stock: ${availableAtSource} ${baseUom}\nAlready Drafted: ${alreadyDraftedQty} ${baseUom}\nRequested: ${requestedQty} ${baseUom}\nShortfall: ${(totalRequested - availableAtSource).toFixed(2)} ${baseUom}\n\nPlease receive stock via GRN or select an item with available stock.`);
+        alert(`❌ INSUFFICIENT STOCK AT SOURCE LOCATION (${fromLoc})!\n\nItem: ${itemName} (${itemCode})\nAvailable Stock: ${availableAtSource} ${baseUom}\nAlready Drafted: ${alreadyDraftedQty} ${baseUom}\nRequested: ${baseQty} ${baseUom}${usingPack ? ` (${requestedQty} ${selectedUom})` : ''}\nShortfall: ${(totalRequested - availableAtSource).toFixed(2)} ${baseUom}\n\nPlease receive stock via GRN or select an item with available stock.`);
         return;
       }
 
@@ -2525,8 +2560,10 @@ export class InventoryWorkspaceView {
       this.trfDraftLines.push({
         itemCode,
         itemName,
-        quantity: requestedQty,
+        quantity: baseQty,
         baseUom,
+        inputQty: requestedQty,
+        inputUom: selectedUom,
         fromBeforeQty,
         fromAfterQty,
         toBeforeQty,
@@ -2827,9 +2864,10 @@ export class InventoryWorkspaceView {
                 <!-- Dynamically populated based on selected storage location -->
               </select>
               
-              <select id="adj-type-sel" style="width:180px; padding:10px; border-radius:6px; border:1px solid var(--border-subtle);">
+              <select id="adj-type-sel" style="width:190px; padding:10px; border-radius:6px; border:1px solid var(--border-subtle);">
                 <option value="DECREASE">🔻 DECREASE (Deduct)</option>
                 <option value="INCREASE">🟢 INCREASE (Add)</option>
+                <option value="SET_COST">💲 SET UNIT COST (Correction)</option>
               </select>
 
               <input type="number" id="adj-qty-inp" value="2" min="0.01" step="0.01" style="width:110px; padding:10px; border-radius:6px; border:1px solid var(--border-subtle);" placeholder="Qty">
@@ -2891,6 +2929,20 @@ export class InventoryWorkspaceView {
       renderDraftLines();
     });
 
+    // When the cost-correction mode is chosen, repurpose the Qty box as a ₹
+    // unit-cost field. DECREASE / INCREASE keep their normal quantity behavior.
+    mount.querySelector('#adj-type-sel').addEventListener('change', (e) => {
+      const qi = mount.querySelector('#adj-qty-inp');
+      if (!qi) return;
+      if (e.target.value === 'SET_COST') {
+        qi.placeholder = 'Unit cost ₹';
+        qi.value = '';
+      } else {
+        qi.placeholder = 'Qty';
+        qi.value = '2';
+      }
+    });
+
     const renderDraftLines = () => {
       const tbody = mount.querySelector('#adj-lines-tbody');
       if (!tbody) return;
@@ -2906,7 +2958,7 @@ export class InventoryWorkspaceView {
         <tr style="border-bottom:1px solid var(--border-subtle);">
           <td style="padding:10px; font-weight:600;">${l.itemName} <br><span style="font-size:0.75rem; color:var(--text-muted); font-family:monospace;">${l.itemCode}</span></td>
           <td style="padding:10px;"><span class="badge ${l.adjustmentType === 'DECREASE' ? 'badge-danger' : 'badge-success'}">${l.adjustmentType}</span></td>
-          <td style="padding:10px; font-weight:700; color:${l.adjustmentType === 'DECREASE' ? 'var(--status-danger)' : 'var(--status-success)'};">${l.quantity} ${l.baseUom}</td>
+          <td style="padding:10px; font-weight:700; color:${l.adjustmentType === 'DECREASE' ? 'var(--status-danger)' : (l.adjustmentType === 'SET_COST' ? 'var(--status-info)' : 'var(--status-success)')};">${l.adjustmentType === 'SET_COST' ? ('₹' + l.quantity + ' / ' + l.baseUom) : (l.quantity + ' ' + l.baseUom)}</td>
           <td style="padding:10px; font-size:0.82rem;">
             <span style="color:var(--text-muted); text-decoration:line-through;">${l.fromBeforeQty}</span>
             ➔ <strong style="color:${l.fromAfterQty === 0 ? 'var(--status-danger)' : 'var(--accent-primary)'};">${l.fromAfterQty} ${l.baseUom}</strong>
@@ -2942,6 +2994,26 @@ export class InventoryWorkspaceView {
 
       if (requestedQty <= 0) {
         alert('❌ Adjustment quantity must be greater than 0.');
+        return;
+      }
+
+      // Cost-only correction: leaves quantity untouched, replaces unit cost.
+      if (adjType === 'SET_COST') {
+        const avail = getStockAtLoc(itemCode, locCode);
+        if (avail <= 0) {
+          alert(`❌ No stock of ${itemName} at ${locCode} to apply a cost correction.`);
+          return;
+        }
+        this.adjDraftLines.push({
+          itemCode,
+          itemName,
+          adjustmentType: 'SET_COST',
+          quantity: requestedQty,
+          baseUom,
+          fromBeforeQty: avail,
+          fromAfterQty: avail
+        });
+        renderDraftLines();
         return;
       }
 
@@ -3012,16 +3084,31 @@ export class InventoryWorkspaceView {
           const locBal = balances.find(b => (b.itemCode === line.itemCode || b.item_code === line.itemCode) && (b.locationCode === locationCode || b.location_code === locationCode));
           if (locBal) {
             const currentQty = parseFloat(locBal.quantity) || 0;
-            const newQty = line.adjustmentType === 'DECREASE' 
-              ? Math.max(0, currentQty - line.quantity)
-              : (currentQty + line.quantity);
-            const unitCost = parseFloat(locBal.unitCost || locBal.unit_cost) || 0;
-            await gw.update('stock_balances', locBal.id, {
-              ...locBal,
-              quantity: newQty,
-              valuation: newQty * unitCost,
-              lastUpdatedAt: new Date().toISOString()
-            });
+            if (line.adjustmentType === 'SET_COST') {
+              // Cost correction: quantity unchanged, unit cost + valuation reset.
+              const newUnitCost = Math.round((parseFloat(line.quantity) || 0) * 10000) / 10000;
+              const newVal = Math.round((currentQty * newUnitCost) * 100) / 100;
+              await gw.update('stock_balances', locBal.id, {
+                ...locBal,
+                quantity: currentQty,
+                unitCost: newUnitCost,
+                unit_cost: newUnitCost,
+                valuation: newVal,
+                data: { ...(locBal.data || {}), quantity: currentQty, unitCost: newUnitCost, unit_cost: newUnitCost, valuation: newVal },
+                lastUpdatedAt: new Date().toISOString()
+              });
+            } else {
+              const newQty = line.adjustmentType === 'DECREASE' 
+                ? Math.max(0, currentQty - line.quantity)
+                : (currentQty + line.quantity);
+              const unitCost = parseFloat(locBal.unitCost || locBal.unit_cost) || 0;
+              await gw.update('stock_balances', locBal.id, {
+                ...locBal,
+                quantity: newQty,
+                valuation: newQty * unitCost,
+                lastUpdatedAt: new Date().toISOString()
+              });
+            }
           } else if (line.adjustmentType === 'INCREASE') {
             const anyBal = balances.find(b => (b.itemCode === line.itemCode || b.item_code === line.itemCode) && (parseFloat(b.unitCost || b.unit_cost) > 0));
             const adjUnitCost = anyBal ? (parseFloat(anyBal.unitCost || anyBal.unit_cost) || 0) : 0;
@@ -3054,7 +3141,9 @@ export class InventoryWorkspaceView {
             });
           }
 
-          stockBreakdownText += `• ${line.itemName} (${line.adjustmentType} ${line.quantity} ${line.baseUom}): ${line.fromBeforeQty} ➔ ${line.fromAfterQty} ${line.baseUom}\n`;
+          stockBreakdownText += line.adjustmentType === 'SET_COST'
+            ? `• ${line.itemName}: unit cost set to ₹${line.quantity} / ${line.baseUom} (quantity unchanged: ${line.fromAfterQty} ${line.baseUom})\n`
+            : `• ${line.itemName} (${line.adjustmentType} ${line.quantity} ${line.baseUom}): ${line.fromBeforeQty} ➔ ${line.fromAfterQty} ${line.baseUom}\n`;
         }
       }
 
@@ -7980,6 +8069,10 @@ export class InventoryWorkspaceView {
     const purchaseUom = item.purchaseUom || item.purchase_uom || baseUom;
     const conv = item.conversionFactor || item.conversion_factor || 1;
     const reorderLevel = item.reorderLevel !== undefined ? item.reorderLevel : (item.reorder_level || 10);
+    // Packaging / content master data (item-specific, persisted in the `data` JSONB).
+    const contentQtyVal = (item.contentQuantity !== undefined ? item.contentQuantity : (item.content_quantity !== undefined ? item.content_quantity : ''));
+    const contentUomVal = item.contentUom || item.content_uom || '';
+    const displayUnitVal = item.displayUnit || item.display_unit || '';
 
     const categories = this._getUnifiedCategories(tenantId);
 
@@ -8055,6 +8148,25 @@ export class InventoryWorkspaceView {
             </div>
           </div>
 
+          <!-- PACKAGING / CONTENT (item-specific conversion; canonical quantity) -->
+          <div style="border-top:1px solid var(--border-subtle); padding-top:12px; margin-top:2px;">
+            <div style="font-weight:700; color:var(--accent-primary); font-size:0.78rem; margin-bottom:8px;">PACKAGING &amp; CONTENT <span style="font-weight:500; color:var(--text-muted);">(how much real stock is one package?)</span></div>
+            <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:10px;">
+              <div>
+                <label style="font-weight:700; display:block; margin-bottom:4px;">Content Qty</label>
+                <input type="number" id="inp-edit-content-qty" value="${contentQtyVal}" min="0" step="0.01" placeholder="e.g. 500" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);" />
+              </div>
+              <div>
+                <label style="font-weight:700; display:block; margin-bottom:4px;">Content UOM</label>
+                <input type="text" id="inp-edit-content-uom" value="${contentUomVal}" placeholder="e.g. ML" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);" />
+              </div>
+              <div>
+                <label style="font-weight:700; display:block; margin-bottom:4px;">Display Unit</label>
+                <input type="text" id="inp-edit-display-unit" value="${displayUnitVal}" placeholder="e.g. CAN / PINT" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);" />
+              </div>
+            </div>
+          </div>
+
           <div>
             <label style="font-weight:700; display:block; margin-bottom:4px;">Reorder Level Threshold</label>
             <input type="number" id="inp-edit-reorder" value="${reorderLevel}" min="0" style="width:100%; padding:8px 12px; border-radius:6px; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);" />
@@ -8091,6 +8203,9 @@ export class InventoryWorkspaceView {
       const newBaseUom = overlay.querySelector('#inp-edit-base-uom').value.trim().toUpperCase();
       const newPurchaseUom = overlay.querySelector('#inp-edit-purchase-uom').value.trim().toUpperCase();
       const newConv = parseFloat(overlay.querySelector('#inp-edit-conv').value) || 1;
+      const newContentQty = parseFloat(overlay.querySelector('#inp-edit-content-qty').value) || 0;
+      const newContentUom = overlay.querySelector('#inp-edit-content-uom').value.trim().toUpperCase();
+      const newDisplayUnit = overlay.querySelector('#inp-edit-display-unit').value.trim().toUpperCase();
       const newReorder = parseFloat(overlay.querySelector('#inp-edit-reorder').value) || 0;
 
       if (!newName || !newCat || !newBaseUom) {
@@ -8109,7 +8224,16 @@ export class InventoryWorkspaceView {
         categoryCode: newCat,
         categoryName: catName,
         productFamilyCode: pfCode,
-        productFamilyName: pfName
+        productFamilyName: pfName,
+        // Packaging / content master data. Persisted into the `data` JSONB (the
+        // inventory table has no dedicated column), so it round-trips through
+        // cloud hydration without any DDL migration.
+        contentQuantity: newContentQty,
+        content_quantity: newContentQty,
+        contentUom: newContentUom,
+        content_uom: newContentUom,
+        displayUnit: newDisplayUnit,
+        display_unit: newDisplayUnit
       };
 
       const updates = {
@@ -8132,6 +8256,12 @@ export class InventoryWorkspaceView {
         purchase_uom: newPurchaseUom,
         conversionFactor: newConv,
         conversion_factor: newConv,
+        contentQuantity: newContentQty,
+        content_quantity: newContentQty,
+        contentUom: newContentUom,
+        content_uom: newContentUom,
+        displayUnit: newDisplayUnit,
+        display_unit: newDisplayUnit,
         reorderLevel: newReorder,
         reorder_level: newReorder
       };
