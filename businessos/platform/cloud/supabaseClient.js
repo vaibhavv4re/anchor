@@ -847,6 +847,91 @@ export function formatRecordForTable(entityName, job) {
     };
   }
 
+  if (entityName === 'retail_products') {
+    return {
+      id: p.id || genTempId('rp_'),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      product_code: p.productCode || p.product_code || '',
+      item_code: p.itemCode || p.item_code || '',
+      name: p.name || p.productName || '',
+      brand: p.brand || '',
+      mrp: parseFloat(p.mrp) || 0,
+      selling_price: parseFloat(p.sellingPrice || p.selling_price) || 0,
+      tax_category: p.taxCategory || p.tax_category || '',
+      barcode: p.barcode || '',
+      status: p.status || 'ACTIVE',
+      data: p
+    };
+  }
+
+  if (entityName === 'retail_categories') {
+    return {
+      id: p.id || genTempId('rc_'),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      code: p.code || p.categoryCode || '',
+      name: p.name || '',
+      parent_code: p.parentCode || p.parent_code || null,
+      sort_order: parseInt(p.sortOrder != null ? p.sortOrder : p.sort_order) || 0,
+      status: p.status || 'ACTIVE',
+      data: p
+    };
+  }
+
+  if (entityName === 'retail_sales') {
+    return {
+      id: p.id || genTempId('rs_'),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      sale_number: p.saleNumber || p.sale_number || '',
+      business_unit: p.businessUnit || p.business_unit || 'RETAIL',
+      register_id: p.registerId || p.register_id || '',
+      status: p.status || 'CONFIRMED',
+      invoice_number: p.invoiceNumber || p.invoice_number || '',
+      settlement_id: p.settlementId || p.settlement_id || '',
+      correlation_id: p.correlationId || p.correlation_id || '',
+      grand_total: parseFloat(p.grandTotal || p.grand_total) || 0,
+      customer_name: p.customerName || p.customer_name || '',
+      operator_name: p.operatorName || p.operator_name || '',
+      occurred_at: p.occurredAt || p.occurred_at || new Date().toISOString(),
+      data: p
+    };
+  }
+
+  if (entityName === 'cash_registers') {
+    return {
+      id: p.id || genTempId('cr_'),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      register_id: p.registerId || p.register_id || '',
+      business_unit: p.businessUnit || p.business_unit || 'RETAIL',
+      status: p.status || 'OPEN',
+      operator_name: p.operatorName || p.operator_name || '',
+      opening_balance: parseFloat(p.openingBalance || p.opening_balance) || 0,
+      cash_in: parseFloat(p.cashIn || p.cash_in) || 0,
+      cash_out: parseFloat(p.cashOut || p.cash_out) || 0,
+      refunds: parseFloat(p.refunds) || 0,
+      expected_closing: parseFloat(p.expectedClosing || p.expected_closing) || 0,
+      physical_closing: parseFloat(p.physicalClosing || p.physical_closing) || 0,
+      data: p
+    };
+  }
+
+  if (entityName === 'register_transactions') {
+    return {
+      id: p.id || genTempId('rt_'),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      register_id: p.registerId || p.register_id || '',
+      business_unit: p.businessUnit || p.business_unit || 'RETAIL',
+      transaction_type: p.transactionType || p.transaction_type || 'SALE',
+      payment_method: p.paymentMethod || p.payment_method || '',
+      amount: parseFloat(p.amount) || 0,
+      reference_type: p.referenceType || p.reference_type || '',
+      reference_id: p.referenceId || p.reference_id || '',
+      correlation_id: p.correlationId || p.correlation_id || '',
+      performed_by: p.performedBy || p.performed_by || '',
+      occurred_at: p.occurredAt || p.occurred_at || new Date().toISOString(),
+      data: p
+    };
+  }
+
   return p;
 }
 
@@ -1215,6 +1300,59 @@ export function formatPatchForTable(entityName, patch) {
       if (p.description) currentData.description = p.description;
       if (Object.keys(currentData).length > 0) result.data = currentData;
     }
+  } else if (entityName === 'retail_products') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('productCode', 'product_code');
+    copyIfPresent('itemCode', 'item_code');
+    copyIfPresent('name', 'name');
+    copyIfPresent('mrp', 'mrp', v => parseFloat(v) || 0);
+    copyIfPresent('sellingPrice', 'selling_price', v => parseFloat(v) || 0);
+    copyIfPresent('barcode', 'barcode');
+    copyIfPresent('status', 'status');
+    result.data = { ...(p.data || p), ...(result.status ? { status: result.status } : {}) };
+  } else if (entityName === 'retail_categories') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('code', 'code');
+    copyIfPresent('name', 'name');
+    copyIfPresent('parentCode', 'parent_code');
+    copyIfPresent('sortOrder', 'sort_order', v => parseInt(v) || 0);
+    copyIfPresent('status', 'status');
+    result.data = { ...(p.data || p), ...(result.status ? { status: result.status } : {}) };
+  } else if (entityName === 'retail_sales') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('saleNumber', 'sale_number');
+    copyIfPresent('status', 'status');
+    copyIfPresent('invoiceNumber', 'invoice_number');
+    copyIfPresent('settlementId', 'settlement_id');
+    copyIfPresent('correlationId', 'correlation_id');
+    copyIfPresent('grandTotal', 'grand_total', v => parseFloat(v) || 0);
+    copyIfPresent('registerId', 'register_id');
+    result.data = { ...(p.data || p), ...(result.status ? { status: result.status } : {}) };
+  } else if (entityName === 'cash_registers') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('registerId', 'register_id');
+    copyIfPresent('status', 'status');
+    copyIfPresent('openingBalance', 'opening_balance', v => parseFloat(v) || 0);
+    copyIfPresent('cashIn', 'cash_in', v => parseFloat(v) || 0);
+    copyIfPresent('cashOut', 'cash_out', v => parseFloat(v) || 0);
+    copyIfPresent('refunds', 'refunds', v => parseFloat(v) || 0);
+    copyIfPresent('expectedClosing', 'expected_closing', v => parseFloat(v) || 0);
+    copyIfPresent('physicalClosing', 'physical_closing', v => parseFloat(v) || 0);
+    copyIfPresent('closedAt', 'closed_at');
+    result.data = { ...(p.data || p), ...(result.status ? { status: result.status } : {}) };
+  } else if (entityName === 'register_transactions') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('registerId', 'register_id');
+    copyIfPresent('transactionType', 'transaction_type');
+    copyIfPresent('paymentMethod', 'payment_method');
+    copyIfPresent('amount', 'amount', v => parseFloat(v) || 0);
+    copyIfPresent('correlationId', 'correlation_id');
+    result.data = { ...(p.data || p) };
   } else {
     Object.keys(p).forEach(k => {
       result[k] = p[k];

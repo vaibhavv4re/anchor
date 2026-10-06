@@ -15,6 +15,8 @@ import { inventoryItemModel } from '../../../../../businessos/platform/inventory
 import { purchasingModel } from '../../../../../businessos/platform/inventory/purchasingModel.js';
 import { offlineStore } from '../../../../../businessos/platform/offline_store/offlineStore.js';
 import { CategoryRepository } from '../../../../../businessos/platform/repositories/categoryRepository.js';
+import { retailReplenishmentModel } from '../../../../../businessos/platform/retail/retailReplenishmentModel.js';
+import { barReplenishmentModel } from '../../../../../businessos/platform/bar/barReplenishmentModel.js';
 
 export class InventoryWorkspaceView {
   constructor(deps = {}) {
@@ -239,7 +241,7 @@ export class InventoryWorkspaceView {
               </div>
               <div style="background:var(--bg-surface-2); padding:10px; border-radius:6px; text-align:center;">
                 <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">PENDING REQUESTS</div>
-                <div style="font-size:1.4rem; font-weight:700; color:var(--status-warning); margin-top:2px;">${requests.filter(r => r.status === 'PENDING').length}</div>
+                <div style="font-size:1.4rem; font-weight:700; color:var(--status-warning); margin-top:2px;">${requests.filter(r => this._isPendingRequest(r)).length}</div>
               </div>
               <div style="background:var(--bg-surface-2); padding:10px; border-radius:6px; text-align:center;">
                 <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">SUPPLIERS</div>
@@ -287,7 +289,7 @@ export class InventoryWorkspaceView {
               <button class="btn-secondary nav-inv-btn ${activeTab === 'inv-po' || activeTab === 'inv-po-create' ? 'active' : ''}" data-tab="inv-po" style="text-align:left; font-size:0.85rem; padding:8px 10px; border-radius:4px; cursor:pointer;">📄 Purchase Orders (${pos.length})</button>
               <button class="btn-secondary nav-inv-btn ${activeTab === 'inv-grn' || activeTab === 'inv-grn-create' ? 'active' : ''}" data-tab="inv-grn" style="text-align:left; font-size:0.85rem; padding:8px 10px; border-radius:4px; cursor:pointer;">🚚 Goods Receiving Studio (${grns.length})</button>
               <button class="btn-secondary nav-inv-btn ${activeTab === 'inv-suppliers' || activeTab === 'suppliers' || activeTab === 'inv-suppliers-create' || activeTab === 'inv-suppliers-import' ? 'active' : ''}" data-tab="inv-suppliers" style="text-align:left; font-size:0.85rem; padding:8px 10px; border-radius:4px; cursor:pointer;">🏢 Suppliers Directory (${suppliers.length})</button>
-              <button class="btn-secondary nav-inv-btn ${activeTab === 'inv-requests' ? 'active' : ''}" data-tab="inv-requests" style="text-align:left; font-size:0.85rem; padding:8px 10px; border-radius:4px; cursor:pointer;">📋 Purchase Requisitions ${requests.filter(r => r.status === 'PENDING').length > 0 ? `<span class="badge badge-warning" style="font-size:0.7rem; padding:1px 5px; margin-left:3px;">${requests.filter(r => r.status === 'PENDING').length}</span>` : ''}</button>
+              <button class="btn-secondary nav-inv-btn ${activeTab === 'inv-requests' ? 'active' : ''}" data-tab="inv-requests" style="text-align:left; font-size:0.85rem; padding:8px 10px; border-radius:4px; cursor:pointer;">📋 Purchase Requisitions ${requests.filter(r => this._isPendingRequest(r)).length > 0 ? `<span class="badge badge-warning" style="font-size:0.7rem; padding:1px 5px; margin-left:3px;">${requests.filter(r => this._isPendingRequest(r)).length}</span>` : ''}</button>
             </aside>
 
             <!-- Main Body Mount Area -->
@@ -2201,7 +2203,119 @@ export class InventoryWorkspaceView {
           </div>
         </div>
       `;
+    } else if (tabKey === 'inv-requests') {
+      this.renderRequisitionsScreen(mount, tenantId, requests, session);
+      return;
     }
+  }
+
+  // Consumer replenishment statuses that await a manager-side warehouse transfer.
+  _isPendingRequest(r) {
+    const s = r && r.status;
+    return s === 'PENDING' || s === 'PENDING_FULFILLMENT' || s === 'APPROVED';
+  }
+
+  _reqConsumerLabel(r) {
+    const to = r.toLocationCode || r.to_location || r.to_location_code || '';
+    const dept = r.department || '';
+    if (to === 'LOC-RETAIL' || dept === 'Retail') return { name: '🍷 Retail', loc: 'LOC-RETAIL' };
+    if (to === 'LOC-314' || dept === 'Bar Store' || dept === 'Bar') return { name: '🍸 Bar', loc: 'LOC-314' };
+    return { name: dept || 'Kitchen', loc: to || '—' };
+  }
+
+  /**
+   * Manager-side consumer requisition fulfillment queue. Lists Bar / Kitchen /
+   * Retail replenishment requests (inventory_requests, PENDING_FULFILLMENT) and
+   * fulfils each with the certified paired warehouse transfer (LOC-805 ->
+   * consumer location). Retail requests are fulfilled exactly like Bar/Kitchen.
+   */
+  renderRequisitionsScreen(mount, tenantId, requests, session) {
+    const rows = (requests || []).slice().sort((a, b) => {
+      const pa = this._isPendingRequest(a) ? 0 : 1, pb = this._isPendingRequest(b) ? 0 : 1;
+      if (pa !== pb) return pa - pb;
+      return new Date(b.requestedAt || b.requested_at || b.createdAt || 0) - new Date(a.requestedAt || a.requested_at || a.createdAt || 0);
+    });
+    const pendingCount = rows.filter(r => this._isPendingRequest(r)).length;
+    const colorFor = (s) => s === 'COMPLETED' ? 'var(--status-success)' : (s === 'REJECTED' || s === 'CANCELLED') ? 'var(--text-muted)' : 'var(--status-warning)';
+
+    mount.innerHTML = `
+      <div class="animate-fade-in" style="display:flex; flex-direction:column; gap:18px;">
+        <div class="card" style="background:var(--bg-surface-1); padding:20px 22px; border-radius:8px;">
+          <h3 style="margin:0;">📋 Consumer Replenishment Queue</h3>
+          <p style="color:var(--text-muted); font-size:0.85rem; margin-top:6px;">
+            Requests raised by consumer locations (Retail 🍷, Bar 🍸, Kitchen). Fulfilling posts a certified
+            paired transfer from the main warehouse <code>LOC-805</code> to the request target and marks it COMPLETED.
+            <strong>${pendingCount}</strong> awaiting fulfilment.
+          </p>
+        </div>
+
+        <div class="table-responsive">
+          <table class="data-table" style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+            <thead><tr style="background:var(--bg-surface-2); text-align:left; color:var(--text-muted);">
+              <th style="padding:10px;">Request</th>
+              <th style="padding:10px;">Consumer</th>
+              <th style="padding:10px;">Item</th>
+              <th style="padding:10px; text-align:right;">Requested</th>
+              <th style="padding:10px; text-align:right;">On hand at request</th>
+              <th style="padding:10px;">Raised</th>
+              <th style="padding:10px;">Status</th>
+              <th style="padding:10px;">Action</th>
+            </tr></thead>
+            <tbody>
+              ${rows.length ? rows.map(r => {
+                const c = this._reqConsumerLabel(r);
+                const code = r.itemCode || r.item_code || '';
+                const name = r.itemName || r.item_name || code;
+                const qty = r.requestedQuantity != null ? r.requestedQuantity : r.requested_quantity;
+                const uom = r.uom || r.baseUom || '';
+                const onHand = r.onHandAtRequest != null ? r.onHandAtRequest : r.on_hand_at_request;
+                const pend = this._isPendingRequest(r);
+                const rid = r.id || r.requestNumber || r.request_number || '';
+                return `<tr style="border-bottom:1px solid var(--border-subtle);">
+                  <td style="padding:10px; font-family:monospace; font-size:0.78rem;">${r.requestNumber || r.request_number || rid}</td>
+                  <td style="padding:10px;">${c.name}<div style="font-size:0.7rem;color:var(--text-muted);">→ ${c.loc}</div></td>
+                  <td style="padding:10px;">${name} <span style="color:var(--text-muted);font-size:0.72rem;">(${code})</span></td>
+                  <td style="padding:10px; text-align:right; font-weight:700;">${qty} <span style="color:var(--text-muted);font-weight:500;font-size:0.72rem;">${uom}</span></td>
+                  <td style="padding:10px; text-align:right; color:var(--text-muted);">${onHand != null ? onHand : '—'}</td>
+                  <td style="padding:10px; color:var(--text-muted); font-size:0.78rem;">${r.requestedAt || r.requested_at || r.createdAt ? new Date(r.requestedAt || r.requested_at || r.createdAt).toLocaleString('en-IN') : '—'}</td>
+                  <td style="padding:10px; font-weight:700; color:${colorFor(r.status)};">${r.status || '—'}</td>
+                  <td style="padding:10px;">${pend
+                    ? `<button class="btn-fulfill-req btn-primary" data-req-id="${rid}" data-consumer="${c.name}" style="padding:6px 12px; font-size:0.78rem; font-weight:700; background:var(--status-success); color:#fff; border:none; border-radius:6px; cursor:pointer;">🚚 Fulfill</button>`
+                    : `<span style="color:var(--text-muted); font-size:0.75rem;">${r.fulfillmentTransferId || r.fulfillment_transfer_id || '—'}</span>`}</td>
+                </tr>`;
+              }).join('') : `<tr><td colspan="8" style="padding:28px; text-align:center; color:var(--text-muted);">No replenishment requests logged.</td></tr>`}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+
+    mount.querySelectorAll('.btn-fulfill-req').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const reqId = btn.dataset.reqId;
+        if (!reqId) return;
+        const req = (requests || []).find(r => (r.id || r.requestNumber || r.request_number) === reqId);
+        const consumer = req ? this._reqConsumerLabel(req).name : '';
+        btn.disabled = true; btn.textContent = 'Fulfilling…';
+        try {
+          const model = consumer.indexOf('Retail') >= 0 ? retailReplenishmentModel
+            : consumer.indexOf('Bar') >= 0 ? barReplenishmentModel : null;
+          if (!model) { alert('No fulfillment model for this consumer.'); btn.disabled = false; btn.textContent = '🚚 Fulfill'; return; }
+          const res = consumer.indexOf('Retail') >= 0
+            ? await model.fulfillRetailReplenishmentRequest(reqId, { fulfilledBy: session?.employeeName || 'Inventory Manager', session }, tenantId)
+            : await model.fulfillBarReplenishmentRequest(reqId, { fulfilledBy: session?.employeeName || 'Inventory Manager', session }, tenantId);
+          if (res && res.success) {
+            await this.render(mount.closest('#workspace-root-mount') || mount, session);
+          } else {
+            alert('Failed to fulfill: ' + ((res && res.error) || 'Unknown error'));
+            btn.disabled = false; btn.textContent = '🚚 Fulfill';
+          }
+        } catch (err) {
+          alert('Failed to fulfill request: ' + (err.message || err));
+          btn.disabled = false; btn.textContent = '🚚 Fulfill';
+        }
+      });
+    });
   }
 
   // --- 1. FULL-SCREEN STOCK TRANSFER WORKSPACE ---

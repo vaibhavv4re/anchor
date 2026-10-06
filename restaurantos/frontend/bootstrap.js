@@ -74,6 +74,10 @@ export function startModularApp(options = {}) {
       // device's history, silently dropping unsynced writes (e.g. a finalized bill)
       // and un-protecting their rows on refresh - which made bills vanish.
       'table_sessions', 'bill_revisions', 'invoices', 'payments', 'session_audit_logs',
+      // Retail (Wine Store) domain - POS catalogue reads MUST come from live cloud
+      // rows (retail_products), never seeded mock data. Stock itself is shared with
+      // the main inventory core (stock_balances @ LOC-RETAIL).
+      'retail_products', 'retail_sales', 'cash_registers', 'register_transactions', 'retail_categories',
       // Fiscal config (single source of truth for the Food/Bar tax split) - read-only
       // under RLS pre-login, so every device resolves the same tax categories.
       'tax_configurations'

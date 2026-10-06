@@ -31,6 +31,9 @@ ALTER TABLE public.payments        REPLICA IDENTITY FULL;
 ALTER TABLE public.stock_balances  REPLICA IDENTITY FULL;
 ALTER TABLE public.cancellation_requests REPLICA IDENTITY FULL;
 ALTER TABLE public.prepared_item_holds   REPLICA IDENTITY FULL;
+ALTER TABLE public.retail_sales          REPLICA IDENTITY FULL;
+ALTER TABLE public.cash_registers        REPLICA IDENTITY FULL;
+ALTER TABLE public.register_transactions REPLICA IDENTITY FULL;
 
 -- 2. Ensure the `supabase_realtime` publication exists.
 --    Supabase creates this by default; guard just in case.
@@ -53,7 +56,10 @@ DECLARE
     'payments',
     'stock_balances',
     'cancellation_requests',
-    'prepared_item_holds'
+    'prepared_item_holds',
+    'retail_sales',
+    'cash_registers',
+    'register_transactions'
   ];
 BEGIN
   FOREACH t IN ARRAY tables LOOP
@@ -88,5 +94,5 @@ SELECT
   )               AS in_realtime_publication
 FROM pg_class c
 WHERE c.relkind = 'r'
-  AND c.relname IN ('orders','table_sessions','bill_revisions','invoices','payments','stock_balances','cancellation_requests','prepared_item_holds')
+  AND c.relname IN ('orders','table_sessions','bill_revisions','invoices','payments','stock_balances','cancellation_requests','prepared_item_holds','retail_sales','cash_registers','register_transactions')
 ORDER BY c.relname;

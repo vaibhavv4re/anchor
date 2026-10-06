@@ -37,10 +37,19 @@ declare
     'stock_balances','stock_operations','stock_transactions','inventory_requests',
     'offline_journal','audit_logs','orders','table_sessions','bill_revisions',
     'invoices','payments','session_audit_logs','tax_configurations','tax_audit_log',
-    'cancellation_requests','prepared_item_holds','disposition_policies'
+    'cancellation_requests','prepared_item_holds','disposition_policies',
+    'retail_products','retail_sales','cash_registers','register_transactions','retail_categories'
   ];
 begin
   foreach t in array tables loop
+    -- Skip tables that do not exist in this database (e.g. product_families is
+    -- referenced but not created by supabase_schema.sql). Without this guard the
+    -- dynamic `alter table ... enable row level security` aborts the whole block
+    -- with 42P01 on the first missing relation.
+    if to_regclass('public.' || t) is null then
+      raise notice 'Skipping RLS for missing table public.%', t;
+      continue;
+    end if;
     -- Drop every existing policy (schema uses title-cased names like
     -- "Anon Access Stock Balances", so match by catalogue, not by guessed name).
     for pol in execute format(
@@ -66,10 +75,15 @@ declare
     'stock_balances','stock_operations','stock_transactions','inventory_requests',
     'offline_journal','audit_logs','orders','table_sessions','bill_revisions',
     'invoices','payments','session_audit_logs','tax_configurations','tax_audit_log',
-    'cancellation_requests','prepared_item_holds','disposition_policies'
+    'cancellation_requests','prepared_item_holds','disposition_policies',
+    'retail_products','retail_sales','cash_registers','register_transactions','retail_categories'
   ];
 begin
   foreach t in array tables loop
+    -- Only create a policy for tables that actually exist (see guard above).
+    if to_regclass('public.' || t) is null then
+      continue;
+    end if;
     execute format($f$
       create policy "tenant_isolation_%1$s" on %1$I
         for all to authenticated
@@ -85,9 +99,22 @@ revoke all on all tables in schema public from anon;
 revoke all on all sequences in schema public from anon;
 grant usage on schema public to anon, authenticated;
 
-grant select on
-  "inventory_categories","inventory_uoms","product_families","storage_locations","suppliers","tax_configurations"
-to anon;
+-- Grant anon SELECT only on read-only config lookups that actually exist.
+-- (product_families is referenced here but not created by supabase_schema.sql;
+-- granting on a missing relation aborts the statement, so each is guarded.)
+do $$
+declare
+  t text;
+  readonly text[] := array[
+    'inventory_categories','inventory_uoms','product_families','storage_locations','suppliers','tax_configurations'
+  ];
+begin
+  foreach t in array readonly loop
+    if to_regclass('public.' || t) is not null then
+      execute format('grant select on table %I to anon', t);
+    end if;
+  end loop;
+end $$;
 
 grant select, insert, update, delete on all tables in schema public to authenticated;
 grant usage, select on all sequences in schema public to authenticated;

@@ -444,6 +444,107 @@ CREATE TABLE IF NOT EXISTS payments (
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
+-- 🍷 5c. Retail (Wine Store) Business Domain.
+-- Retail is a second commercial business unit that reuses the Inventory Core,
+-- Invoice Engine and Payment Engine, but keeps a hard boundary from the
+-- restaurant (no table_sessions / bill_revisions / cashier). Sale lines live in
+-- the data JSONB (bill-revision convention). correlation_id is the idempotency
+-- key for the whole RetailSale transaction boundary.
+CREATE TABLE IF NOT EXISTS retail_products (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  product_code TEXT,
+  item_code TEXT,
+  name TEXT,
+  brand TEXT,
+  vintage TEXT,
+  region TEXT,
+  country TEXT,
+  varietal TEXT,
+  bottle_size TEXT,
+  mrp NUMERIC DEFAULT 0,
+  selling_price NUMERIC DEFAULT 0,
+  tax_category TEXT,
+  barcode TEXT,
+  status TEXT DEFAULT 'ACTIVE',
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Retail merchandising category taxonomy (two-level: top-level + sub-category).
+-- A configurable wine-shop lens used to browse the catalogue and roll up live
+-- LOC-RETAIL stock + LOW/OUT alerts at the category level. This is deliberately
+-- SEPARATE from the fiscal retail_products.tax_category (which drives VAT). Rows
+-- are tenant-scoped; parent_code is null for a top-level category.
+CREATE TABLE IF NOT EXISTS retail_categories (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  code TEXT NOT NULL,
+  name TEXT NOT NULL,
+  parent_code TEXT,
+  sort_order INTEGER DEFAULT 0,
+  status TEXT DEFAULT 'ACTIVE',
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_retail_category_tenant_code UNIQUE (tenant_id, code)
+);
+
+CREATE TABLE IF NOT EXISTS retail_sales (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  sale_number TEXT,
+  business_unit TEXT DEFAULT 'RETAIL',
+  register_id TEXT,
+  status TEXT DEFAULT 'CONFIRMED',
+  invoice_number TEXT,
+  settlement_id TEXT,
+  correlation_id TEXT,
+  grand_total NUMERIC DEFAULT 0,
+  customer_name TEXT,
+  operator_name TEXT,
+  data JSONB,
+  occurred_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_retail_sale_corr UNIQUE (tenant_id, correlation_id)
+);
+
+CREATE TABLE IF NOT EXISTS cash_registers (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  register_id TEXT NOT NULL,
+  business_unit TEXT DEFAULT 'RETAIL',
+  status TEXT DEFAULT 'OPEN',
+  operator_name TEXT,
+  opening_balance NUMERIC DEFAULT 0,
+  cash_in NUMERIC DEFAULT 0,
+  cash_out NUMERIC DEFAULT 0,
+  refunds NUMERIC DEFAULT 0,
+  expected_closing NUMERIC DEFAULT 0,
+  physical_closing NUMERIC DEFAULT 0,
+  data JSONB,
+  opened_at TIMESTAMPTZ,
+  closed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS register_transactions (
+  id TEXT PRIMARY KEY,
+  tenant_id TEXT NOT NULL,
+  register_id TEXT,
+  business_unit TEXT DEFAULT 'RETAIL',
+  transaction_type TEXT NOT NULL,
+  payment_method TEXT,
+  amount NUMERIC DEFAULT 0,
+  reference_type TEXT,
+  reference_id TEXT,
+  correlation_id TEXT,
+  performed_by TEXT,
+  occurred_at TIMESTAMPTZ DEFAULT NOW(),
+  data JSONB,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT uq_register_txn_corr UNIQUE (tenant_id, correlation_id, register_id, transaction_type)
+);
+
 CREATE TABLE IF NOT EXISTS session_audit_logs (
   id TEXT PRIMARY KEY,
   tenant_id TEXT,

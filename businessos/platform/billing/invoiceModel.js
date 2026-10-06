@@ -72,6 +72,12 @@ class InvoiceModel {
     const fy = this.getCurrentFinancialYear();
     const fyShort = fy.replace('20', '').replace('-20', '-'); // e.g. "26-27"
 
+    // Per-series suffix. Retail (Wine Store) numbers its fiscal documents in an
+    // isolated INV/<fy>/<seq>R sequence so they can never collide with restaurant
+    // POS numbers. Any non-POS series reserves the 'R' suffix; POS stays bare.
+    const seriesSuffix = series === 'POS' || !series ? '' : 'R';
+    const numRe = new RegExp('(\\d+)' + seriesSuffix + '$');
+
     const existingNumberSet = new Set();
     let maxSeq = 1000;
 
@@ -79,7 +85,12 @@ class InvoiceModel {
       const inv = r.invoiceNumber || r.invoice_number;
       if (inv) {
         existingNumberSet.add(inv);
-        const match = inv.match(/(\d{4})$/);
+        // Fold into this series' max only when the number belongs to this series:
+        // a suffixed series keeps only trailing-<suffix> numbers; POS skips any
+        // number ending in the reserved 'R' suffix.
+        const belongs = seriesSuffix ? inv.endsWith(seriesSuffix) : !/R$/.test(inv);
+        if (!belongs) return;
+        const match = inv.match(numRe);
         if (match && match[1]) {
           const num = parseInt(match[1], 10);
           if (!isNaN(num) && num > maxSeq) maxSeq = num;
@@ -88,12 +99,12 @@ class InvoiceModel {
     });
 
     let nextSeq = maxSeq + 1;
-    let invNo = `INV/${fyShort}/${nextSeq}`;
+    let invNo = `INV/${fyShort}/${nextSeq}${seriesSuffix}`;
 
     // Collision Resolution: Ensure invNo is strictly unassigned
     while (existingNumberSet.has(invNo)) {
       nextSeq++;
-      invNo = `INV/${fyShort}/${nextSeq}`;
+      invNo = `INV/${fyShort}/${nextSeq}${seriesSuffix}`;
     }
 
     return {
