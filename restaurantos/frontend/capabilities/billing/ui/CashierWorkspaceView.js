@@ -17,6 +17,7 @@ import { sessionAuditModel } from '../../../../../businessos/platform/session/se
 import { tenantModel } from '../../../../../businessos/platform/tenant/tenantModel.js';
 import { TaxInvoicePrintModal } from './TaxInvoicePrintModal.js';
 import { accountingProjectionService } from '../../../../../businessos/platform/accounting/accountingProjectionService.js';
+import { CashRegisterPanel } from '../../common/ui/CashRegisterPanel.js';
 
 export class CashierWorkspaceView {
   constructor(deps = {}) {
@@ -31,6 +32,7 @@ export class CashierWorkspaceView {
     this.authEngine = deps.authEngine || null;
     this.platformEventBus = deps.platformEventBus || platformEventBus;
     this.unsubscribeEvents = [];
+    this._shiftPanel = null;
   }
 
   filterRecordsByDateRange(records, dateRange = 'today', dateField = 'issuedAt') {
@@ -104,8 +106,8 @@ export class CashierWorkspaceView {
       const dg = window.__APP__.platform.dataGateway;
       const tenantId = (sessionUser && sessionUser.tenantId) || undefined;
       const refreshFn = typeof dg.refreshForWorkspace === 'function'
-        ? dg.refreshForWorkspace('cashier', ['table_sessions', 'orders', 'bill_revisions', 'invoices', 'payments'], tenantId)
-        : dg.hydrateCollections(['table_sessions', 'bill_revisions', 'invoices', 'payments', 'orders'], tenantId);
+        ? dg.refreshForWorkspace('cashier', ['table_sessions', 'orders', 'bill_revisions', 'invoices', 'payments', 'cash_registers', 'register_transactions'], tenantId)
+        : dg.hydrateCollections(['table_sessions', 'bill_revisions', 'invoices', 'payments', 'orders', 'cash_registers', 'register_transactions'], tenantId);
       refreshFn.then(() => this.updateContent(sessionUser))
         .catch(err => console.warn('[CashierWorkspaceView] Hydration error:', err));
     }
@@ -846,47 +848,17 @@ export class CashierWorkspaceView {
   renderMyShiftView() {
     const sessionUser = this.authEngine ? this.authEngine.getCurrentSession() : null;
     const cashierName = sessionUser ? (sessionUser.employeeName || sessionUser.name || 'Cashier') : 'Cashier Desk';
-    const tenant = tenantModel.getPrimaryTenant() || {};
-    const tenantId = tenant.tenantId || 'tenant_h0qc7wf';
-    const payments = paymentModel.getAllPayments(tenantId);
 
-    const cashTotal = payments.filter(p => p.paymentMethod === 'CASH').reduce((sum, p) => sum + p.amount, 0);
-
+    // The real open/close lifecycle lives in the shared CashRegisterPanel
+    // (CASHIER-01 / RESTAURANT) — mounted in bindEvents once this HTML is in
+    // the DOM, so the Retail and Cashier tills behave identically.
     return `
-      <div style="display:flex; flex-direction:column; width:100%; padding:20px; overflow-y:auto; gap:20px;">
+      <div style="display:flex; flex-direction:column; width:100%; padding:20px; overflow-y:auto; gap:16px;">
         <div>
-          <h3 style="font-size:1.4rem; margin:0; font-weight:800;">🕐 Cashier Shift & Drawer Handover</h3>
-          <p style="color:var(--text-muted); font-size:0.85rem; margin:2px 0 0;">Active shift status, cash drawer float, and shift closing handover checklist.</p>
+          <h3 style="font-size:1.4rem; margin:0; font-weight:800;">🕐 Cashier Shift & Cash Box</h3>
+          <p style="color:var(--text-muted); font-size:0.85rem; margin:2px 0 0;">Signed in as <strong style="color:var(--text-primary);">${cashierName}</strong>. Verify the float at open, track the live drawer through the shift, and reconcile with a physical count at end of day.</p>
         </div>
-
-        <div class="card" style="padding:20px; background:var(--bg-surface-1); border:1px solid var(--border-subtle); max-width:640px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; border-bottom:1px solid var(--border-subtle); padding-bottom:12px;">
-            <div>
-              <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700;">ACTIVE SHIFT SESSION</div>
-              <div style="font-size:1.2rem; font-weight:800; color:var(--text-primary);">${cashierName}</div>
-            </div>
-            <span class="badge badge-success" style="font-size:0.85rem; font-weight:800;">🟢 Shift Active</span>
-          </div>
-
-          <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:20px;">
-            <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px;">
-              <div style="font-size:0.75rem; color:var(--text-muted);">Opening Cash Float:</div>
-              <div style="font-size:1.2rem; font-weight:800; color:var(--text-primary); margin-top:2px;">₹2,000.00</div>
-            </div>
-            <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px;">
-              <div style="font-size:0.75rem; color:var(--text-muted);">Cash Collected Today:</div>
-              <div style="font-size:1.2rem; font-weight:800; color:#10b981; margin-top:2px;">₹${cashTotal.toFixed(2)}</div>
-            </div>
-            <div style="background:var(--bg-surface-2); padding:12px; border-radius:6px; grid-column:span 2;">
-              <div style="font-size:0.75rem; color:var(--text-muted);">Expected Cash Drawer Total:</div>
-              <div style="font-size:1.6rem; font-weight:800; color:var(--accent-primary); margin-top:2px;">₹${(2000 + cashTotal).toFixed(2)}</div>
-            </div>
-          </div>
-
-          <button id="btn-close-shift-drawer" class="btn-secondary" style="padding:10px 16px; font-weight:700; color:var(--status-warning); border-color:var(--status-warning);">
-            🔒 End Shift & Reconcile Cash Drawer
-          </button>
-        </div>
+        <div id="cashier-shift-panel-mount" style="flex:1; min-height:0;"></div>
       </div>
     `;
   }
@@ -956,12 +928,32 @@ export class CashierWorkspaceView {
       });
     }
 
-    // Shift close drawer handler
-    const closeShiftBtn = this.container.querySelector('#btn-close-shift-drawer');
-    if (closeShiftBtn) {
-      closeShiftBtn.addEventListener('click', () => {
-        alert('🔒 Cash Drawer Reconciled! Shift ending report generated for manager audit.');
+    // Cashier Cash Box (CASHIER-01 / RESTAURANT) — mount the shared register
+    // panel once the shift tab markup is in the DOM. A prior panel is torn down
+    // first because bindEvents runs on every updateContent re-render.
+    const shiftMount = this.container.querySelector('#cashier-shift-panel-mount');
+    if (shiftMount) {
+      if (this._shiftPanel && typeof this._shiftPanel.destroy === 'function') {
+        try { this._shiftPanel.destroy(); } catch (_) {}
+        this._shiftPanel = null;
+      }
+      const sessionUser = this.authEngine ? this.authEngine.getCurrentSession() : null;
+      const tenant = tenantModel.getPrimaryTenant() || {};
+      this._shiftPanel = new CashRegisterPanel({
+        platformEventBus: this.platformEventBus,
+        businessUnit: 'RESTAURANT',
+        registerId: 'CASHIER-01',
+        tenantId: (sessionUser && (sessionUser.tenantId || sessionUser.tenant_id)) || tenant.tenantId || 'tenant_h0qc7wf',
+        session: sessionUser || {},
+        labels: {
+          title: '💵 Cash Box',
+          subtitle: 'Verify the float at open, track the live drawer through the shift, and reconcile with a physical count at end of day. You cannot close while bills remain unsettled.',
+          openButton: 'Open Cash Box',
+          closeButton: 'End of Day · Close Cash Box',
+          operatorFallback: 'Cashier Desk'
+        }
       });
+      this._shiftPanel.render(shiftMount, sessionUser || {});
     }
 
     this.bindInboxEvents();
@@ -1301,5 +1293,14 @@ export class CashierWorkspaceView {
 
     const mount = this.container.querySelector('#cashier-modal-mount');
     if (mount) mount.appendChild(modalEl);
+  }
+
+  destroy() {
+    if (this._shiftPanel && typeof this._shiftPanel.destroy === 'function') {
+      try { this._shiftPanel.destroy(); } catch (_) {}
+      this._shiftPanel = null;
+    }
+    (this.unsubscribeEvents || []).forEach(u => { if (typeof u === 'function') u(); });
+    this.unsubscribeEvents = [];
   }
 }

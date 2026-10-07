@@ -365,6 +365,13 @@ export class ApplicationShell {
     if (!this.appEl) return;
     const mount = this.appEl.querySelector('#workspace-mount');
     if (!mount) return;
+    // Tear down the previous restaurant sub-view (e.g. the Cashier workspace and
+    // its Cash Box panel) before re-mounting so their event subscriptions do not
+    // leak across nav. Only acts when the tracked instance exposes destroy().
+    if (this._activeSubViewInstance && typeof this._activeSubViewInstance.destroy === 'function') {
+      try { this._activeSubViewInstance.destroy(); } catch (_) {}
+    }
+    this._activeSubViewInstance = null;
     mount.innerHTML = '';
 
     const opts = {
@@ -379,6 +386,7 @@ export class ApplicationShell {
       mount.appendChild(view.render(mount, session, this.activeSubView));
     } else if (this.activeSubView === 'cashier' || this.activeSubView === 'inbox' || this.activeSubView === 'invoices' || this.activeSubView === 'payments' || this.activeSubView === 'reports' || this.activeSubView === 'shift') {
       const view = new CashierWorkspaceView(opts);
+      this._activeSubViewInstance = view;
       mount.appendChild(view.render(mount, session, this.activeSubView));
     } else if (this.activeSubView === 'ca' || this.activeSubView === 'accounts') {
       const view = new AccountsCaWorkspaceView(opts);
