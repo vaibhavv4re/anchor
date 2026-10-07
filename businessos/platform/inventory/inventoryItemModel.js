@@ -628,13 +628,34 @@ class InventoryItemModel {
       updatedAt: new Date().toISOString()
     };
 
+    // The cloud `inventory` row only has a real `base_uom` column; every other
+    // packaging/content field lives inside the `data` JSONB and is read back
+    // from there on hydration. The edit form sends these top-level, so mirror
+    // any edited packaging/content value into `data` too, otherwise it silently
+    // reverts to the previous unit on the next refresh.
+    if (updatedRecord.data && typeof updatedRecord.data === 'object') {
+      const packKeys = [
+        'baseUom', 'base_uom', 'purchaseUom', 'purchase_uom',
+        'conversionFactor', 'conversion_factor', 'contentQuantity', 'content_quantity',
+        'contentUom', 'content_uom', 'displayUnit', 'display_unit'
+      ];
+      const dataPatch = {};
+      packKeys.forEach((k) => { if (updates[k] !== undefined) dataPatch[k] = updates[k]; });
+      updatedRecord.data = { ...updatedRecord.data, ...dataPatch };
+    }
+
     store[idx] = updatedRecord;
     offlineStore.setCollection('inventory', store);
     offlineStore.setCollection('inventory_items', store);
 
     const gw = this._getDataGateway();
     if (gw && typeof gw.update === 'function') {
-      await gw.update('inventory', existing.id || itemCode, updatedRecord);
+      // The Supabase `inventory` row is keyed by its `uuid` PK (or item_code).
+      // existing.id is the app-level JSONB id (e.g. "inv-bar0039") which matches
+      // NEITHER, so the previous cloud PATCH hit zero rows and the edit never
+      // persisted. Prefer the real uuid, then item_code, so the write lands.
+      const cloudKey = updatedRecord.uuid || existing.uuid || updatedRecord.item_code || updatedRecord.itemCode || itemCode;
+      await gw.update('inventory', cloudKey, updatedRecord);
     }
 
     return updatedRecord;
