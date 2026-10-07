@@ -81,6 +81,20 @@ const bookRegisterTxn = (type, method, amount) => {
   check('S4 expected cash 1200', unbal.summary.expectedCash === 1200, unbal.summary.expectedCash);
   check('S4 variance -50 (short) · not balanced', unbal.variance === -50 && unbal.balanced === false, `variance=${unbal.variance}`);
 
+  // ---- D1: generalized engine keeps RETAIL defaults (regression guard) ------
+  reset();
+  const dOpen = cashRegisterModel.openRegister({ openingBalance: 1000, operatorName: 'Retail Manager', tenantId: TENANT }, { tenantId: TENANT });
+  check('D1 no-context open defaults to RETAIL / RETAIL-01', dOpen.businessUnit === 'RETAIL' && dOpen.registerId === 'RETAIL-01', `${dOpen.businessUnit}/${dOpen.registerId}`);
+  cashRegisterModel.closeRegister({ physicalClosing: 1000, tenantId: TENANT }, { tenantId: TENANT });
+  const dCarry = cashRegisterModel.getCarryoverOpening();
+  check('D1 carryover = last physical closing under RETAIL defaults', dCarry.expectedOpening === 1000, dCarry.expectedOpening);
+  // Enforcement is opt-in: an unbalanced close with NO reason still succeeds.
+  reset();
+  cashRegisterModel.openRegister({ openingBalance: 500, tenantId: TENANT }, { tenantId: TENANT });
+  let defClose = true;
+  try { cashRegisterModel.closeRegister({ physicalClosing: 400, tenantId: TENANT }, { tenantId: TENANT }); } catch (_) { defClose = false; }
+  check('D1 default (no enforceVarianceReason) allows unbalanced close', defClose);
+
   // ---- Report --------------------------------------------------------------
   let pass = 0;
   console.log('\n=== Retail Cash Register + EOD (Phase 3) ===');
