@@ -320,7 +320,7 @@ export class ConnectivityComponent {
             await dg.hydrateCollections([
               'inventory', 'suppliers', 'purchase_orders', 'goods_receipt_notes',
               'inventory_categories', 'inventory_uoms', 'orders', 'table_sessions',
-              'bill_revisions', 'invoices', 'payments'
+              'bill_revisions', 'invoices', 'payments', 'cash_registers', 'register_transactions'
             ], currentDiag.tenantId);
             this.connectivityManager.notifySyncComplete({ success: true, timestamp: new Date().toISOString() });
           } catch (err) {
