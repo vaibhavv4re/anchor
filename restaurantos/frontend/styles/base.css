@@ -85,6 +85,24 @@ input:focus, select:focus {
   border-color: var(--border-focus);
 }
 
+/* Dropdown option lists render with the OS default (white) background in
+   Chrome/Windows. Without an explicit color the light select text becomes
+   white-on-white and unreadable. Force a dark, on-theme option list so every
+   dropdown stays legible. */
+select, option {
+  color-scheme: dark;
+}
+
+option {
+  background-color: var(--bg-surface-2);
+  color: var(--text-primary);
+}
+
+option:disabled,
+optgroup {
+  color: var(--text-muted);
+}
+
 h1, h2, h3, h4, h5, h6 {
   font-weight: 600;
   line-height: 1.2;
