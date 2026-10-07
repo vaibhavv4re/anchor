@@ -8,6 +8,7 @@ import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
 import { billRevisionModel } from './billRevisionModel.js';
 import { invoiceModel } from './invoiceModel.js';
+import { cashRegisterModel } from '../retail/cashRegisterModel.js';
 import { runtimeConfig } from '../cloud/runtimeConfig.js';
 
 class PaymentModel {
@@ -154,6 +155,26 @@ class PaymentModel {
     //    SECURITY DEFINER RPC (idempotent on correlation_id, tenant bound by the
     //    JWT). Otherwise the original anon-REST create flow is preserved.
     this._syncPaymentToCloud(dg, paymentRecord, paymentId, targetTenantId, cid, now.toISOString());
+
+    // 3b. Mirror into the CASHIER-01 cash drawer so end-of-day reconciliation
+    //     sees restaurant cash the same way retail sales populate RETAIL-01.
+    //     No-op when the register is not OPEN; idempotent on the payment
+    //     correlationId, so a replayed settlement never double-books the till.
+    try {
+      cashRegisterModel.registerSale({
+        tenantId: targetTenantId,
+        businessUnit: 'RESTAURANT',
+        registerId: 'CASHIER-01',
+        amount: paymentRecord.amount,
+        paymentMethod: paymentRecord.paymentMethod,
+        referenceType: 'INVOICE',
+        referenceId: issuedInvoiceNo,
+        correlationId: cid,
+        performedBy: paymentRecord.receivedByName
+      });
+    } catch (e) {
+      console.warn('[paymentModel] Register drawer posting skipped:', e.message);
+    }
 
     // 4. Publish platform event
     platformEventBus.publish('payment:recorded', {
