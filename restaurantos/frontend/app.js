@@ -4,6 +4,7 @@
  */
 
 import { authEngine } from '../../businessos/platform/authentication/authEngine.js';
+import { getDeviceId } from '../../businessos/platform/metadata/entityMetadata.js';
 import { platformEventBus, PlatformEventTypes } from '../../businessos/platform/events/platformEvents.js';
 import { notificationEngine } from '../../businessos/platform/notifications/notificationEngine.js';
 import { rbacEngine } from '../../businessos/platform/authorization/rbacEngine.js';
@@ -134,7 +135,7 @@ export class ApplicationShell {
         this.activeSubView = 'auto';
         this.render();
       },
-      deviceId: 'DEV-FLOOR-01'
+      deviceId: getDeviceId()
     });
 
     const mount = this.appEl.querySelector('#pin-pad-mount');
@@ -208,9 +209,11 @@ export class ApplicationShell {
 
     if (session.workspace === 'superadmin' || session.roleId === 'role-superadmin') {
       const superAdminWs = new SuperAdminWorkspaceView(opts);
+      this._activeWorkspaceInstance = superAdminWs;
       await superAdminWs.render(rootMount, session);
     } else if (session.workspace === 'admin') {
       const adminWs = new AdminWorkspaceView(opts);
+      this._activeWorkspaceInstance = adminWs;
       await adminWs.render(rootMount, session);
     } else if (session.workspace === 'manager' || session.roleId === 'role-manager') {
       const managerWs = new ManagerWorkspaceView(opts);
@@ -218,12 +221,15 @@ export class ApplicationShell {
       await managerWs.render(rootMount, session);
     } else if (session.workspace === 'inventory') {
       const inventoryWs = new InventoryWorkspaceView(opts);
+      this._activeWorkspaceInstance = inventoryWs;
       await inventoryWs.render(rootMount, session);
     } else if (session.workspace === 'owner' || session.roleId === 'role-owner') {
       const ownerWs = new OwnerWorkspaceView(opts);
+      this._activeWorkspaceInstance = ownerWs;
       await ownerWs.render(rootMount, session);
     } else if (session.workspace === 'bar' || session.roleId === 'role-bartender') {
       const barWs = new BarWorkspaceView(opts);
+      this._activeWorkspaceInstance = barWs;
       await barWs.render(rootMount, session);
     } else if (session.workspace === 'retail' || session.roleId === 'role-retail-manager') {
       const retailWs = new RetailWorkspaceView(opts);
@@ -231,11 +237,13 @@ export class ApplicationShell {
       await retailWs.render(rootMount, session);
     } else if (session.workspace === 'ca' || session.workspace === 'accounts' || session.roleId === 'role-ca') {
       const caWs = new AccountsCaWorkspaceView(opts);
+      this._activeWorkspaceInstance = caWs;
       await caWs.render(rootMount, session);
     } else if (this.activeSubView === 'kds' || session.workspace === 'kds') {
       this.renderKDSWorkspace(rootMount, session);
     } else if (session.workspace === 'waiter' || session.roleId === 'role-waiter') {
       const waiterWs = new WaiterWorkspaceView(opts);
+      this._activeWorkspaceInstance = waiterWs;
       await waiterWs.render(rootMount, session);
     } else {
       // Default / Navigation Layout for other workspaces
@@ -264,6 +272,47 @@ export class ApplicationShell {
         <button class="nav-item ${this.activeSubView === 'payments' ? 'active' : ''}" data-view="payments">💳 Payments Ledger</button>
         <button class="nav-item ${this.activeSubView === 'reports' ? 'active' : ''}" data-view="reports">📊 Cashier Reports</button>
         <button class="nav-item ${this.activeSubView === 'shift' ? 'active' : ''}" data-view="shift">🕐 My Shift</button>
+
+        <style>
+          .nav-item {
+            width: 100%;
+            text-align: left;
+            padding: var(--space-sm) var(--space-md);
+            border-radius: var(--radius-sm);
+            font-size: var(--font-size-sm);
+            color: var(--text-secondary);
+            transition: all var(--transition-fast);
+          }
+          .nav-item:hover, .nav-item.active {
+            background-color: var(--bg-surface-2);
+            color: var(--accent-primary);
+            font-weight: 600;
+          }
+        </style>
+      `;
+    }
+
+    const isKitchen = session.workspace === 'kitchen' || session.roleId === 'role-chef';
+    if (isKitchen) {
+      // Inventory & Stock is a chef-only concern; line cooks / other kitchen staff
+      // (any kitchen role without recipe-view authority) must not see it.
+      const isChef = session.roleId === 'role-chef' || this.rbacEngine.hasPermission(session.roleId, 'recipe.view');
+      return `
+        <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; margin-bottom:4px; padding-left:8px;">Kitchen</div>
+
+        <button class="nav-item ${this.activeSubView === 'dashboard' ? 'active' : ''}" data-view="dashboard">📌 Main Overview</button>
+        <button class="nav-item ${this.activeSubView === 'kitchen' ? 'active' : ''}" data-view="kitchen">👨‍ Kitchen Tower</button>
+        <button class="nav-item ${this.activeSubView === 'kds' ? 'active' : ''}" data-view="kds">🔥 Live KDS Display</button>
+
+        ${isChef ? `
+          <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; margin-top:12px; margin-bottom:4px; padding-left:8px;">Inventory & Stock</div>
+          <button class="nav-item ${this.activeSubView === 'kitchen_inventory' ? 'active' : ''}" data-view="kitchen_inventory">📦 Kitchen Stock</button>
+          <button class="nav-item ${this.activeSubView === 'kitchen_menu' ? 'active' : ''}" data-view="kitchen_menu">📋 Menu Master</button>
+          <button class="nav-item ${this.activeSubView === 'kitchen_recipe' ? 'active' : ''}" data-view="kitchen_recipe">📖 Recipe Book</button>
+        ` : ''}
+
+        <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; margin-top:12px; margin-bottom:4px; padding-left:8px;">Staff & Operations</div>
+        <button class="nav-item ${this.activeSubView === 'attendance' ? 'active' : ''}" data-view="attendance">⏱️ Timesheet</button>
 
         <style>
           .nav-item {
@@ -557,7 +606,7 @@ export class ApplicationShell {
       <div class="card flex items-center justify-between" style="border-left:4px solid var(--accent-primary);">
         <div>
           <h2 style="font-size:1.5rem;">Welcome back, ${session.employeeName}!</h2>
-          <p style="color:var(--text-muted); font-size:0.875rem; margin-top:4px;">You are clocked into the ${session.workspace.toUpperCase()} workspace on terminal DEV-FLOOR-01.</p>
+          <p style="color:var(--text-muted); font-size:0.875rem; margin-top:4px;">You are clocked into the ${session.workspace.toUpperCase()} workspace on terminal ${session.deviceId || getDeviceId()}.</p>
         </div>
         <span class="badge badge-success">ACTIVE SHIFT</span>
       </div>
@@ -581,11 +630,15 @@ export class ApplicationShell {
   }
 
   handleSessionLocked(payload) {
-    const session = this.authEngine.getCurrentSession();
+    // After lockSession() the active session is cleared, so prefer the snapshot
+    // published with the SESSION_LOCKED event; fall back to the current session
+    // (manual lock path) and guard against double overlays.
+    const session = (payload && (payload.session || payload)) || this.authEngine.getCurrentSession();
     if (!session || this.lockScreenComponent) return;
 
     const lockView = new LockScreenView({
       session,
+      authEngine: this.authEngine,
       onUnlock: (newSession, isOverride) => {
         this.lockScreenComponent = null;
         this.render();
