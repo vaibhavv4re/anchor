@@ -6,9 +6,12 @@
 import { authEngine } from '../../../../../businessos/platform/authentication/authEngine.js';
 
 export class LockScreenView {
-  constructor({ session, onUnlock }) {
+  constructor({ session, onUnlock, authEngine: injectedAuthEngine } = {}) {
     this.session = session;
     this.onUnlock = onUnlock;
+    // Prefer the shell's DI'd authEngine instance; fall back to the global
+    // singleton so standalone/test usage keeps working unchanged.
+    this.authEngine = injectedAuthEngine || authEngine;
     this.isOverrideMode = false;
     this.enteredPin = '';
     this.overlay = null;
@@ -110,7 +113,7 @@ export class LockScreenView {
     const errEl = this.overlay.querySelector('#lock-error');
     if (errEl) errEl.textContent = 'Verifying PIN...';
 
-    const result = await authEngine.unlockSession(this.enteredPin);
+    const result = await this.authEngine.unlockSession(this.enteredPin);
 
     if (result.success) {
       if (this.overlay && this.overlay.parentNode) {
