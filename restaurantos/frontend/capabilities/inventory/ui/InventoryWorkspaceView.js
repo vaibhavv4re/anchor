@@ -97,23 +97,41 @@ export class InventoryWorkspaceView {
 
   /**
    * Classifies an item into a top-level segment for the Master Inventory view.
-   * BAR      -> category.product_family_code === 'FAM-LIQUOR'
-   * OPERATING-> category.product_family_code in ('FAM-OPERATING','FAM-SUPPLIES')
-   *            OR item.item_type in ('Consumable','Asset','Cleaning Supply','Packaging')
-   * FOOD     -> everything else (default)
+   * Uses the same bar-detection heuristic as barReplenishmentModel so the Bar tab
+   * stays consistent with the rest of the app (CAT-BEV-ALC is seeded under FAM-BEVERAGES,
+   * and bar SKUs are keyed by a BAR code-prefix).
+   *
+   * BAR       -> item code starts with 'BAR', OR category code contains 'BEV'/'BAR',
+   *              OR department contains 'BAR', OR family is FAM-LIQUOR/FAM-BAR
+   * OPERATING -> family FAM-OPERATING/FAM-SUPPLIES/FAM-PACK, or consumable/asset/packaging type
+   * FOOD      -> everything else (default)
    */
   _classifyItemSegment(item, categories) {
+    const code = String(item.itemCode || item.item_code || item.sku || item.code || item.id || '').toUpperCase().trim();
     const catCode = String(item.categoryCode || item.category_code || item.category || '').toUpperCase().trim();
+    const dept = String(item.department || '').toUpperCase().trim();
+    const type = String(item.itemType || item.item_type || item.type || '').toUpperCase().trim();
+
     const cat = (categories || []).find(c => {
       const cc = String(c.categoryCode || c.category_code || c.code || c.id || '').toUpperCase().trim();
       return cc && cc === catCode;
     });
-    const fam = String((cat && (cat.productFamilyCode || cat.product_family_code || cat.productFamily)) || '').toUpperCase().trim();
-    const type = String(item.itemType || item.item_type || item.type || '').toUpperCase().trim();
+    const catName = String((cat && (cat.categoryName || cat.category_name || cat.name)) || '').toUpperCase();
+    const fam = this._inferProductFamilyCode(cat || { categoryCode: catCode, categoryName: catName });
 
-    if (fam === 'FAM-LIQUOR' || fam === 'FAM-BAR') return 'BAR';
-    if (fam === 'FAM-OPERATING' || fam === 'FAM-SUPPLIES' || fam === 'FAM-PACK') return 'OPERATING';
-    if (['CONSUMABLE', 'ASSET', 'CLEANING SUPPLY', 'PACKAGING'].includes(type)) return 'OPERATING';
+    // BAR: match the platform's own bar-SKU heuristic
+    if (code.startsWith('BAR') || catCode.includes('BEV') || catCode.includes('BAR') ||
+        dept.includes('BAR') || fam === 'FAM-LIQUOR' || fam === 'FAM-BAR' ||
+        /SPIRIT|LIQUOR|WINE|BEER|BREEZER/.test(catName)) {
+      return 'BAR';
+    }
+
+    // OPERATING: consumables, packaging, cleaning, fixed assets
+    if (fam === 'FAM-OPERATING' || fam === 'FAM-SUPPLIES' || fam === 'FAM-PACK' ||
+        ['CONSUMABLE', 'ASSET', 'CLEANING SUPPLY', 'PACKAGING'].includes(type)) {
+      return 'OPERATING';
+    }
+
     return 'FOOD';
   }
 
