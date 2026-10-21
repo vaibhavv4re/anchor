@@ -15,6 +15,16 @@ export class ConnectivityComponent {
     this.modalEl = null;
     this.isBannerDismissed = false;
     this.unsubscribe = null;
+
+    // Anti-flicker rendering state. The banner/badge are only mutated when the
+    // visual state actually changes, and a transient SYNCING blip (a routine
+    // background read) is deferred so it never flashes the banner (which used to
+    // reflow the entire app on every poll). See updateUI()/_render().
+    this._lastBadgeHtml = null;
+    this._lastBannerKind = null;
+    this._syncingRevealTimer = null;
+    this._deferredPaint = null;
+    this.SYNCING_REVEAL_MS = 600;
   }
 
   mount(headerMount, bannerMount) {
@@ -29,21 +39,79 @@ export class ConnectivityComponent {
     if (typeof this.unsubscribe === 'function') {
       this.unsubscribe();
     }
+    if (this._syncingRevealTimer) {
+      clearTimeout(this._syncingRevealTimer);
+      this._syncingRevealTimer = null;
+    }
+    this._deferredPaint = null;
     if (this.modalEl && this.modalEl.parentNode) {
       this.modalEl.parentNode.removeChild(this.modalEl);
     }
   }
 
   updateUI(diag, headerMount, bannerMount) {
+    // A brief SYNCING blip (routine background read/refresh) must NOT touch the
+    // DOM. Mounting/unmounting the block banner above the app reflows every
+    // workspace (the app-wide flicker). Only if SYNCING genuinely persists past
+    // SYNCING_REVEAL_MS do we treat it as a real reconnect and paint it; a
+    // settling IDLE/OFFLINE notification before then cancels the pending reveal.
+    const isTransientSyncing = diag.networkState !== NetworkStates.OFFLINE
+      && diag.syncState === SyncStates.SYNCING;
+
+    if (isTransientSyncing) {
+      this._deferredPaint = { diag, headerMount, bannerMount };
+      if (!this._syncingRevealTimer) {
+        this._syncingRevealTimer = setTimeout(() => {
+          this._syncingRevealTimer = null;
+          const pending = this._deferredPaint;
+          this._deferredPaint = null;
+          if (pending) this._render(pending.diag, pending.headerMount, pending.bannerMount);
+        }, this.SYNCING_REVEAL_MS);
+      }
+      return;
+    }
+
+    // Non-syncing state (IDLE / OFFLINE / SYNC_ATTENTION): cancel any pending
+    // reveal and paint immediately (idempotent - see _render).
+    if (this._syncingRevealTimer) {
+      clearTimeout(this._syncingRevealTimer);
+      this._syncingRevealTimer = null;
+    }
+    this._deferredPaint = null;
+    this._render(diag, headerMount, bannerMount);
+  }
+
+  // Visual class of the banner region. DOM is touched only when this changes,
+  // so repeated identical notifications are a true no-op (no reflow, no blink).
+  _bannerKind(diag) {
+    if (diag.networkState === NetworkStates.OFFLINE) {
+      return this.isBannerDismissed
+        ? 'offline-dismissed'
+        : `offline:${diag.pendingSyncCount > 0 ? 'pending' : 'clear'}`;
+    }
+    if (diag.syncState === SyncStates.SYNCING) return 'syncing';
+    if (diag.syncState === SyncStates.SYNC_ATTENTION) return 'attention';
+    return 'none';
+  }
+
+  _render(diag, headerMount, bannerMount) {
     if (headerMount) {
-      headerMount.innerHTML = this.renderBadgeHTML(diag);
-      const badgeBtn = headerMount.querySelector('.connectivity-badge-btn');
-      if (badgeBtn) {
-        badgeBtn.addEventListener('click', () => this.openStatusModal(diag));
+      const badgeHtml = this.renderBadgeHTML(diag);
+      if (badgeHtml !== this._lastBadgeHtml) {
+        headerMount.innerHTML = badgeHtml;
+        this._lastBadgeHtml = badgeHtml;
+        const badgeBtn = headerMount.querySelector('.connectivity-badge-btn');
+        if (badgeBtn) {
+          badgeBtn.addEventListener('click', () => this.openStatusModal(diag));
+        }
       }
     }
 
     if (bannerMount) {
+      const kind = this._bannerKind(diag);
+      if (kind === this._lastBannerKind) return; // nothing visually changed -> leave DOM untouched
+      this._lastBannerKind = kind;
+
       if (diag.networkState === NetworkStates.OFFLINE) {
         if (!this.isBannerDismissed) {
           bannerMount.style.display = 'block';

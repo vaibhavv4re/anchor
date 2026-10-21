@@ -66,6 +66,11 @@ export class ConnectivityManager {
     this._probeFailures = 0;
     this.PROBE_OFFLINE_THRESHOLD = 3;
 
+    // Edge-trigger guard: last state signature we actually broadcast. Used to
+    // suppress no-op notifications (periodic probe / routine read) that were
+    // re-rendering the header UI app-wide. See _notifyListeners().
+    this._lastNotifiedSignature = null;
+
     this._initNetworkListeners();
     this._startReachabilityProbe();
   }
@@ -278,6 +283,30 @@ export class ConnectivityManager {
 
   _notifyListeners(specificEventType = null) {
     const diagnostics = this.getDiagnostics();
+
+    // Edge-triggered notification (Contract: broadcast only a REAL transition -
+    // disconnect/reconnect, or a sync-state / pending-count change). The
+    // reachability probe runs every 15s and every cloud read refreshes
+    // lastCloudSyncTimestamp; neither is a state change, yet broadcasting them
+    // re-rendered the header badge and flashed the platform banner on every
+    // poll - the reported app-wide flicker. updatedAt & lastCloudSyncTimestamp
+    // are deliberately EXCLUDED from the signature so timestamp-only refreshes
+    // are a true no-op.
+    // Only the DEFAULT broadcast (CONNECTIVITY_CHANGED state report) is suppressed
+    // on a no-op repeat. An explicit event (e.g. SYNC_STATUS_CHANGED) is always
+    // honored so callers can deliberately announce progress - this preserves the
+    // platform event contract and DataGateway's OFFLINE->ONLINE flush detection.
+    const signature = [
+      diagnostics.networkState,
+      diagnostics.syncState,
+      diagnostics.dataSource,
+      diagnostics.pendingSyncCount
+    ].join('|');
+    if (specificEventType === null) {
+      if (signature === this._lastNotifiedSignature) return;
+    }
+    this._lastNotifiedSignature = signature;
+
     for (const listener of this.subscribers) {
       try {
         listener(diagnostics);
