@@ -45,6 +45,7 @@ export class KitchenDisplaySystemView {
     this.container.className = 'kds-fullscreen-workspace animate-fade-in';
     this.container.style.cssText = 'min-height:100vh; width:100%; background:#0b0f19; color:#f1f5f9; padding:18px 24px; box-sizing:border-box; display:flex; flex-direction:column; gap:16px; font-family:-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;';
     
+    this._lastRenderSignature = null;
     this.updateContent();
     this.startLiveTimer();
     this.startRealtimeSync();
@@ -207,13 +208,40 @@ export class KitchenDisplaySystemView {
 
   startLiveTimer() {
     if (this.timerInterval) clearInterval(this.timerInterval);
-    this.timerInterval = setInterval(() => {
-      if (!this.container) return;
-      this.container.querySelectorAll('[data-created-at]').forEach(el => {
-        const cat = el.getAttribute('data-created-at');
-        if (cat) el.textContent = this.formatElapsed(cat);
-      });
-    }, 10000);
+    this.timerInterval = setInterval(() => this._refreshElapsed(), 10000);
+  }
+
+  /**
+   * Update ticket age text + aging color in place (no DOM rebuild -> no flicker).
+   * Runs every 10s so elapsed labels stay live even when a re-render is skipped.
+   */
+  _refreshElapsed() {
+    if (!this.container) return;
+    this.container.querySelectorAll('[data-created-at]').forEach(el => {
+      const cat = el.getAttribute('data-created-at');
+      if (!cat) return;
+      el.textContent = this.formatElapsed(cat);
+      const mins = this.getElapsedMinutes(cat);
+      el.style.color = mins > 15 ? '#ef4444' : (mins > 8 ? '#f59e0b' : '#94a3b8');
+    });
+  }
+
+  /**
+   * Stable signature of everything the KDS renders EXCEPT wall-clock elapsed time.
+   * Used to skip no-op re-renders (the flicker source): ticket/item status, note
+   * presence, cancellation requests, station holds and the active filters. Elapsed
+   * time is intentionally excluded because _refreshElapsed() keeps it current.
+   */
+  _computeRenderSignature(tenantId) {
+    const allTickets = orderModel.getAllTickets(tenantId) || [];
+    const kitchenTickets = allTickets.filter(t => t.destination === 'KITCHEN' && t.status !== 'SERVED' && t.status !== 'CANCELLED');
+    const tSig = kitchenTickets.map(t => {
+      const items = (t.items || []).map(i => `${i.lineItemId || i.itemId}=${i.itemStatus || i.status || ''}${(i.notes && String(i.notes).trim()) ? '~' : ''}`).join(',');
+      return `${t.ticketId || t.id}:${t.status}:${items}`;
+    }).join('|');
+    const cxl = (cancellationModel.getPendingRequests('KITCHEN', tenantId) || []).map(r => `${r.requestId || r.id}:${r.status || ''}`).join(',');
+    const holds = (preparedHoldModel.getHolds(tenantId, { station: 'KITCHEN' }) || []).filter(h => h.status === 'HELD').map(h => `${h.holdId || h.id}:${h.status}`).join(',');
+    return `${tSig}#${cxl}#${holds}#${this.selectedStation || 'ALL'}#${this.selectedStatusTab || ''}#${(this.searchQuery || '').trim()}`;
   }
 
   updateContent() {
@@ -221,6 +249,14 @@ export class KitchenDisplaySystemView {
 
     const session = typeof sessionStorage !== 'undefined' ? JSON.parse(sessionStorage.getItem('ros_session') || '{}') : {};
     const tenantId = session.tenantId || 'tenant_h0qc7wf';
+
+    // Flicker guard: only rebuild the DOM when the rendered content actually
+    // changes. The KDS re-renders on a 3.5s poll, realtime events and cross-tab
+    // broadcasts; without this every no-op tick replaced container.innerHTML and
+    // visibly flashed the whole ticket board.
+    const renderSignature = this._computeRenderSignature(tenantId);
+    if (renderSignature === this._lastRenderSignature) return;
+    this._lastRenderSignature = renderSignature;
 
     // 1. Fetch live tickets
     const allTickets = orderModel.getAllTickets(tenantId) || [];
