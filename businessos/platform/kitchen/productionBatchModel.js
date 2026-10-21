@@ -40,6 +40,30 @@ class ProductionBatchModel {
     return 'tenant_h0qc7wf';
   }
 
+  _getDataGateway() {
+    if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform) {
+      return window.__APP__.platform.dataGateway;
+    }
+    return null;
+  }
+
+  // Fire-and-forget write-through to the cloud production_batches table.
+  // offlineStore remains the synchronous local cache; DataGateway owns the
+  // offline queue/retry so a batch created on one screen reaches every other.
+  _mirrorCreate(record) {
+    const dg = this._getDataGateway();
+    if (!dg || typeof dg.create !== 'function') return;
+    Promise.resolve(dg.create('production_batches', record)).catch(e =>
+      console.warn('[productionBatchModel] cloud create mirror failed:', e.message));
+  }
+
+  _mirrorUpdate(record) {
+    const dg = this._getDataGateway();
+    if (!dg || typeof dg.update !== 'function' || !record || !record.id) return;
+    Promise.resolve(dg.update('production_batches', record.id, record)).catch(e =>
+      console.warn('[productionBatchModel] cloud update mirror failed:', e.message));
+  }
+
   /**
    * 1. Create Planned Production Batch
    */
@@ -99,6 +123,7 @@ class ProductionBatchModel {
 
     batches.unshift(record);
     offlineStore.setCollection('production_batches', batches);
+    this._mirrorCreate(record);
     platformEventBus.publish('kitchen:batch:created', record);
     return record;
   }
@@ -170,6 +195,7 @@ class ProductionBatchModel {
     batch.completedAt = new Date().toISOString();
 
     offlineStore.setCollection('production_batches', batches);
+    this._mirrorUpdate(batch);
     platformEventBus.publish('kitchen:batch:completed', batch);
     return batch;
   }

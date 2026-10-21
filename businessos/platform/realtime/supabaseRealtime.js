@@ -16,7 +16,7 @@ import { platformEventBus } from '../events/platformEvents.js';
 import { runtimeConfig } from '../cloud/runtimeConfig.js';
 import { getSupabaseClient, destroySupabaseClient } from './supabaseClientFactory.js';
 
-const REALTIME_TABLES = ['orders', 'table_sessions', 'bill_revisions', 'invoices', 'payments', 'stock_balances', 'cancellation_requests', 'prepared_item_holds'];
+const REALTIME_TABLES = ['orders', 'table_sessions', 'bill_revisions', 'invoices', 'payments', 'stock_balances', 'cancellation_requests', 'prepared_item_holds', 'shift_registers', 'production_batches'];
 const CHANNEL_JOIN_TIMEOUT_MS = 5000;
 const POLL_INTERVAL_MS = 10000; // 10s fallback; realtime primary is <1s
 
@@ -66,7 +66,8 @@ export class SupabaseRealtime {
             'inventory', 'suppliers', 'purchase_orders', 'goods_receipt_notes',
             'inventory_categories', 'inventory_uoms', 'orders', 'table_sessions',
             'bill_revisions', 'invoices', 'payments',
-            'cancellation_requests', 'prepared_item_holds', 'disposition_policies'
+            'cancellation_requests', 'prepared_item_holds', 'disposition_policies',
+            'shift_registers', 'production_batches'
           ], 'tenant_h0qc7wf');
           console.log('☁️ [SupabaseRealtime] Full cloud refresh completed on reconnect.');
         } catch (e) {
@@ -776,6 +777,11 @@ export class SupabaseRealtime {
       this._syncCloudCancellationRequests([newRecord], tId);
     } else if (table === 'prepared_item_holds' && newRecord) {
       this._syncCloudPreparedItemHolds([newRecord], tId);
+    } else if ((table === 'shift_registers' || table === 'production_batches') && newRecord) {
+      // Device-local collections now mirrored in Supabase: upsert the cloud row
+      // into the same local cache key the service reads so every screen stays
+      // consistent without a full hydrate round-trip.
+      this._upsertCloudRecord(table, newRecord);
     }
 
     if (!isFromBroadcast) {
@@ -783,5 +789,29 @@ export class SupabaseRealtime {
     }
 
     return normalized;
+  }
+
+  /**
+   * Generic data-JSONB upsert into the local cache for mirrored collections
+   * (shift_registers, production_batches). Normalises the cloud row with the
+   * same { ...data, ...row } merge the supabaseDataAdapter read path uses.
+   */
+  _upsertCloudRecord(collection, raw) {
+    try {
+      const p = (raw && raw.data && typeof raw.data === 'object') ? { ...raw.data, ...raw } : { ...raw };
+      if (!p.id) p.id = raw.id;
+      if (raw.tenant_id && !p.tenantId) p.tenantId = raw.tenant_id;
+      if (raw.status) p.status = raw.status;
+      const list = offlineStore.getCollection(collection) || [];
+      const idx = list.findIndex(x => x && x.id === p.id);
+      if (idx >= 0) {
+        list[idx] = { ...list[idx], ...p };
+      } else {
+        list.push(p);
+      }
+      offlineStore.setCollection(collection, list);
+    } catch (e) {
+      console.warn(`[SupabaseRealtime] ${collection} upsert failed:`, e.message);
+    }
   }
 }

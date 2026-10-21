@@ -22,7 +22,7 @@ export class SupabaseDataAdapter {
     const virtualCollections = [
       'roles', 'sessions', 'table_runtime_states',
       'stock_requisitions', 'menu_catalog',
-      'production_batches', 'devices', 'system_config'
+      'devices', 'system_config'
     ];
     if (!this.client || virtualCollections.includes(targetTable)) {
       return { success: true, data: [] };

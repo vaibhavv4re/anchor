@@ -38,7 +38,8 @@ declare
     'offline_journal','audit_logs','orders','table_sessions','bill_revisions',
     'invoices','payments','session_audit_logs','tax_configurations','tax_audit_log',
     'cancellation_requests','prepared_item_holds','disposition_policies',
-    'retail_products','retail_sales','cash_registers','register_transactions','retail_categories'
+    'retail_products','retail_sales','cash_registers','register_transactions','retail_categories',
+    'shift_registers','production_batches'
   ];
 begin
   foreach t in array tables loop
@@ -76,7 +77,8 @@ declare
     'offline_journal','audit_logs','orders','table_sessions','bill_revisions',
     'invoices','payments','session_audit_logs','tax_configurations','tax_audit_log',
     'cancellation_requests','prepared_item_holds','disposition_policies',
-    'retail_products','retail_sales','cash_registers','register_transactions','retail_categories'
+    'retail_products','retail_sales','cash_registers','register_transactions','retail_categories',
+    'shift_registers','production_batches'
   ];
 begin
   foreach t in array tables loop

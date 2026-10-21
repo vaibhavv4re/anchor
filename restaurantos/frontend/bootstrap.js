@@ -78,6 +78,9 @@ export function startModularApp(options = {}) {
       // rows (retail_products), never seeded mock data. Stock itself is shared with
       // the main inventory core (stock_balances @ LOC-RETAIL).
       'retail_products', 'retail_sales', 'cash_registers', 'register_transactions', 'retail_categories',
+      // Manager shift register lifecycle - cloud-backed so a register opened on
+      // one screen is visible on every other screen (multi-screen parity).
+      'shift_registers',
       // Fiscal config (single source of truth for the Food/Bar tax split) - read-only
       // under RLS pre-login, so every device resolves the same tax categories.
       'tax_configurations'

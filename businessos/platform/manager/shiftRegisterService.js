@@ -6,10 +6,12 @@
  * physical cash count. Cash-drawer variance is derived from these rows, so it
  * can finally be non-zero instead of a hardcoded "Balanced".
  *
- * Storage: device-local `offlineStore` collection `shift_registers`. There is no
- * Supabase table for this yet, so the Manager views label the panel as local and
- * it is NOT part of the realtime set. This is a deliberate, flagged boundary —
- * provisioning `shift_registers` in the cloud is a follow-up, not a silent gap.
+ * Storage: `offlineStore` collection `shift_registers` as the always-available
+ * local cache, mirrored write-through to the Supabase `shift_registers` table
+ * via the DataGateway (create/update) so a register opened on one screen is
+ * visible on every other screen. When the cloud table is not yet provisioned or
+ * the device is offline, DataGateway queues the write and the local path keeps
+ * working unchanged (cache-first reads).
  *
  * Every mutation also writes an append-only trace through sessionAuditModel so
  * "who opened / counted / handed over" is auditable.
@@ -43,6 +45,30 @@ class ShiftRegisterService {
   _save(list) {
     offlineStore.setCollection(COLLECTION, list);
     platformEventBus.publish('shift:register:updated', { source: 'shiftRegister' });
+  }
+
+  _getDataGateway() {
+    if (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform) {
+      return window.__APP__.platform.dataGateway;
+    }
+    return null;
+  }
+
+  // Fire-and-forget write-through. DataGateway owns offline queueing/retry, so
+  // we never block the synchronous local path and never double-write a journal
+  // row here (the gateway mirrors into offline_journal internally).
+  _mirrorCreate(record) {
+    const dg = this._getDataGateway();
+    if (!dg || typeof dg.create !== 'function') return;
+    Promise.resolve(dg.create(COLLECTION, record)).catch(e =>
+      console.warn('[shiftRegisterService] cloud create mirror failed:', e.message));
+  }
+
+  _mirrorUpdate(record) {
+    const dg = this._getDataGateway();
+    if (!dg || typeof dg.update !== 'function' || !record || !record.id) return;
+    Promise.resolve(dg.update(COLLECTION, record.id, record)).catch(e =>
+      console.warn('[shiftRegisterService] cloud update mirror failed:', e.message));
   }
 
   /** The OPEN register for this tenant, or null if none has been opened. */
@@ -88,6 +114,7 @@ class ShiftRegisterService {
     const list = this._all(t).slice();
     list.push(record);
     this._save(list);
+    this._mirrorCreate(record);
     this._audit(record, 'SHIFT_OPEN', `Opening float ₹${record.openingFloat} registered`, actor, t);
     return record;
   }
@@ -105,8 +132,10 @@ class ShiftRegisterService {
       r.id === reg.id ? { ...r, countedCash: value, countedAt: new Date().toISOString(), countedBy: actor } : r
     );
     this._save(list);
+    const updated = list.find(r => r.id === reg.id);
+    this._mirrorUpdate(updated);
     this._audit(reg, 'CASH_COUNT', `Physical cash counted ₹${value}`, actor, t);
-    return list.find(r => r.id === reg.id);
+    return updated;
   }
 
   /** Persist shift-handover notes onto the active register. */
@@ -121,8 +150,10 @@ class ShiftRegisterService {
       r.id === reg.id ? { ...r, handoverNotes: notes, handoverAt: new Date().toISOString(), handoverBy: actor } : r
     );
     this._save(list);
+    const updated = list.find(r => r.id === reg.id);
+    this._mirrorUpdate(updated);
     this._audit(reg, 'SHIFT_HANDOVER', `Handover note: ${notes || '(none)'}`, actor, t);
-    return list.find(r => r.id === reg.id);
+    return updated;
   }
 
   closeRegister({ tenantId = null, countedCash = null, notes = '', closedBy = null } = {}) {
@@ -140,8 +171,10 @@ class ShiftRegisterService {
         : r
     );
     this._save(list);
+    const updated = list.find(r => r.id === reg.id);
+    this._mirrorUpdate(updated);
     this._audit(reg, 'SHIFT_CLOSE', 'Shift register closed', actor, t);
-    return list.find(r => r.id === reg.id);
+    return updated;
   }
 
   _audit(register, eventType, description, actorName, tenantId) {

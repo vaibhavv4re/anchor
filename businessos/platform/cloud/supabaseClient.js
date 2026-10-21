@@ -932,6 +932,39 @@ export function formatRecordForTable(entityName, job) {
     };
   }
 
+  if (entityName === 'shift_registers') {
+    return {
+      id: p.id || genTempId('shift_'),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      status: p.status || 'OPEN',
+      register_code: p.registerCode || p.register_code || '',
+      device_id: p.deviceId || p.device_id || '',
+      opened_by: p.openedBy || p.opened_by || '',
+      opened_at: p.openedAt || p.opened_at || null,
+      counted_at: p.countedAt || p.counted_at || null,
+      closed_by: p.closedBy || p.closed_by || null,
+      closed_at: p.closedAt || p.closed_at || null,
+      data: p
+    };
+  }
+
+  if (entityName === 'production_batches') {
+    return {
+      id: p.id || genTempId('batch_'),
+      tenant_id: job.tenantId || p.tenantId || p.tenant_id || 'tenant_h0qc7wf',
+      batch_number: p.batchNumber || p.batch_number || p.id || '',
+      recipe_id: p.recipeId || p.recipe_id || null,
+      station: p.station || '',
+      status: p.status || 'PLANNED',
+      planned_portions: parseInt(p.plannedPortions || p.planned_portions) || 0,
+      actual_portions_produced: parseInt(p.actualPortionsProduced || p.actual_portions_produced) || 0,
+      planned_by: p.plannedBy || p.planned_by || '',
+      completed_by: p.completedBy || p.completed_by || null,
+      completed_at: p.completedAt || p.completed_at || null,
+      data: p
+    };
+  }
+
   return p;
 }
 
@@ -1353,6 +1386,32 @@ export function formatPatchForTable(entityName, patch) {
     copyIfPresent('amount', 'amount', v => parseFloat(v) || 0);
     copyIfPresent('correlationId', 'correlation_id');
     result.data = { ...(p.data || p) };
+  } else if (entityName === 'shift_registers') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('status', 'status');
+    copyIfPresent('registerCode', 'register_code');
+    copyIfPresent('deviceId', 'device_id');
+    copyIfPresent('openedBy', 'opened_by');
+    copyIfPresent('openedAt', 'opened_at');
+    copyIfPresent('countedAt', 'counted_at');
+    copyIfPresent('closedBy', 'closed_by');
+    copyIfPresent('closedAt', 'closed_at');
+    result.updated_at = new Date().toISOString();
+    result.data = { ...(p.data || p), ...(result.status ? { status: result.status } : {}) };
+  } else if (entityName === 'production_batches') {
+    copyIfPresent('id', 'id');
+    copyIfPresent('tenantId', 'tenant_id');
+    copyIfPresent('batchNumber', 'batch_number');
+    copyIfPresent('recipeId', 'recipe_id');
+    copyIfPresent('station', 'station');
+    copyIfPresent('status', 'status');
+    copyIfPresent('plannedPortions', 'planned_portions', v => parseInt(v) || 0);
+    copyIfPresent('actualPortionsProduced', 'actual_portions_produced', v => parseInt(v) || 0);
+    copyIfPresent('completedBy', 'completed_by');
+    copyIfPresent('completedAt', 'completed_at');
+    result.updated_at = new Date().toISOString();
+    result.data = { ...(p.data || p), ...(result.status ? { status: result.status } : {}) };
   } else {
     Object.keys(p).forEach(k => {
       result[k] = p[k];
