@@ -45,6 +45,19 @@ class ProductionRoutingEngine {
     const order = orderModel.getOrder(orderId, targetTenantId);
     if (!order) return [];
 
+    // Idempotency guard: 'order:confirmed' can be re-fired (retries, cross-screen sync,
+    // or an explicit re-route). Never dispatch a second KOT/BOT for an order that has
+    // already been routed, otherwise waiter/manager projections double-count items.
+    const existingEmbedded = (Array.isArray(order.tickets) && order.tickets.length > 0)
+      ? order.tickets
+      : (Array.isArray(order.data?.tickets) ? order.data.tickets : []);
+    if (existingEmbedded.length > 0) return existingEmbedded;
+
+    const orderIdKey = order.orderId || order.id;
+    const standaloneRouted = (offlineStore.getCollection('tickets', targetTenantId) || [])
+      .filter(t => (t.orderId || t.id) === orderIdKey);
+    if (standaloneRouted.length > 0) return standaloneRouted;
+
     const kitchenItems = [];
     const barItems = [];
 
@@ -294,7 +307,7 @@ class ProductionRoutingEngine {
    * Recalculate ticket status based on items status:
    * - All items SERVED => SERVED
    * - All items READY/SERVED => READY
-   * - Any item PREPARING/READY => PREPARING
+   * - All items PREPARING/READY/SERVED => PREPARING
    * - Otherwise => QUEUED
    * CANCELLED/VOIDED items are excluded (treated as removed, not blockers).
    * @param {Object} ticket
@@ -706,20 +719,11 @@ class ProductionRoutingEngine {
     return updatedTicket;
   }
 
-  _computeTicketStatus(ticket) {
-    const allItems = ticket?.items || [];
-    const items = allItems.filter(it => !this._isRemovedItem(it));
-    if (!items.length) {
-      return allItems.length ? 'CANCELLED' : (ticket?.status || 'QUEUED');
-    }
-    const statuses = items.map(it => it.itemStatus || it.status || 'QUEUED');
-    if (statuses.every(s => s === 'SERVED')) return 'SERVED';
-    if (statuses.every(s => s === 'READY' || s === 'SERVED')) return 'READY';
-    if (statuses.some(s => s === 'READY' || s === 'SERVED')) return 'PARTIALLY_READY';
-    if (statuses.some(s => s === 'PREPARING')) return 'PREPARING';
-    return 'QUEUED';
-  }
-
+  // NOTE: _computeTicketStatus is defined once (above, ~line 303) and enforces the
+  // ALL-items gate: the ticket only promotes to PREPARING when every remaining item
+  // is PREPARING/READY/SERVED, and to READY only when every item is READY/SERVED.
+  // A previous duplicate definition here used ANY-rule (some(...)) and shadowed that
+  // method, causing a single-item KDS/BOS action to move the whole ticket. Removed.
   _computeOrderStatus(order) {
     const rawItems = (order?.items && order.items.length > 0)
       ? order.items

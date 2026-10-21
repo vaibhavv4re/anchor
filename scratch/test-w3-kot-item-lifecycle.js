@@ -67,7 +67,7 @@ async function runTest() {
   console.log('\n4. Chef marks Item 1 (Green Chicken Soup) as PREPARING');
   const res1 = productionRoutingEngine.updateTicketItemStatus(kot.ticketId, kot.items[0].lineItemId, 'PREPARING', tenantId);
   assert(res1.item.itemStatus === 'PREPARING', 'Item 1 itemStatus is PREPARING');
-  assert(res1.ticket.status === 'PREPARING', 'Ticket overall status became PREPARING');
+  assert(res1.ticket.status === 'QUEUED', 'Ticket stays QUEUED (ALL-items rule: items 2 & 3 still QUEUED)');
 
   let proj = sessionProjectionService.getSessionProjection(session.id, tenantId);
   assert(proj.preparingItems.length === 1, 'Waiter projection shows 1 item PREPARING');
@@ -78,7 +78,7 @@ async function runTest() {
   console.log('\n5. Chef marks Item 1 as READY (Partial KOT Readiness)');
   const res2 = productionRoutingEngine.updateTicketItemStatus(kot.ticketId, kot.items[0].lineItemId, 'READY', tenantId);
   assert(res2.item.itemStatus === 'READY', 'Item 1 itemStatus is READY');
-  assert(res2.ticket.status === 'PREPARING', 'Ticket overall status is STILL PREPARING (not all items ready)');
+  assert(res2.ticket.status === 'QUEUED', 'Ticket stays QUEUED (ALL-items rule: items 2 & 3 still QUEUED)');
 
   proj = sessionProjectionService.getSessionProjection(session.id, tenantId);
   assert(proj.readyItems.length === 1 && proj.readyItems[0].name === 'Green Chicken Soup', 'Waiter sees 1 READY item: Green Chicken Soup');
