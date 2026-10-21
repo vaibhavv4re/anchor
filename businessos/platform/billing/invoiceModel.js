@@ -454,20 +454,30 @@ class InvoiceModel {
 
     if (!useServer) {
       if (dg && typeof dg.create === 'function') {
-        dg.create('invoices', invoiceRecord).catch(e => console.warn('[invoiceModel] Cloud invoices sync error:', e.message));
-        const journalEntry = {
-          job_id: 'job_' + invoiceRecord.id,
-          job_type: 'TAX_INVOICE_ISSUED',
-          tenant_id: targetTenantId,
-          entity_name: 'invoices',
-          payload: invoiceRecord,
-          device_id: typeof navigator !== 'undefined' ? navigator.userAgent.substring(0, 30) : 'POS-TERMINAL-01',
-          actor: invoiceRecord.cashierName,
-          correlation_id: cid,
-          sync_state: 'SYNCED',
-          created_at: now
-        };
-        dg.create('offline_journal', journalEntry).catch(e => console.warn('[invoiceModel] Cloud journal sync error:', e.message));
+        // Let DataGateway own the cloud write: create() never rejects and
+        // queues a QUEUED job on failure/offline. Only append the SYNCED
+        // audit journal row once the row is confirmed to have reached the
+        // cloud (no QUEUED job left behind for this invoice).
+        Promise.resolve(dg.create('invoices', invoiceRecord))
+          .then(() => {
+            if (this._hasPendingSyncedCandidate('invoices', cid, invoiceRecord)) {
+              return;
+            }
+            const journalEntry = {
+              job_id: 'job_' + invoiceRecord.id,
+              job_type: 'TAX_INVOICE_ISSUED',
+              tenant_id: targetTenantId,
+              entity_name: 'invoices',
+              payload: invoiceRecord,
+              device_id: typeof navigator !== 'undefined' ? navigator.userAgent.substring(0, 30) : 'POS-TERMINAL-01',
+              actor: invoiceRecord.cashierName,
+              correlation_id: cid,
+              sync_state: 'SYNCED',
+              created_at: now
+            };
+            return dg.create('offline_journal', journalEntry);
+          })
+          .catch(e => console.warn('[invoiceModel] Cloud invoices sync error:', e.message));
       }
       return;
     }
@@ -489,6 +499,25 @@ class InvoiceModel {
       if (dg && typeof dg.create === 'function') {
         dg.create('invoices', invoiceRecord).catch(e => console.warn('[invoiceModel] Cloud invoices sync error:', e.message));
       }
+    });
+  }
+
+  /**
+   * Detect whether DataGateway left an unsynced (QUEUED/PENDING/ERROR) job for
+   * this entity+correlation, meaning the cloud write is not yet confirmed and
+   * the manual SYNCED audit row must be suppressed. Tolerates both the
+   * camelCase (offlineJournal) and snake_case (manual) journal shapes.
+   */
+  _hasPendingSyncedCandidate(entityName, cid, record) {
+    const list = offlineStore.getCollection('offline_journal') || [];
+    return list.some(j => {
+      const entity = j.entityName || j.entity_name;
+      if (entity !== entityName) return false;
+      const state = j.syncState || j.sync_state || 'QUEUED';
+      if (state !== 'QUEUED' && state !== 'PENDING' && state !== 'ERROR') return false;
+      const p = j.payload || {};
+      const jobCid = p.correlationId || j.correlationId || j.correlation_id;
+      return (cid && jobCid === cid) || (record && p.id === record.id);
     });
   }
 

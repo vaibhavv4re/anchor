@@ -206,20 +206,31 @@ class PaymentModel {
 
     const fallbackCreate = () => {
       if (!dg || typeof dg.create !== 'function') return;
-      dg.create('payments', paymentRecord).catch(e => console.warn('[paymentModel] Cloud payment sync error:', e.message));
-      const journalEntry = {
-        job_id: 'job_' + paymentId,
-        job_type: 'PAYMENT_RECORDED',
-        tenant_id: targetTenantId,
-        entity_name: 'payments',
-        payload: paymentRecord,
-        device_id: typeof navigator !== 'undefined' ? navigator.userAgent.substring(0, 30) : 'POS-TERMINAL-01',
-        actor: paymentRecord.receivedByName,
-        correlation_id: cid,
-        sync_state: 'SYNCED',
-        created_at: nowIso
-      };
-      dg.create('offline_journal', journalEntry).catch(e => console.warn('[paymentModel] Cloud journal sync error:', e.message));
+      // Let DataGateway own the cloud write. create() never rejects: on failure
+      // or when offline it enqueues a QUEUED offline_journal job and schedules a
+      // flush. We therefore only append the SYNCED audit row once we can confirm
+      // no QUEUED job was left behind for this payment (i.e. the row landed).
+      Promise.resolve(dg.create('payments', paymentRecord))
+        .then(() => {
+          if (this._hasPendingSyncedCandidate('payments', cid, paymentRecord)) {
+            // DataGateway is retrying via its QUEUED job — do NOT pre-mark SYNCED.
+            return;
+          }
+          const journalEntry = {
+            job_id: 'job_' + paymentId,
+            job_type: 'PAYMENT_RECORDED',
+            tenant_id: targetTenantId,
+            entity_name: 'payments',
+            payload: paymentRecord,
+            device_id: typeof navigator !== 'undefined' ? navigator.userAgent.substring(0, 30) : 'POS-TERMINAL-01',
+            actor: paymentRecord.receivedByName,
+            correlation_id: cid,
+            sync_state: 'SYNCED',
+            created_at: nowIso
+          };
+          return dg.create('offline_journal', journalEntry);
+        })
+        .catch(e => console.warn('[paymentModel] Cloud payment sync error:', e.message));
     };
 
     if (!useServer) {
@@ -248,6 +259,25 @@ class PaymentModel {
     }).catch(err => {
       console.warn('[paymentModel] rpc_record_payment failed, falling back to REST create:', err.message);
       fallbackCreate();
+    });
+  }
+
+  /**
+   * Detect whether DataGateway left an unsynced (QUEUED/PENDING/ERROR) job for
+   * this entity+correlation, meaning the cloud write has NOT yet been confirmed
+   * and the manual SYNCED audit row must be suppressed. Tolerates both the
+   * camelCase (offlineJournal) and snake_case (manual) journal shapes.
+   */
+  _hasPendingSyncedCandidate(entityName, cid, record) {
+    const list = offlineStore.getCollection('offline_journal') || [];
+    return list.some(j => {
+      const entity = j.entityName || j.entity_name;
+      if (entity !== entityName) return false;
+      const state = j.syncState || j.sync_state || 'QUEUED';
+      if (state !== 'QUEUED' && state !== 'PENDING' && state !== 'ERROR') return false;
+      const p = j.payload || {};
+      const jobCid = p.correlationId || j.correlationId || j.correlation_id;
+      return (cid && jobCid === cid) || (record && p.id === record.id);
     });
   }
 }
