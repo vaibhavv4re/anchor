@@ -1,0 +1,119 @@
+supplier_code,item_code,supplier_sku,supplier_item_name,purchase_uom,pack_quantity,pack_uom,unit_price,gst_rate,moq,lead_time_days,preferred,active
+SUP-103,RM0402,SKU-GRN-IND,Indrayani Rice (Sticky),BAG,25,KG,1650.00,5,1,2,true,true
+SUP-103,RM0403,SKU-GRN-BSM,Basmati Rice (Long Grain Biryani),BAG,25,KG,2850.00,5,1,2,true,true
+SUP-103,RM0404,SKU-GRN-RFL,Rice Flour (Tandalachi Pithi),BAG,25,KG,1150.00,5,1,2,true,true
+SUP-103,RM0701,SKU-FLR-ATA,Atta (Whole Wheat Flour),BAG,25,KG,1050.00,5,1,2,true,true
+SUP-103,RM0702,SKU-FLR-MAI,Maida (Refined Wheat Flour),BAG,25,KG,1000.00,5,1,2,true,true
+SUP-103,RM0703,SKU-FLR-BES,Besan (Chickpea Flour),BAG,25,KG,2375.00,5,1,2,true,true
+SUP-103,RM0704,SKU-FLR-CRN,Corn Flour (Cornstarch),BAG,10,KG,700.00,5,1,2,true,true
+SUP-103,RM0705,SKU-FLR-SUJ,Sujee (Semolina / Rava),BAG,25,KG,1375.00,5,1,2,true,true
+SUP-103,RM0706,SKU-FLR-PNK,Panko Breadcrumbs,PACK,5,KG,900.00,12,1,2,true,true
+SUP-103,RM0707,SKU-FLR-BAJ,Bajra Flour (Pearl Millet),BAG,10,KG,600.00,5,1,2,true,true
+SUP-103,RM0711,SKU-DAL-TOR,Toor Dal (Split Pigeon Peas),BAG,30,KG,4950.00,5,1,2,true,true
+SUP-103,RM0712,SKU-DAL-MOO,Moong Dal (Split Green Gram),BAG,25,KG,3875.00,5,1,2,true,true
+SUP-103,RM0713,SKU-DAL-CHA,Chana Dal (Split Chickpeas),BAG,25,KG,2375.00,5,1,2,true,true
+SUP-103,RM0714,SKU-DAL-MAS,Masoor Dal (Red Lentils),BAG,25,KG,2750.00,5,1,2,true,true
+SUP-103,RM0801,SKU-SWP-BLP,Black Peppercorns,BAG,10,KG,7000.00,5,1,2,true,true
+SUP-103,RM0802,SKU-SWP-WHP,White Peppercorns,BAG,5,KG,4500.00,5,1,2,true,true
+SUP-103,RM0803,SKU-SWP-JER,Jeera (Cumin Seeds),BAG,10,KG,1800.00,5,1,2,true,true
+SUP-103,RM0804,SKU-SWP-SAJ,Shah Jeera (Black Cumin),BAG,5,KG,1100.00,5,1,2,true,true
+SUP-103,RM0805,SKU-SWP-MUS,Mustard Seeds (Rai),BAG,10,KG,900.00,5,1,2,true,true
+SUP-103,RM0806,SKU-SWP-SAF,Saunf (Fennel Seeds),BAG,10,KG,1400.00,5,1,2,true,true
+SUP-103,RM0807,SKU-SWP-AJW,Ajwain (Carom Seeds),BAG,5,KG,1000.00,5,1,2,true,true
+SUP-103,RM0808,SKU-SWP-COR,Coriander Seeds,BAG,10,KG,1300.00,5,1,2,true,true
+SUP-103,RM0809,SKU-SWP-TEJ,Tej Patta (Bay Leaves),SACHET,0.5,KG,200.00,5,1,2,true,true
+SUP-103,RM0810,SKU-SWP-CIN,Cinnamon Stick,BAG,1,KG,360.00,5,1,2,true,true
+SUP-103,RM0811,SKU-SWP-CLV,Cloves (Laung),BAG,1,KG,820.00,5,1,2,true,true
+SUP-103,RM0812,SKU-SWP-GCA,Green Cardamom (Elaichi),BAG,1,KG,2800.00,5,1,2,true,true
+SUP-103,RM0813,SKU-SWP-BCA,Black Cardamom,BAG,1,KG,1600.00,5,1,2,true,true
+SUP-103,RM0814,SKU-SWP-STA,Star Anise,BAG,1,KG,900.00,5,1,2,true,true
+SUP-103,RM0815,SKU-SWP-MAC,Mace (Javitri),BAG,1,KG,1500.00,5,1,2,true,true
+SUP-103,RM0816,SKU-SWP-NUW,Whole Nutmeg (Jaiphal),BAG,1,KG,1400.00,5,1,2,true,true
+SUP-103,RM0817,SKU-SWP-STF,Stone Flower (Dagad Phool),SACHET,0.2,KG,120.00,5,1,2,true,true
+SUP-103,RM0818,SKU-SWP-WSS,White Sesame Seeds,BAG,10,KG,1800.00,5,1,2,true,true
+SUP-103,RM0819,SKU-SWP-BSS,Black Sesame Seeds,BAG,10,KG,2000.00,5,1,2,true,true
+SUP-103,RM0820,SKU-SWP-POP,Poppy Seeds (Khas Khas),BAG,5,KG,1600.00,5,1,2,true,true
+SUP-103,RM0821,SKU-SWP-KAL,Nigella Seeds (Kalonji),BAG,5,KG,800.00,5,1,2,true,true
+SUP-103,RM0851,SKU-CHL-KDR,Kashmiri Dry Red Chilli,BAG,10,KG,3000.00,5,1,2,true,true
+SUP-103,RM0852,SKU-CHL-BDR,Bedgi Dry Red Chilli,BAG,10,KG,2600.00,5,1,2,true,true
+SUP-103,RM0853,SKU-CHL-KPD,Kashmiri Red Chilli Powder,BAG,10,KG,2800.00,5,1,2,true,true
+SUP-103,RM0854,SKU-CHL-BPD,Bedgi Chilli Powder,BAG,10,KG,2500.00,5,1,2,true,true
+SUP-103,RM0855,SKU-CHL-SPD,Spicy Red Chilli Powder,BAG,10,KG,2400.00,5,1,2,true,true
+SUP-103,RM0901,SKU-SPW-TUR,Turmeric Powder (Haldi),BAG,10,KG,1800.00,5,1,2,true,true
+SUP-103,RM0902,SKU-SPW-COR,Coriander Powder (Dhaniya),BAG,10,KG,1500.00,5,1,2,true,true
+SUP-103,RM0903,SKU-SPW-CUM,Cumin Powder (Jeera),BAG,10,KG,1900.00,5,1,2,true,true
+SUP-103,RM0904,SKU-SPW-RCU,Roasted Cumin Powder,BAG,5,KG,1050.00,5,1,2,true,true
+SUP-103,RM0905,SKU-SPW-WPP,White Pepper Powder,BAG,5,KG,4750.00,5,1,2,true,true
+SUP-103,RM0906,SKU-SPW-SON,Dry Ginger Powder (Sonth),BAG,5,KG,1600.00,5,1,2,true,true
+SUP-103,RM0907,SKU-SPW-GAP,Dry Garlic Powder,BAG,5,KG,1700.00,5,1,2,true,true
+SUP-103,RM0908,SKU-SPW-ONP,Dry Onion Powder,BAG,5,KG,1500.00,5,1,2,true,true
+SUP-103,RM0909,SKU-SPW-HIN,Asafoetida Powder (Hing),JAR,0.5,KG,600.00,5,1,2,true,true
+SUP-103,RM0911,SKU-MLD-KKI,Kitchen King Masala,BAG,5,KG,1100.00,12,1,2,true,true
+SUP-103,RM0912,SKU-MLD-GRM,Garam Masala Powder,BAG,5,KG,1300.00,12,1,2,true,true
+SUP-103,RM0913,SKU-MLD-MLV,Malvani Masala Powder,BAG,5,KG,1400.00,12,1,2,true,true
+SUP-103,RM0914,SKU-MLD-XAC,Goan Xacuti Masala Powder,BAG,5,KG,1500.00,12,1,2,true,true
+SUP-103,RM0915,SKU-MLD-FSH,Coastal Fish Curry Masala,BAG,5,KG,1450.00,12,1,2,true,true
+SUP-103,RM0916,SKU-MLD-MAL,Malabari Pepper Masala,BAG,5,KG,1500.00,12,1,2,true,true
+SUP-103,RM0917,SKU-MLD-BIR,Biryani Masala Powder,BAG,5,KG,1200.00,12,1,2,true,true
+SUP-103,RM0918,SKU-MLD-CHK,Chicken Masala Powder,BAG,5,KG,1150.00,12,1,2,true,true
+SUP-103,RM0919,SKU-MLD-MUT,Mutton Masala Powder,BAG,5,KG,1150.00,12,1,2,true,true
+SUP-103,RM0920,SKU-MLD-CHT,Chaat Masala,BAG,5,KG,1000.00,12,1,2,true,true
+SUP-103,RM0921,SKU-MLD-AMC,Dry Mango Powder (Amchur),BAG,5,KG,900.00,5,1,2,true,true
+SUP-103,RM0922,SKU-MLD-PRP,Peri Peri Seasoning,BAG,2,KG,900.00,12,1,2,true,true
+SUP-103,RM0923,SKU-MLD-ARO,Aromatic Powder (House Blend),BAG,2,KG,700.00,12,1,2,true,true
+SUP-103,RM0931,SKU-HRB-KSM,Kasuri Methi (Dried Fenugreek),SACHET,0.5,KG,160.00,5,1,2,true,true
+SUP-103,RM0932,SKU-HRB-ORG,Oregano Flakes,SACHET,0.5,KG,260.00,12,1,2,true,true
+SUP-103,RM0933,SKU-HRB-CHF,Chilli Flakes,BAG,2,KG,520.00,12,1,2,true,true
+SUP-103,RM1001,SKU-OIL-CCO,Pure Cooking Coconut Oil,TIN,15,LTR,2850.00,5,1,2,true,true
+SUP-103,RM1002,SKU-OIL-SUN,Refined Sunflower Oil,BOTTLE,5,LTR,800.00,5,1,2,true,true
+SUP-103,RM1003,SKU-OIL-MST,Mustard Oil,TIN,15,LTR,2700.00,5,1,2,true,true
+SUP-103,RM1004,SKU-OIL-SES,Sesame Oil,BOTTLE,5,LTR,1300.00,5,1,2,true,true
+SUP-103,RM1005,SKU-OIL-OLI,Olive Oil,BOTTLE,3,LTR,1950.00,12,1,2,true,true
+SUP-103,RM1006,SKU-OIL-EVO,Extra Virgin Olive Oil,BOTTLE,3,LTR,2700.00,12,1,2,true,true
+SUP-103,RM0409,SKU-OIL-GHE,Desi Cow Ghee (Pure),TIN,15,KG,9800.00,12,1,2,true,true
+SUP-103,RM1101,SKU-CCT-DES,Desiccated Coconut Powder,BAG,5,KG,1200.00,5,1,2,true,true
+SUP-103,RM1102,SKU-CCT-KOP,Whole Dry Coconut (Kopra),BAG,10,KG,1200.00,5,1,2,true,true
+SUP-103,RM1103,SKU-CCT-CMP,Coconut Milk Powder,BAG,1,KG,380.00,12,1,2,true,true
+SUP-103,RM1104,SKU-CCT-KKB,Black Dried Kokum,BAG,1,KG,280.00,5,1,2,true,true
+SUP-103,RM1105,SKU-CCT-KRD,Red Dried Kokum,BAG,1,KG,260.00,5,1,2,true,true
+SUP-103,RM1106,SKU-CCT-TAM,Seedless Tamarind,BAG,5,KG,800.00,5,1,2,true,true
+SUP-103,RM1107,SKU-CCT-KUD,Kudampuli (Malabar Tamarind),BAG,1,KG,300.00,5,1,2,true,true
+SUP-103,RM1111,SKU-NUT-CSW,Cashewnuts (W240 Grade),BAG,5,KG,4500.00,5,1,2,true,true
+SUP-103,RM1201,SKU-SCS-KTP,Tomato Ketchup,BOTTLE,1,LTR,120.00,12,1,2,true,true
+SUP-103,RM1202,SKU-SCS-RCS,Red Chilli Sauce,BOTTLE,1,LTR,110.00,12,1,2,true,true
+SUP-103,RM1203,SKU-SCS-GCS,Green Chilli Sauce,BOTTLE,1,LTR,110.00,12,1,2,true,true
+SUP-103,RM1204,SKU-SCS-DSY,Dark Soy Sauce,BOTTLE,1,LTR,160.00,12,1,2,true,true
+SUP-103,RM1205,SKU-SCS-LSY,Light Soy Sauce,BOTTLE,1,LTR,160.00,12,1,2,true,true
+SUP-103,RM1206,SKU-SCS-OYS,Oyster Sauce,JAR,1,LTR,180.00,12,1,2,true,true
+SUP-103,RM1207,SKU-SCS-FSH,Fish Sauce,BOTTLE,1,LTR,140.00,12,1,2,true,true
+SUP-103,RM1208,SKU-SCS-WRC,Worcestershire Sauce,BOTTLE,1,LTR,200.00,12,1,2,true,true
+SUP-103,RM1209,SKU-SCS-WVG,Synthetic White Vinegar,BOTTLE,1,LTR,90.00,12,1,2,true,true
+SUP-103,RM1210,SKU-SCS-ACV,Apple Cider Vinegar,BOTTLE,1,LTR,220.00,12,1,2,true,true
+SUP-103,RM1211,SKU-SCS-MAY,Mayonnaise,JAR,2,KG,360.00,18,1,2,true,true
+SUP-103,RM1212,SKU-SCS-SWC,Sweet Chilli Sauce,BOTTLE,1,LTR,120.00,12,1,2,true,true
+SUP-103,RM1213,SKU-SCS-BBQ,Barbeque Sauce,BOTTLE,1,LTR,150.00,12,1,2,true,true
+SUP-103,RM0501,SKU-SPC-KAS,Kasundi Mustard Paste,JAR,1,KG,320.00,12,1,2,true,true
+SUP-103,RM1301,SKU-CNT-TMP,Canned Tomato Puree,BOX,24,CAN,1080.00,12,1,2,true,true
+SUP-103,RM1302,SKU-CNT-MSH,Canned Button Mushrooms,BOX,6,CAN,570.00,12,1,2,true,true
+SUP-103,RM1303,SKU-CNT-JLP,Canned Jalapeno Slices,JAR,1,JAR,260.00,12,1,2,true,true
+SUP-103,RM1304,SKU-CNT-BOL,Sliced Black Olives,JAR,1,JAR,300.00,12,1,2,true,true
+SUP-103,RM1305,SKU-CNT-GOL,Sliced Green Olives,JAR,1,JAR,320.00,12,1,2,true,true
+SUP-103,RM1401,SKU-BKC-JGP,Jaggery Powder,BAG,20,KG,1200.00,0,1,2,true,true
+SUP-103,RM1402,SKU-BKC-JGB,Solid Jaggery Block,BAG,20,KG,1400.00,0,1,2,true,true
+SUP-103,RM1403,SKU-BKC-ICS,Icing Sugar,BAG,5,KG,450.00,12,1,2,true,true
+SUP-103,RM1404,SKU-BKC-BKP,Baking Powder,JAR,1,KG,160.00,12,1,2,true,true
+SUP-103,RM1405,SKU-BKC-BKS,Baking Soda,PACK,1,KG,60.00,12,1,2,true,true
+SUP-103,RM1406,SKU-BKC-CHS,Dark Chocolate Syrup,BOTTLE,2,LTR,760.00,18,1,2,true,true
+SUP-103,RM1407,SKU-BKC-CCP,Cocoa Powder,BAG,1,KG,550.00,12,1,2,true,true
+SUP-103,RM1408,SKU-BKC-VAN,Vanilla Essence,BOTTLE,100,ML,120.00,12,1,2,true,true
+SUP-103,RM1501,SKU-SLT-SLT,Salt (Iodized),BAG,20,KG,500.00,5,1,2,true,true
+SUP-103,RM1502,SKU-SLT-BSL,Black Salt (Kala Namak),BAG,5,KG,300.00,5,1,2,true,true
+SUP-103,RM1601,SKU-PST-PEN,Penne Pasta,PACK,1,KG,130.00,12,1,2,true,true
+SUP-103,RM1602,SKU-PST-MAC,Macaroni Pasta,PACK,1,KG,120.00,12,1,2,true,true
+SUP-103,RM1603,SKU-PST-SPG,Spaghetti Pasta,PACK,1,KG,130.00,12,1,2,true,true
+SUP-103,PKG0101,SKU-CNS-FOIL,Aluminium Foil Roll (Heavy),BOX,12,PCS,9500.00,18,1,2,true,true
+SUP-103,PKG0102,SKU-CNS-CLNG,Cling Film Roll,BOX,6,PCS,3000.00,18,1,2,true,true
+SUP-103,PKG0103,SKU-CNS-BTTP,Butter Paper Sheets,PACK,500,PCS,1200.00,18,1,2,true,true
+SUP-103,PKG0104,SKU-CNS-NAPK,Table Napkins,BAG,200,PCS,1500.00,18,1,2,true,true
+SUP-103,PKG0105,SKU-CNS-TWL,Kitchen Towel Rolls,BAG,10,ROLL,3000.00,18,1,2,true,true
+SUP-103,PKG0106,SKU-CNS-SKWR,6-inch Bamboo Skewers,PACK,100,PCS,800.00,18,1,2,true,true

@@ -1,0 +1,23 @@
+record_type,code,name,product_family_code,default_base_uom,description,active
+PRODUCT_FAMILY,FAM-GRAINS,"Grains, Pulses & Dry Goods",,,Consolidated dry-goods family (rice/flours/dals/nuts/pasta),true
+PRODUCT_FAMILY,FAM-SPICES,Spices & Seasonings,,,Whole/powder spices and blended masalas,true
+PRODUCT_FAMILY,FAM-CONDIMENTS,"Oils, Sauces & Condiments",,,"Cooking oils, sauces, vinegars, canned toppings",true
+PRODUCT_FAMILY,FAM-BAKING,"Bakery, Sugar & Confectionery",,,NEW - jaggery icing sugar leaveners cocoa vanilla,true
+PRODUCT_FAMILY,FAM-OPERATING,Operating Supplies & Disposables,,,NEW - foil cling napkins towels skewers,true
+CATEGORY,CAT-RICE,Rice & Staples,FAM-GRAINS,KG,EXISTING - reused for Basmati/Indrayani/Rice Flour,true
+CATEGORY,CAT-GRAIN-FLOUR,"Flours, Meals & Semolina",FAM-GRAINS,KG,NEW - atta maida besan corn sujee panko bajra,true
+CATEGORY,CAT-PULSES-DAL,Pulses & Dals,FAM-GRAINS,KG,NEW - toor moong chana masoor,true
+CATEGORY,CAT-NUTS-DRYFRUIT,Nuts & Dry Fruits,FAM-GRAINS,KG,NEW - cashews etc.,true
+CATEGORY,CAT-PASTA,Dried Pasta & Noodles,FAM-GRAINS,PACK,NEW - penne macaroni spaghetti,true
+CATEGORY,CAT-SPICE-WHOLE,Whole Spices,FAM-SPICES,KG,EXISTING - reused for pepper jeera rai saunf etc.,true
+CATEGORY,CAT-DRY-CHILLI,Dry Chillies & Chilli Powders,FAM-SPICES,KG,NEW - kashmiri/bedgi whole and powdered,true
+CATEGORY,CAT-SPICE-POWDER,Powdered Spices,FAM-SPICES,KG,EXISTING - reused for haldi dhaniya etc.,true
+CATEGORY,CAT-MASALA-BLEND,Blended Masalas & Seasonings,FAM-SPICES,KG,NEW - kitchen king garam malvani xacuti etc.,true
+CATEGORY,CAT-DRIED-HERB,Dried Herbs & Leaves,FAM-SPICES,KG,NEW - kasuri methi oregano chilli flakes,true
+CATEGORY,CAT-SALT-SEASONING,Salt & Seasoning Salts,FAM-SPICES,KG,NEW - iodized salt black salt,true
+CATEGORY,CAT-OILS,Cooking Oils & Fats,FAM-CONDIMENTS,LTR,EXISTING - reused for coconut sunflower mustard ghee etc.,true
+CATEGORY,CAT-COCONUT-TAMARIND,"Coconut, Kokum & Tamarind",FAM-CONDIMENTS,KG,NEW - desiccated coconut kokum tamarind kudampuli,true
+CATEGORY,CAT-SAUCE-VINEGAR,"Sauces, Ketchups & Vinegars",FAM-CONDIMENTS,LTR,NEW - ketchup soya oyster fish vinegar mayo etc.,true
+CATEGORY,CAT-CANNED-TOPPING,Canned & Pickled Toppings,FAM-CONDIMENTS,CAN,NEW - tomato puree mushrooms olives jalapeno,true
+CATEGORY,CAT-BAKING-CONFECTION,"Bakery, Sugar & Confectionery",FAM-BAKING,KG,NEW - jaggery icing sugar baking powder soda cocoa vanilla,true
+CATEGORY,CAT-CONSUMABLE,Consumables & Operating Supplies,FAM-OPERATING,PCS,EXISTING - reused for foil cling napkins towels skewers,true

@@ -1,0 +1,23 @@
+uom_code,uom_name,uom_family,base_unit_flag,base_ratio,is_container,is_system
+MG,Milligram,WEIGHT,false,0.001,false,true
+G,Gram,WEIGHT,true,1,false,true
+KG,Kilogram,WEIGHT,false,1000,false,true
+TON,Metric Tonne,WEIGHT,false,1000000,false,true
+ML,Millilitre,VOLUME,true,1,false,true
+LTR,Litre,VOLUME,false,1000,false,true
+L,Litre,VOLUME,false,1000,false,true
+PCS,Piece,COUNT,true,1,false,true
+NOS,Number / Piece,COUNT,false,1,false,true
+DOZEN,Dozen,COUNT,false,12,false,true
+PACK,Pack,COUNT,false,,true,true
+BOX,Box,COUNT,false,,true,true
+BOTTLE,Bottle,COUNT,false,,true,true
+CAN,Can,COUNT,false,,true,true
+BAG,Bag / Sack,COUNT,false,,true,true
+CRATE,Crate,COUNT,false,,true,true
+TIN,Tin / Canister,COUNT,false,,true,true
+JAR,Jar,COUNT,false,,true,true
+CASE,Case,COUNT,false,,true,true
+TRAY,Tray,COUNT,false,,true,true
+SACHET,Sachet / Pouch,COUNT,false,,true,false
+ROLL,Roll,COUNT,false,,true,false

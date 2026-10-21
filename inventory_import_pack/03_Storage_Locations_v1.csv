@@ -1,0 +1,6 @@
+location_code,location_name,parent_location_code,storage_type,location_type,active
+LOC-MWH,Main Warehouse / Dry Store,,Dry,WAREHOUSE,true
+LOC-CHILL,Chilled Store,,Cold Room,COLD_STORAGE,true
+LOC-KITCHEN,Kitchen Store,,General,DISPENSE,true
+LOC-BAR,Bar Cold Room,,Cold Room,COLD_STORAGE,true
+LOC-RETAIL,Retail Store,,General,DISPENSE,true

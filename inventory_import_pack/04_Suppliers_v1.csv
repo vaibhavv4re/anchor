@@ -1,0 +1,11 @@
+supplier_code,supplier_name,contact_person,phone,email,address,gstin,active
+SUP-001,Fresh Poultry & Meats Co,Ramesh Sharma,+91 9876500001,orders@freshpoultry.example,"Mumbai, MH",27AAAAA0000A1Z5,false
+SUP-002,Coastal Seafood Suppliers,Ali Ansari,+91 9876500002,orders@coastalseafood.example,"Sassoon Docks, Mumbai",27AAAAA0000A2Z5,false
+SUP-003,Malwani Spices & Provisions Pvt Ltd,Pandit Shenoy,+91 9876500003,orders@malwanispice.example,"Ratnagiri, MH",27AAAAA0000A3Z5,false
+SUP-004,Farm Fresh Produce Union,Kisan Patil,+91 9876500004,orders@farmfresh.example,"Pune, MH",27AAAAA0000A4Z5,false
+SUP-005,Hotel Packaging & Disposables Traders,Sunil DCosta,+91 9876500005,orders@hoteltrade.example,"Navi Mumbai, MH",27AAAAA0000A5Z5,false
+SUP-101,Fresh Farm Produce Pvt Ltd,Ramesh Kumar,+91 9876543210,orders@freshfarm.com,"Plot 42 APMC Market Vashi Navi Mumbai",27AAAAA1234A1Z5,true
+SUP-102,Apex Dairy & Poultry Traders,Sunil Sharma,+91 9812345678,sales@apexdairy.com,"Gala 15 Industrial Estate Thane",27BBBBA5678B1Z2,true
+SUP-103,Royal Spice & Grocery Supplies,Anita Verma,+91 9765432109,info@royalspice.in,"88 Grain Merchant Street Crawford Market Mumbai",27CCCCA9876C1Z9,true
+SUP-104,Ocean Harvest Seafood Co,David Dsouza,+91 9823456789,fresh@oceanharvest.com,"Sassoon Dock Colaba Mumbai",27DDDDA4321D1Z8,true
+SUP-105,Beverage World Supplies,Vikram Mehta,+91 9898989898,supply@beverageworld.com,"Andheri MIDC Mumbai",27EEEEA8765E1Z4,true

@@ -17,6 +17,7 @@ import { offlineStore } from '../../../../../businessos/platform/offline_store/o
 import { CategoryRepository } from '../../../../../businessos/platform/repositories/categoryRepository.js';
 import { retailReplenishmentModel } from '../../../../../businessos/platform/retail/retailReplenishmentModel.js';
 import { barReplenishmentModel } from '../../../../../businessos/platform/bar/barReplenishmentModel.js';
+import { UOM_REGISTRY } from '../../../../../businessos/platform/uom/uomRegistry.js';
 
 export class InventoryWorkspaceView {
   constructor(deps = {}) {
@@ -41,6 +42,13 @@ export class InventoryWorkspaceView {
     this.liveInventoryCategoryFilter = 'ALL';
     this.liveInventoryStatusFilter = 'ALL';
     this.liveInventorySort = 'VALUE_DESC';
+
+    // Filters for Master Inventory (grouped/segmented view)
+    this.masterSegment = 'ALL';               // ALL | FOOD | BAR | OPERATING
+    this.masterSearch = '';
+    this.masterCategoryFilter = 'ALL';
+    this.masterStatusFilter = 'ALL';           // ALL | ACTIVE | INACTIVE
+    this.masterCollapsedCats = new Set();      // category codes currently collapsed
   }
 
   _getDataGateway() {
@@ -85,6 +93,28 @@ export class InventoryWorkspaceView {
       catList = repo.getDefaultCategories(tenantId);
     }
     return catList;
+  }
+
+  /**
+   * Classifies an item into a top-level segment for the Master Inventory view.
+   * BAR      -> category.product_family_code === 'FAM-LIQUOR'
+   * OPERATING-> category.product_family_code in ('FAM-OPERATING','FAM-SUPPLIES')
+   *            OR item.item_type in ('Consumable','Asset','Cleaning Supply','Packaging')
+   * FOOD     -> everything else (default)
+   */
+  _classifyItemSegment(item, categories) {
+    const catCode = String(item.categoryCode || item.category_code || item.category || '').toUpperCase().trim();
+    const cat = (categories || []).find(c => {
+      const cc = String(c.categoryCode || c.category_code || c.code || c.id || '').toUpperCase().trim();
+      return cc && cc === catCode;
+    });
+    const fam = String((cat && (cat.productFamilyCode || cat.product_family_code || cat.productFamily)) || '').toUpperCase().trim();
+    const type = String(item.itemType || item.item_type || item.type || '').toUpperCase().trim();
+
+    if (fam === 'FAM-LIQUOR' || fam === 'FAM-BAR') return 'BAR';
+    if (fam === 'FAM-OPERATING' || fam === 'FAM-SUPPLIES' || fam === 'FAM-PACK') return 'OPERATING';
+    if (['CONSUMABLE', 'ASSET', 'CLEANING SUPPLY', 'PACKAGING'].includes(type)) return 'OPERATING';
+    return 'FOOD';
   }
 
   _inferProductFamilyCode(category) {
@@ -145,6 +175,7 @@ export class InventoryWorkspaceView {
         await gw.getCollection('inventory', tenantId);
         await gw.getCollection('suppliers', tenantId);
         await gw.getCollection('inventory_categories', tenantId);
+        await gw.getCollection('inventory_uoms', tenantId);
         await gw.getCollection('goods_receipt_notes', tenantId);
         await gw.getCollection('purchase_orders', tenantId);
       }
@@ -680,18 +711,27 @@ export class InventoryWorkspaceView {
         });
       });
     } else if (tabKey === 'inv-uom') {
-      const defaultUomList = uoms.length ? uoms : [
-        { uomCode: 'KG', uomName: 'Kilogram', uomFamily: 'WEIGHT', conversionFactor: 1000, isBaseUnit: false },
-        { uomCode: 'G', uomName: 'Gram', uomFamily: 'WEIGHT', conversionFactor: 1, isBaseUnit: true },
-        { uomCode: 'TON', uomName: 'Metric Tonne', uomFamily: 'WEIGHT', conversionFactor: 1000000, isBaseUnit: false },
-        { uomCode: 'L', uomName: 'Litre', uomFamily: 'VOLUME', conversionFactor: 1000, isBaseUnit: false },
-        { uomCode: 'ML', uomName: 'Millilitre', uomFamily: 'VOLUME', conversionFactor: 1, isBaseUnit: true },
-        { uomCode: 'PCS', uomName: 'Piece', uomFamily: 'COUNT', conversionFactor: 1, isBaseUnit: true },
-        { uomCode: 'NOS', uomName: 'Numbers', uomFamily: 'COUNT', conversionFactor: 1, isBaseUnit: true },
-        { uomCode: 'DOZEN', uomName: 'Dozen (12)', uomFamily: 'COUNT', conversionFactor: 12, isBaseUnit: false },
-        { uomCode: 'PACK', uomName: 'Standard Pack', uomFamily: 'COUNT', conversionFactor: 1, isBaseUnit: false },
-        { uomCode: 'BOX', uomName: 'Storage Box', uomFamily: 'COUNT', conversionFactor: 1, isBaseUnit: false }
-      ];
+      // Canonical UOM list = UOM_REGISTRY (single source of truth) merged with any
+      // live Supabase/offlineStore rows so tenant-specific additions remain visible.
+      const registryUoms = Object.values(UOM_REGISTRY).map(u => ({
+        id: 'uom-' + String(u.code).toLowerCase(),
+        uomCode: u.code,
+        uomName: u.name,
+        uomFamily: u.family,
+        conversionFactor: (u.baseRatio === undefined || u.baseRatio === null) ? 1 : u.baseRatio,
+        isBaseUnit: !!u.isBase,
+        isContainer: !!u.isContainer,
+        icon: u.icon,
+        status: 'ACTIVE'
+      }));
+      const _uomMap = new Map(registryUoms.map(u => [u.uomCode, u]));
+      (Array.isArray(uoms) ? uoms : []).forEach(u => {
+        const code = (u.uomCode || u.code || '').toUpperCase().trim();
+        if (!code) return;
+        const existing = _uomMap.get(code);
+        _uomMap.set(code, existing ? { ...existing, ...u, uomCode: code } : u);
+      });
+      const defaultUomList = Array.from(_uomMap.values());
 
       const weightUoms = defaultUomList.filter(u => (u.uomFamily || u.uom_family || u.family) === 'WEIGHT');
       const volumeUoms = defaultUomList.filter(u => (u.uomFamily || u.uom_family || u.family) === 'VOLUME');
@@ -1422,12 +1462,140 @@ export class InventoryWorkspaceView {
         </div>
       `;
     } else if (tabKey === 'inv-master' || tabKey === 'master') {
+      // ---------- Segment / filter state ----------
+      const seg = this.masterSegment || 'ALL';
+      const q = (this.masterSearch || '').toLowerCase().trim();
+      const catFilter = this.masterCategoryFilter || 'ALL';
+      const statusFilter = this.masterStatusFilter || 'ALL';
+      const collapsed = this.masterCollapsedCats || new Set();
+
+      const catMeta = new Map();
+      categories.forEach(c => {
+        const code = String(c.categoryCode || c.category_code || c.code || c.id || '').toUpperCase().trim();
+        if (!code) return;
+        catMeta.set(code, {
+          name: c.categoryName || c.category_name || code,
+          family: String(c.productFamilyCode || c.product_family_code || '').toUpperCase().trim()
+        });
+      });
+
+      const withSeg = items.map(i => {
+        const code = String(i.itemCode || i.item_code || i.sku || i.code || i.id || '').toUpperCase();
+        const cat = String(i.categoryCode || i.category_code || i.category || 'GENERAL').toUpperCase();
+        return { raw: i, code, cat, segment: this._classifyItemSegment(i, categories) };
+      });
+
+      const segCounts = { ALL: withSeg.length, FOOD: 0, BAR: 0, OPERATING: 0 };
+      withSeg.forEach(x => { segCounts[x.segment] = (segCounts[x.segment] || 0) + 1; });
+
+      const filtered = withSeg.filter(x => {
+        if (seg !== 'ALL' && x.segment !== seg) return false;
+        if (catFilter !== 'ALL' && x.cat !== catFilter) return false;
+        const isAct = x.raw.active !== false;
+        if (statusFilter === 'ACTIVE' && !isAct) return false;
+        if (statusFilter === 'INACTIVE' && isAct) return false;
+        if (q) {
+          const name = String(x.raw.itemName || x.raw.item_name || x.raw.name || '').toLowerCase();
+          if (!x.code.toLowerCase().includes(q) && !name.includes(q)) return false;
+        }
+        return true;
+      });
+
+      // Group by category, preserving category-master order then any stragglers
+      const groups = new Map();
+      filtered.forEach(x => {
+        if (!groups.has(x.cat)) groups.set(x.cat, []);
+        groups.get(x.cat).push(x);
+      });
+      const orderedCatCodes = [
+        ...categories.map(c => String(c.categoryCode || c.category_code || c.code || c.id || '').toUpperCase().trim()).filter(Boolean),
+        ...Array.from(groups.keys())
+      ].filter((v, idx, arr) => v && arr.indexOf(v) === idx);
+      const groupCodes = orderedCatCodes.filter(code => groups.has(code));
+
+      const segBtnStyle = (active) => `padding:8px 16px; font-weight:700; border-radius:6px; cursor:pointer; border:1px solid ${active ? 'var(--accent-primary)' : 'var(--border-subtle)'}; background:${active ? 'var(--accent-primary)' : 'var(--bg-surface-2)'}; color:${active ? '#fff' : 'var(--text-main)'};`;
+      const SEGS = [
+        { key: 'ALL', label: ' All', count: segCounts.ALL },
+        { key: 'FOOD', label: '🍲 Food', count: segCounts.FOOD },
+        { key: 'BAR', label: '🍺 Bar', count: segCounts.BAR },
+        { key: 'OPERATING', label: '🧻 Operating', count: segCounts.OPERATING }
+      ];
+
+      const renderRow = (x) => {
+        const i = x.raw;
+        const name = i.itemName || i.item_name || i.name || '';
+        const type = i.itemType || i.item_type || i.type || 'RAW_MATERIAL';
+        const baseUom = i.baseUom || i.base_uom || i.baseUnit || 'KG';
+        const purchaseUom = i.purchaseUom || i.purchase_uom || i.purchaseUnit || baseUom;
+        let conv = Number(i.conversionFactor !== undefined ? i.conversionFactor : (i.conversion_factor !== undefined ? i.conversion_factor : 1));
+        if (baseUom.toUpperCase() === purchaseUom.toUpperCase()) conv = 1;
+        const convText = (baseUom.toUpperCase() === purchaseUom.toUpperCase()) ? '1' : `${conv} ${baseUom}/${purchaseUom}`;
+        const reorderVal = Number(i.reorderLevel !== undefined ? i.reorderLevel : (i.reorder_level !== undefined ? i.reorder_level : 0));
+        const reorderText = `${reorderVal.toLocaleString()} ${baseUom}`;
+        const isAct = i.active !== false;
+        return `
+          <tr class="row-master-item-click" data-item-code="${x.code}" style="border-bottom:1px solid var(--border-subtle); cursor:pointer;">
+            <td style="padding:8px 10px; font-weight:700; font-family:monospace; color:var(--accent-primary);">${x.code}</td>
+            <td style="padding:8px 10px; font-weight:600;">${name}</td>
+            <td style="padding:8px 10px;"><span class="badge badge-info">${type}</span></td>
+            <td style="padding:8px 10px;"><span class="badge badge-secondary">${baseUom}</span></td>
+            <td style="padding:8px 10px;"><span class="badge badge-secondary">${purchaseUom}</span></td>
+            <td style="padding:8px 10px; font-weight:600; font-size:0.8rem;">${convText}</td>
+            <td style="padding:8px 10px; font-weight:700; color:var(--status-warning);">${reorderText}</td>
+            <td style="padding:8px 10px;"><span class="badge ${isAct ? 'badge-success' : 'badge-secondary'}">${isAct ? 'ACTIVE' : 'INACTIVE'}</span></td>
+          </tr>`;
+      };
+
+      const renderGroup = (catCode) => {
+        const list = groups.get(catCode) || [];
+        const meta = catMeta.get(catCode);
+        const catName = meta ? meta.name : `${catCode} ⚠️ (not in Category Master)`;
+        const isCollapsed = collapsed.has(catCode);
+        const chevron = isCollapsed ? '▶' : '▼';
+        return `
+          <div class="master-cat-group" data-cat-code="${catCode}" style="margin-bottom:10px; border:1px solid var(--border-subtle); border-radius:6px; overflow:hidden;">
+            <div class="master-cat-header" data-cat-code="${catCode}"
+                 style="display:flex; align-items:center; gap:10px; padding:10px 14px; background:var(--bg-surface-2); cursor:pointer; user-select:none;">
+              <span style="font-size:0.75rem; color:var(--text-muted); width:14px;">${chevron}</span>
+              <strong style="color:var(--text-main); font-size:0.95rem;">${catName}</strong>
+              <span class="badge badge-secondary" style="font-size:0.7rem; padding:2px 8px; border-radius:10px;">${list.length} item${list.length === 1 ? '' : 's'}</span>
+              <span style="margin-left:auto; font-family:monospace; font-size:0.7rem; color:var(--text-muted);">${catCode}</span>
+            </div>
+            ${isCollapsed ? '' : `
+            <div class="table-responsive">
+              <table class="data-table" style="width:100%; border-collapse:collapse; font-size:0.85rem;">
+                <thead>
+                  <tr style="border-bottom:1px solid var(--border-subtle); text-align:left; background:var(--bg-surface-1);">
+                    <th style="padding:8px 10px;">Code</th>
+                    <th style="padding:8px 10px;">Item Name</th>
+                    <th style="padding:8px 10px;">Type</th>
+                    <th style="padding:8px 10px;">Base</th>
+                    <th style="padding:8px 10px;">Purchase</th>
+                    <th style="padding:8px 10px;">Conversion</th>
+                    <th style="padding:8px 10px;">Reorder</th>
+                    <th style="padding:8px 10px;">Status</th>
+                  </tr>
+                </thead>
+                <tbody>${list.map(renderRow).join('')}</tbody>
+              </table>
+            </div>`}
+          </div>`;
+      };
+
+      const catOptionsHtml = ['<option value="ALL">All Categories</option>']
+        .concat(categories.map(c => {
+          const code = String(c.categoryCode || c.category_code || c.code || c.id || '').toUpperCase().trim();
+          const name = c.categoryName || c.category_name || code;
+          return code ? `<option value="${code}" ${catFilter === code ? 'selected' : ''}>${name}</option>` : '';
+        }))
+        .join('');
+
       mount.innerHTML = `
         <div class="card animate-fade-in" style="background:var(--bg-surface-1); padding:24px; border-radius:8px;">
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px; flex-wrap:wrap; gap:12px;">
             <div>
               <h3 style="font-size:1.4rem; margin:0;">📦 Master Inventory Items Catalog (${items.length} Items)</h3>
-              <p style="color:var(--text-muted); font-size:0.85rem; margin-top:2px;">Sourced 100% directly from Supabase PostgreSQL <strong>inventory</strong> table.</p>
+              <p style="color:var(--text-muted); font-size:0.85rem; margin-top:2px;">Grouped by category. Use the tabs to switch between Food, Bar and Operating consumables.</p>
             </div>
             <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center;">
               <button class="btn-primary nav-inv-btn" data-tab="inv-master-create" style="padding:8px 14px; font-weight:700; background:var(--accent-primary); border-radius:6px; border:none; cursor:pointer; color:#fff;">
@@ -1445,64 +1613,59 @@ export class InventoryWorkspaceView {
             </div>
           </div>
 
-          <div class="table-responsive">
-            <table class="data-table" style="width:100%; border-collapse:collapse; font-size:0.85rem;">
-              <thead>
-                <tr style="border-bottom:1px solid var(--border-subtle); text-align:left; background:var(--bg-surface-2);">
-                  <th style="padding:10px;">Item Code</th>
-                  <th style="padding:10px;">Item Name</th>
-                  <th style="padding:10px;">Item Type</th>
-                  <th style="padding:10px;">Category</th>
-                  <th style="padding:10px;">Base UOM</th>
-                  <th style="padding:10px;">Purchase UOM</th>
-                  <th style="padding:10px;">Conversion</th>
-                  <th style="padding:10px;">Reorder Level</th>
-                  <th style="padding:10px;">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                ${items.map(i => {
-                  const code = i.itemCode || i.item_code || i.sku || i.code || i.id || '';
-                  const name = i.itemName || i.item_name || i.name || '';
-                  const type = i.itemType || i.item_type || i.type || 'RAW_MATERIAL';
-                  const category = i.categoryCode || i.category_code || i.category || 'GENERAL';
-                  const baseUom = i.baseUom || i.base_uom || i.baseUnit || 'KG';
-                  const purchaseUom = i.purchaseUom || i.purchase_uom || i.purchaseUnit || baseUom;
-                  let conv = Number(i.conversionFactor !== undefined ? i.conversionFactor : (i.conversion_factor !== undefined ? i.conversion_factor : 1));
-                  if (baseUom.toUpperCase() === purchaseUom.toUpperCase()) conv = 1;
-
-                  const convText = (baseUom.toUpperCase() === purchaseUom.toUpperCase()) ? '1' : `${conv} ${baseUom}/${purchaseUom}`;
-                  const reorderVal = Number(i.reorderLevel !== undefined ? i.reorderLevel : (i.reorder_level !== undefined ? i.reorder_level : 0));
-                  const reorderText = `${reorderVal.toLocaleString()} ${baseUom}`;
-                  const isAct = i.active !== false;
-
-                  const catObj = categories.find(c => {
-                    const cCode = (c.categoryCode || c.category_code || c.code || c.id || '').toUpperCase().trim();
-                    return cCode && cCode === String(category).toUpperCase().trim();
-                  });
-                  const categoryDisplay = catObj
-                    ? (catObj.categoryName || catObj.category_name || category)
-                    : `<span class="badge badge-danger" title="Category not found in Category Master" style="background:#ef4444; color:#fff; font-weight:700; font-size:0.75rem; padding:2px 8px; border-radius:4px;">⚠️ ${category || 'NONE'} (Category not found in Category Master)</span>`;
-
-                  return `
-                    <tr class="row-master-item-click" data-item-code="${code}" style="border-bottom:1px solid var(--border-subtle); cursor:pointer;">
-                      <td style="padding:10px; font-weight:700; font-family:monospace; color:var(--accent-primary);">${code}</td>
-                      <td style="padding:10px; font-weight:600;">${name}</td>
-                      <td style="padding:10px;"><span class="badge badge-info">${type}</span></td>
-                      <td style="padding:10px;">${categoryDisplay}</td>
-                      <td style="padding:10px;"><span class="badge badge-secondary">${baseUom}</span></td>
-                      <td style="padding:10px;"><span class="badge badge-secondary">${purchaseUom}</span></td>
-                      <td style="padding:10px; font-weight:600; font-size:0.8rem;">${convText}</td>
-                      <td style="padding:10px; font-weight:700; color:var(--status-warning);">${reorderText}</td>
-                      <td style="padding:10px;"><span class="badge ${isAct ? 'badge-success' : 'badge-secondary'}">${isAct ? 'ACTIVE' : 'INACTIVE'}</span></td>
-                    </tr>
-                  `;
-                }).join('')}
-              </tbody>
-            </table>
+          <!-- Segment tabs -->
+          <div style="display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px;">
+            ${SEGS.map(s => `<button type="button" class="master-seg-btn" data-seg="${s.key}" style="${segBtnStyle(seg === s.key)}">${s.label} <span style="opacity:0.75; margin-left:4px;">(${s.count})</span></button>`).join('')}
           </div>
+
+          <!-- Filter bar -->
+          <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; align-items:center;">
+            <input type="search" id="inp-master-search" placeholder="🔍 Search item code or name..." value="${q.replace(/"/g, '&quot;')}" style="flex:1; min-width:220px; padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-2); color:var(--text-main);">
+            <select id="sel-master-category" style="padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-2); color:var(--text-main); min-width:180px;">${catOptionsHtml}</select>
+            <select id="sel-master-status" style="padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-2); color:var(--text-main);">
+              <option value="ALL" ${statusFilter === 'ALL' ? 'selected' : ''}>All Status</option>
+              <option value="ACTIVE" ${statusFilter === 'ACTIVE' ? 'selected' : ''}>Active only</option>
+              <option value="INACTIVE" ${statusFilter === 'INACTIVE' ? 'selected' : ''}>Inactive only</option>
+            </select>
+            <button type="button" id="btn-master-expand-all" class="btn-secondary" style="padding:6px 12px; font-size:0.78rem; border-radius:6px; cursor:pointer; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);">Expand all</button>
+            <button type="button" id="btn-master-collapse-all" class="btn-secondary" style="padding:6px 12px; font-size:0.78rem; border-radius:6px; cursor:pointer; background:var(--bg-surface-2); border:1px solid var(--border-subtle); color:var(--text-main);">Collapse all</button>
+            <span style="margin-left:auto; font-size:0.78rem; color:var(--text-muted);">Showing <strong style="color:var(--text-main);">${filtered.length}</strong> of ${items.length}</span>
+          </div>
+
+          ${groupCodes.length === 0 ? `
+            <div style="padding:32px; text-align:center; color:var(--text-muted); border:1px dashed var(--border-subtle); border-radius:6px;">No items match the current filters.</div>
+          ` : groupCodes.map(renderGroup).join('')}
         </div>
       `;
+
+      // ---------- Event wiring ----------
+      const rerender = () => this.render(mount, session);
+      mount.querySelectorAll('.master-seg-btn').forEach(btn => {
+        btn.addEventListener('click', () => { this.masterSegment = btn.dataset.seg; rerender(); });
+      });
+      const searchInp = mount.querySelector('#inp-master-search');
+      if (searchInp) {
+        searchInp.addEventListener('input', (e) => { this.masterSearch = e.target.value; });
+        searchInp.addEventListener('change', () => rerender());
+        searchInp.addEventListener('keydown', (e) => { if (e.key === 'Enter') rerender(); });
+      }
+      const catSel = mount.querySelector('#sel-master-category');
+      if (catSel) catSel.addEventListener('change', (e) => { this.masterCategoryFilter = e.target.value; rerender(); });
+      const statSel = mount.querySelector('#sel-master-status');
+      if (statSel) statSel.addEventListener('change', (e) => { this.masterStatusFilter = e.target.value; rerender(); });
+      const expBtn = mount.querySelector('#btn-master-expand-all');
+      if (expBtn) expBtn.addEventListener('click', () => { this.masterCollapsedCats = new Set(); rerender(); });
+      const colBtn = mount.querySelector('#btn-master-collapse-all');
+      if (colBtn) colBtn.addEventListener('click', () => { this.masterCollapsedCats = new Set(groupCodes); rerender(); });
+      mount.querySelectorAll('.master-cat-header').forEach(h => {
+        h.addEventListener('click', () => {
+          const code = h.dataset.catCode;
+          const set = this.masterCollapsedCats || new Set();
+          if (set.has(code)) set.delete(code); else set.add(code);
+          this.masterCollapsedCats = set;
+          rerender();
+        });
+      });
 
       const btnImport = mount.querySelector('#btn-inv-master-import');
       if (btnImport) btnImport.addEventListener('click', () => this.openMasterInventoryImportModal(tenantId, session, mount));

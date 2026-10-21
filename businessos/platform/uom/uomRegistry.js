@@ -27,5 +27,7 @@ export const UOM_REGISTRY = {
   'TIN': { code: 'TIN', name: 'Tin / Canister', family: 'COUNT', isBase: false, isContainer: true, icon: '🛢️' },
   'JAR': { code: 'JAR', name: 'Jar', family: 'COUNT', isBase: false, isContainer: true, icon: '🫙' },
   'CASE': { code: 'CASE', name: 'Case', family: 'COUNT', isBase: false, isContainer: true, icon: '📦' },
-  'TRAY': { code: 'TRAY', name: 'Tray', family: 'COUNT', isBase: false, isContainer: true, icon: '🍱' }
+  'TRAY': { code: 'TRAY', name: 'Tray', family: 'COUNT', isBase: false, isContainer: true, icon: '🍱' },
+  'SACHET': { code: 'SACHET', name: 'Sachet / Pouch', family: 'COUNT', isBase: false, isContainer: true, icon: '📄' },
+  'ROLL': { code: 'ROLL', name: 'Roll', family: 'COUNT', isBase: false, isContainer: true, icon: '🧻' }
 };
