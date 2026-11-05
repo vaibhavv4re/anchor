@@ -8,7 +8,7 @@ import { getDeviceId } from '../../businessos/platform/metadata/entityMetadata.j
 import { platformEventBus, PlatformEventTypes } from '../../businessos/platform/events/platformEvents.js';
 import { notificationEngine } from '../../businessos/platform/notifications/notificationEngine.js';
 import { rbacEngine } from '../../businessos/platform/authorization/rbacEngine.js';
-import { normalizeRoleId, catalogWorkspaceFor } from '../../businessos/platform/authorization/roleCatalog.js';
+import { normalizeRoleId, catalogWorkspaceFor, canAccessObservatory } from '../../businessos/platform/authorization/roleCatalog.js';
 import { runCapabilityGroup1TestSuite } from '../../businessos/platform/tests/capability_group_1.test.js';
 import { runCapabilityGroup2TestSuite } from './capabilities/restaurant_layout/tests/capability_group_2.test.js';
 import { runCapabilityGroup3TestSuite } from './capabilities/guest_service/tests/capability_group_3.test.js';
@@ -48,6 +48,7 @@ import { KitchenDisplaySystemView } from './capabilities/kitchen/ui/KitchenDispl
 import { WaiterWorkspaceView } from './capabilities/guest_service/ui/WaiterWorkspaceView.js';
 import { AccountsCaWorkspaceView } from './capabilities/accounting/ui/AccountsCaWorkspaceView.js';
 import { OwnerWorkspaceView } from './capabilities/owner/ui/OwnerWorkspaceView.js';
+import { ObservabilityControlCenterView } from './capabilities/observability/ui/ObservabilityControlCenterView.js';
 import { BarWorkspaceView } from './capabilities/bar/ui/BarWorkspaceView.js';
 import { RetailWorkspaceView } from './capabilities/retail/ui/RetailWorkspaceView.js';
 import { CashierWorkspaceView } from './capabilities/billing/ui/CashierWorkspaceView.js';
@@ -182,10 +183,10 @@ export class ApplicationShell {
             </div>
 
             <button class="btn-secondary" id="btn-lock-session" title="Lock Session" style="padding:8px 12px;">🔒 Lock</button>
+            ${this._isObservatoryAllowed(canonicalRoleId) ? `<button class="btn-secondary" id="btn-observatory" title="Observability Control Center" style="padding:8px 12px;">🛰️ Observatory</button>` : ''}
             <button class="btn-secondary" id="btn-logout" title="Clock Out & Logout" style="padding:8px 12px; color:var(--status-danger);">🚪 Logout</button>
           </div>
         </header>
-
         <!-- Main Body Workspace Mount -->
         <main id="workspace-root-mount" style="flex:1; width:100%; display:flex; flex-direction:column;"></main>
         <div id="admin-modal-mount"></div>
@@ -216,6 +217,23 @@ export class ApplicationShell {
       try { this._activeWorkspaceInstance.destroy(); } catch (_) {}
     }
     this._activeWorkspaceInstance = null;
+
+    // Observatory Control Center takes precedence over normal workspace routing
+    // when on its hash route AND the role is allowlisted (superadmin/owner). All
+    // other roles fall through to their workspace (fail-closed).
+    if (this._isObservatoryRoute(canonicalRoleId)) {
+      const obsView = new ObservabilityControlCenterView({
+        ...opts,
+        onBack: () => {
+          if (typeof location !== 'undefined') location.hash = '';
+          this.activeSubView = 'auto';
+          this.render();
+        }
+      });
+      this._activeWorkspaceInstance = obsView;
+      obsView.render(rootMount, session);
+      return;
+    }
 
     if (routingWorkspace === 'superadmin' || canonicalRoleId === 'role-superadmin') {
       const superAdminWs = new SuperAdminWorkspaceView(opts);
@@ -299,10 +317,34 @@ export class ApplicationShell {
   // True when the session's role may open a sub-view. Unknown roles fail closed
   // (catalogHasPermission returns false for unrecognised role ids).
   _canViewSubView(session, view) {
+    // The observatory is a dedicated diagnostics surface restricted to an
+    // explicit allowlist. Checked BEFORE the permission map so it never depends
+    // on the '*' wildcard (which role-admin also holds and must be excluded).
+    if (view === 'observatory') {
+      const roleId = (session && (session.roleId || session.role_id)) || '';
+      return this._isObservatoryAllowed(normalizeRoleId(roleId));
+    }
     const perm = this._subViewPermission(view);
     if (!perm) return true;
     const roleId = (session && (session.roleId || session.role_id)) || 'role-waiter';
     return this.rbacEngine.hasPermission(roleId, perm);
+  }
+
+  // Observatory access allowlist (superadmin + owner only). Delegates to the
+  // canonical role catalog so the rule lives in one place and fails closed.
+  _isObservatoryAllowed(canonicalRoleId) {
+    return canAccessObservatory(canonicalRoleId);
+  }
+
+  // True when the browser is on the #/observatory route AND the role is allowed.
+  _isObservatoryRoute(canonicalRoleId) {
+    try {
+      const h = (typeof location !== 'undefined' && location.hash) || '';
+      const onRoute = h === '#/observatory' || h === '#observatory';
+      return onRoute && this._isObservatoryAllowed(canonicalRoleId);
+    } catch {
+      return false;
+    }
   }
 
   // Sidebar entry helper: emits the nav button only when the role may open it.
@@ -452,6 +494,16 @@ export class ApplicationShell {
         this.render();
       });
     }
+
+    // Observatory entry (rendered only for the allowlist). Navigates via the
+    // hash route so renderWorkspace re-resolves access on every render.
+    const obsBtn = this.appEl.querySelector('#btn-observatory');
+    if (obsBtn) {
+      obsBtn.addEventListener('click', () => {
+        if (typeof location !== 'undefined') location.hash = '#/observatory';
+        this.render();
+      });
+    }
   }
 
   bindSidebarEvents(session) {
@@ -495,6 +547,13 @@ export class ApplicationShell {
     if (this.activeSubView === 'owner') {
       const view = new OwnerWorkspaceView(opts);
       mount.appendChild(view.render(mount, session, this.activeSubView));
+    } else if (this.activeSubView === 'observatory') {
+      const view = new ObservabilityControlCenterView({
+        ...opts,
+        onBack: () => { this.activeSubView = 'auto'; this.render(); }
+      });
+      this._activeSubViewInstance = view;
+      view.render(mount, session);
     } else if (this.activeSubView === 'cashier' || this.activeSubView === 'inbox' || this.activeSubView === 'invoices' || this.activeSubView === 'payments' || this.activeSubView === 'reports' || this.activeSubView === 'shift') {
       const view = new CashierWorkspaceView(opts);
       this._activeSubViewInstance = view;

@@ -148,4 +148,15 @@ export function catalogWorkspaceFor(roleId) {
   return (getCatalogRole(roleId) || { workspace: 'waiter' }).workspace;
 }
 
+/**
+ * Observatory (Observability Control Center) access allowlist. Restricted to
+ * superadmin + owner by EXPLICIT role id, NOT the '*' permission, because
+ * role-admin also holds '*' but must not see cross-device diagnostics. Unknown
+ * roles fail closed.
+ */
+const OBSERVATORY_ALLOWED_ROLES = ['role-superadmin', 'role-owner'];
+export function canAccessObservatory(roleId) {
+  return OBSERVATORY_ALLOWED_ROLES.includes(normalizeRoleId(roleId));
+}
+
 export default ROLE_CATALOG;

@@ -42,6 +42,7 @@ export class ModularConfigView {
         <button class="config-tab ${this.activeTab === 'payments' ? 'active' : ''}" data-tab="payments">💳 Payments & Taxes</button>
         <button class="config-tab ${this.activeTab === 'printing' ? 'active' : ''}" data-tab="printing">📄 Ticket Printing</button>
         <button class="config-tab ${this.activeTab === 'system' ? 'active' : ''}" data-tab="system">⚙️ System & Idle Timeouts</button>
+        <button class="config-tab ${this.activeTab === 'observability' ? 'active' : ''}" data-tab="observability">🛰️ Observability</button>
       </div>
 
       <!-- Tab Content Area -->
@@ -205,7 +206,50 @@ export class ModularConfigView {
       `;
     }
 
+    if (this.activeTab === 'observability') {
+      const obs = config.observability || {};
+      const tier = obs.tier || 'lean';
+      const overrides = obs.deviceOverrides || {};
+      const rows = Object.keys(overrides).length
+        ? Object.entries(overrides).map(([dev, t]) => this._obsOverrideRowHtml(dev, t)).join('')
+        : `<div style="color:var(--text-muted); font-size:0.85rem;">No per-device overrides.</div>`;
+      return `
+        <div style="display:flex; flex-direction:column; gap:var(--space-md); max-width:720px;">
+          <h3>🛰️ Observability Control Center</h3>
+          <p style="color:var(--text-muted); font-size:0.875rem;">Controls how much telemetry each client device streams to the cloud Observatory. Credentials (PINs, tokens) are always redacted before capture, on every tier.</p>
+          <div style="max-width:320px;">
+            <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Tenant capture tier</label>
+            <select id="cfg-obs-tier" style="width:100%;">
+              <option value="off" ${tier === 'off' ? 'selected' : ''}>Off - no telemetry</option>
+              <option value="lean" ${tier === 'lean' ? 'selected' : ''}>Lean - errors, warnings & key lifecycle (recommended)</option>
+              <option value="full" ${tier === 'full' ? 'selected' : ''}>Full - every event (high volume)</option>
+            </select>
+          </div>
+          <div>
+            <label style="display:block; font-size:0.875rem; margin-bottom:6px;">Per-device overrides</label>
+            <p style="color:var(--text-muted); font-size:0.8rem; margin-top:0;">Force one terminal to a tier (e.g. <em>full</em> to debug a specific device) without changing the tenant default.</p>
+            <div id="obs-override-rows" style="display:flex; flex-direction:column; gap:var(--space-sm);">${rows}</div>
+            <div><button class="btn-secondary" id="btn-obs-add-override" style="margin-top:8px;">+ Add device override</button></div>
+          </div>
+          <button class="btn-primary" id="btn-save-observability" style="align-self:flex-start;">Save Observability Settings</button>
+        </div>
+      `;
+    }
+
     return `<div style="color:var(--text-muted);">Tab settings under ${this.activeTab}</div>`;
+  }
+
+  _obsOverrideRowHtml(dev = '', tier = 'full') {
+    const esc = (v) => String(v == null ? '' : v).replace(/"/g, '&quot;');
+    return `
+      <div class="obs-override-row" style="display:grid; grid-template-columns:1fr 160px auto; gap:8px; align-items:center;">
+        <input class="inp-obs-dev" placeholder="Device ID (e.g. DEV-1)" value="${esc(dev)}" style="width:100%;">
+        <select class="inp-obs-tier">
+          ${['off', 'lean', 'full'].map((t) => `<option value="${t}" ${tier === t ? 'selected' : ''}>${t}</option>`).join('')}
+        </select>
+        <button type="button" class="btn-secondary btn-del-obs-override" style="padding:6px 10px;">✕</button>
+      </div>
+    `;
   }
 
   _printerRowHtml(p = {}, i = 0) {
@@ -316,6 +360,42 @@ export class ModularConfigView {
         alert('Payments & tax defaults saved (synced to cloud).');
       });
     }
+
+    // ---- Observability ------------------------------------------------------
+    const addOverride = this.container.querySelector('#btn-obs-add-override');
+    if (addOverride) {
+      addOverride.addEventListener('click', () => {
+        const rows = this.container.querySelector('#obs-override-rows');
+        const placeholder = rows.querySelector('div[style*="color:var(--text-muted)"]');
+        if (placeholder) rows.innerHTML = '';
+        rows.insertAdjacentHTML('beforeend', this._obsOverrideRowHtml('', 'full'));
+        this._bindObsOverrideDeletes();
+      });
+      this._bindObsOverrideDeletes();
+    }
+
+    const saveObs = this.container.querySelector('#btn-save-observability');
+    if (saveObs) {
+      saveObs.addEventListener('click', async () => {
+        const tier = this.container.querySelector('#cfg-obs-tier').value;
+        const deviceOverrides = {};
+        this.container.querySelectorAll('.obs-override-row').forEach((row) => {
+          const dev = row.querySelector('.inp-obs-dev').value.trim();
+          const t = row.querySelector('.inp-obs-tier').value;
+          if (dev) deviceOverrides[dev] = t;
+        });
+        await saveSection('observability', { tier, deviceOverrides });
+        alert('Observability settings saved (synced to cloud).');
+      });
+    }
+  }
+
+  _bindObsOverrideDeletes() {
+    this.container.querySelectorAll('.btn-del-obs-override').forEach((btn) => {
+      if (btn.dataset.bound) return;
+      btn.dataset.bound = '1';
+      btn.addEventListener('click', () => btn.closest('.obs-override-row').remove());
+    });
   }
 
   _bindPrinterRowDeletes() {

@@ -96,14 +96,15 @@ export class AuthEngine {
     // staff resolve from real identity/employee data so the local path can never
     // invent privileges.
     if (sPin === '888888') {
-      // 1. System Superadmin PIN (offline-dev convenience)
+      // 1. System Superadmin PIN (offline-dev convenience; break-glass only)
       employeeName = 'System Superadmin';
       roleId = 'role-superadmin';
       tenantId = 'system';
-    } else if (matchedTenant || sPin === '999999') {
-      // 2. Tenant Admin PIN (offline-dev convenience)
-      tenantId = matchedTenant ? (matchedTenant.tenantId || matchedTenant.tenant_id || tenantId) : tenantId;
-      employeeName = matchedTenant ? (matchedTenant.adminName || matchedTenant.admin_name || 'General Manager') : 'General Manager';
+    } else if (matchedTenant) {
+      // 2. Tenant Admin PIN - resolved strictly from a real tenants row (admin_pin),
+      //    never from a hardcoded literal. No Supabase data, no admin session.
+      tenantId = matchedTenant.tenantId || matchedTenant.tenant_id || tenantId;
+      employeeName = matchedTenant.adminName || matchedTenant.admin_name || 'General Manager';
       roleId = 'role-admin';
     } else {
       // 3. Employee PIN / Identity lookup - data-driven only.

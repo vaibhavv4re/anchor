@@ -35,7 +35,11 @@ const HARDENING_TESTS = [
   'test-a3-server-lockdown.js',
   'test-cloud-sync-roundtrip.js',
   'test-ca-readonly-enforcement.js',
-  'test-supabase-write-projection.js'
+  'test-supabase-write-projection.js',
+  'test-telemetry-capture-tiers.js',
+  'test-telemetry-redaction.js',
+  'test-telemetry-flush.js',
+  'test-observability-access.js'
 ];
 
 function walk(dir, out) {

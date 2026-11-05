@@ -69,17 +69,11 @@ export class IdentityModel {
       }
     }
 
-    if (!found && (pin === '888888' || pin === '999999' || pin === '777777')) {
-      const isSuper = pin === '888888';
-      const isAdmin = pin === '999999';
-      found = {
-        id: isSuper ? 'id-superadmin' : (isAdmin ? 'id-admin' : 'id-ca'),
-        pinHash: hashed,
-        employeeId: isSuper ? 'emp-superadmin' : (isAdmin ? 'emp-admin' : 'emp-ca'),
-        status: 'ACTIVE'
-      };
-    }
-
+    // No hardcoded PIN -> identity fabrication. A PIN resolves ONLY from real
+    // Supabase data (a hashed identities row, or an employee row that still
+    // carries a legacy embedded PIN). Nothing here may invent an identity for a
+    // privileged role, so the local path can never mint an admin/CA out of a
+    // static PIN. (The superadmin break-glass lives server-side in pin-login.)
     return found || null;
   }
 

@@ -9,6 +9,6 @@ window.__APP_ENV__ = window.__APP_ENV__ || {};
 Object.assign(window.__APP_ENV__, {
   "SUPABASE_URL": "",
   "SUPABASE_ANON_KEY": "",
-  "AUTH_MODE": "",
+  "AUTH_MODE": "server",
   "WRITES_MODE": ""
 });

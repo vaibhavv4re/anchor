@@ -1,6 +1,10 @@
 import { createPlatformContainer } from '../../businessos/platform/platformContainer.js';
 import { createApplicationContainer } from '../../businessos/platform/container/applicationContainer.js';
 import { runtimeConfig } from '../../businessos/platform/cloud/runtimeConfig.js';
+import { telemetryCollector } from '../../businessos/platform/observability/telemetryCollector.js';
+import { healthMonitor } from '../../businessos/platform/health/healthMonitor.js';
+import { systemConfigStore } from '../../businessos/platform/config/systemConfigStore.js';
+import { getDeviceId } from '../../businessos/platform/metadata/entityMetadata.js';
 import { ApplicationShell } from './app.js';
 
 /**
@@ -129,5 +133,20 @@ export function startModularApp(options = {}) {
   }
 
   appGraph.shell.init();
+
+  // Observability Control Center - silent telemetry capture. Guarded so a
+  // capture failure can NEVER affect the running app, and skipped entirely when
+  // the tenant config sets tier `off`. Health + config are injected here so the
+  // collector stays decoupled and Node-testable.
+  try {
+    telemetryCollector.init(appGraph.platform.eventBus, {
+      deviceId: getDeviceId(),
+      getObservabilitySection: () => systemConfigStore.getSection('observability'),
+      healthProvider: () => healthMonitor.getSystemHealth()
+    });
+  } catch (e) {
+    console.warn('[Bootstrap] Observability collector init skipped:', e && e.message);
+  }
+
   return appGraph.shell;
 }
