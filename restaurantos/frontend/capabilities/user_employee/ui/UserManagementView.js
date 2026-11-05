@@ -5,7 +5,8 @@
  */
 
 import { offlineStore } from '../../../../../businessos/platform/offline_store/offlineStore.js';
-import { identityModel } from '../../../../../businessos/platform/identity/identityModel.js';
+import { identityModel, hashPin } from '../../../../../businessos/platform/identity/identityModel.js';
+import { listCatalogRoles, normalizeRoleId, catalogWorkspaceFor } from '../../../../../businessos/platform/authorization/roleCatalog.js';
 
 export class UserManagementView {
   constructor(deps = {}) {
@@ -46,27 +47,25 @@ export class UserManagementView {
   }
 
   getStandardRoles() {
-    const defaultRoles = [
-      { id: 'role-superadmin', name: 'Super Admin', workspace: 'superadmin' },
-      { id: 'role-admin', name: 'Admin', workspace: 'admin' },
-      { id: 'role-manager', name: 'Manager', workspace: 'manager' },
-      { id: 'role-ca', name: 'Chartered Accountant / CA Auditor', workspace: 'ca' },
-      { id: 'role-waiter', name: 'Waiter', workspace: 'waiter' },
-      { id: 'role-chef', name: 'Chef', workspace: 'kitchen' },
-      { id: 'role-cashier', name: 'Cashier & Billing', workspace: 'cashier' },
-      { id: 'role-inventory-manager', name: 'Inventory Manager', workspace: 'inventory' },
-      { id: 'role-bar', name: 'Bartender', workspace: 'bar' }
-    ];
+    // Canonical catalog is the single source of truth for the assignable roles
+    // (id + name + workspace), eliminating the old drift where the UI offered
+    // role-bar / role-inventory-manager while the router used other strings.
+    const defaultRoles = listCatalogRoles()
+      // The cross-tenant platform operator is provisioned by the Super Admin
+      // console, never from tenant staff onboarding, so hide it here.
+      .filter((r) => r.id !== 'role-superadmin')
+      .map((r) => ({ id: r.id, name: r.name, workspace: r.workspace }));
 
     const rolesFromStore = this._getCollection('roles') || [];
     const combinedMap = new Map();
-    defaultRoles.forEach(r => combinedMap.set(r.id, r));
-    rolesFromStore.forEach(r => {
+    defaultRoles.forEach((r) => combinedMap.set(r.id, r));
+    rolesFromStore.forEach((r) => {
       if (r && r.id) {
-        combinedMap.set(r.id, {
-          id: r.id,
+        const id = normalizeRoleId(r.id);
+        combinedMap.set(id, {
+          id,
           name: r.name || r.id,
-          workspace: r.workspace || (r.id === 'role-ca' ? 'ca' : 'waiter')
+          workspace: r.workspace || catalogWorkspaceFor(id)
         });
       }
     });
@@ -83,7 +82,9 @@ export class UserManagementView {
       const avatarUrl = emp.avatarUrl || emp.avatar_url || `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(emp.name || 'Staff')}`;
       const empName = emp.name || emp.employeeName || 'Staff Member';
       const roleName = role ? role.name : (emp.roleId ? emp.roleId.replace('role-', '').toUpperCase() : 'Staff');
-      const pinDisplay = (emp.data && emp.data.pinDisplay) ? emp.data.pinDisplay : (emp.pinDisplay || (emp.adminPin ? emp.adminPin : '******'));
+      // Never render plaintext PINs (historical data.pinDisplay/adminPin leaks).
+      // Access is proven only by logging in; the table masks the credential.
+      const pinDisplay = '••••••';
 
       return `
         <tr>
@@ -221,7 +222,7 @@ export class UserManagementView {
     });
 
     const form = modalEl.querySelector('#form-onboard-staff');
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
 
       const name = modalEl.querySelector('#input-staff-name').value.trim();
@@ -234,50 +235,58 @@ export class UserManagementView {
         return;
       }
 
+      // Security-critical: never persist the plaintext PIN. Hash it here and
+      // store ONLY the hash on the identity row; the employee record carries
+      // no PIN material at all (previously wrote pin/pinDisplay in plaintext).
+      const pinHash = await hashPin(pin);
+      const session = typeof sessionStorage !== 'undefined' ? JSON.parse(sessionStorage.getItem('ros_session') || '{}') : {};
+      const tenantId = session.tenantId || 'tenant_h0qc7wf';
+      const identityId = 'id_' + Math.random().toString(36).substring(2, 9);
+      const employeeId = 'emp_' + Math.random().toString(36).substring(2, 9);
+
       const roleObj = roles.find(r => r.id === roleId);
-      const workspaceDefault = roleObj ? roleObj.workspace : (roleId === 'role-manager' ? 'manager' : 'waiter');
+      const workspaceDefault = roleObj ? roleObj.workspace : catalogWorkspaceFor(roleId);
 
       const newEmp = {
-        id: 'emp-' + pin,
-        identityId: 'id-' + pin,
+        id: employeeId,
+        identityId,
+        tenantId,
+        tenant_id: tenantId,
         name,
         roleId,
-        pin,
-        pinDisplay: pin,
+        role_id: roleId,
         workspaceDefault,
+        workspace_default: workspaceDefault,
         status: 'ACTIVE',
         avatarUrl: `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(name)}`,
-        data: { pinDisplay: pin, pin }
+        data: { identityId, roleId, workspaceDefault }
+      };
+
+      const identityRow = {
+        id: identityId,
+        tenant_id: tenantId,
+        employee_id: employeeId,
+        pin_hash: pinHash,
+        pinHash,
+        status: 'ACTIVE',
+        createdAt: new Date().toISOString()
       };
 
       // 1. Save to Supabase DataGateway if online (DataGateway handles both local cache and cloud Supabase sync)
       const gw = this.dataGateway || (typeof window !== 'undefined' && window.__APP__ && window.__APP__.platform ? window.__APP__.platform.dataGateway : null);
       if (gw && typeof gw.create === 'function') {
+        gw.create('identities', identityRow);
         gw.create('employees', newEmp);
-        gw.create('identities', {
-          id: newEmp.identityId,
-          tenant_id: 'tenant_h0qc7wf',
-          pin_hash: pin,
-          status: 'ACTIVE'
-        });
       } else {
+        const identities = offlineStore.getCollection('identities') || [];
+        if (!identities.some(i => i.id === identityId)) {
+          identities.push(identityRow);
+          offlineStore.setCollection('identities', identities);
+        }
         const emps = offlineStore.getCollection('employees') || [];
-        if (!emps.some(e => e.id === newEmp.id)) {
+        if (!emps.some(e => e.id === employeeId)) {
           emps.push(newEmp);
           offlineStore.setCollection('employees', emps);
-        }
-        const identities = offlineStore.getCollection('identities') || [];
-        if (!identities.some(i => i.id === newEmp.identityId)) {
-          identities.push({
-            id: newEmp.identityId,
-            employeeId: newEmp.id,
-            name: newEmp.name,
-            pin,
-            pinHash: pin,
-            status: 'ACTIVE',
-            createdAt: new Date().toISOString()
-          });
-          offlineStore.setCollection('identities', identities);
         }
       }
 

@@ -15,7 +15,9 @@
 //   You MUST add the shared HS256 signing secret as a custom secret named
 //   JWT_SECRET (Dashboard: Project Settings -> API -> JWT Secret -> Reveal).
 //   Never put any of these in a client file.
-// Optional: SUPERADMIN_PIN (defaults to 888888), TENANT_ADMIN_PIN (defaults to 999999)
+// Optional: SUPERADMIN_PIN (defaults to 888888) - documented break-glass only;
+// maps directly to the seeded superadmin identity. All other principals (staff
+// and tenant admins) authenticate exclusively via hashed identities.pin_hash.
 //
 // The client calls this only when AUTH_MODE=server (Stage 1A rollout gate);
 // otherwise the legacy local auth path is used, so this is non-breaking.
@@ -92,7 +94,6 @@ Deno.serve(async (req: Request) => {
     return new Response(JSON.stringify({ error: 'AUTH_CONFIG_MISSING' }), { status: 500, headers: { ...cors(), 'Content-Type': 'application/json' } });
   }
   const SUPERADMIN_PIN = Deno.env.get('SUPERADMIN_PIN') || '888888';
-  const TENANT_ADMIN_PIN = Deno.env.get('TENANT_ADMIN_PIN') || '999999';
 
   const ip = req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() || 'unknown';
   if (rateLimited(ip)) {
@@ -116,9 +117,15 @@ Deno.serve(async (req: Request) => {
   let claims: Record<string, unknown> | null = null;
 
   if (pin === SUPERADMIN_PIN) {
+    // Documented break-glass only: the env SUPERADMIN_PIN maps directly to the
+    // seeded superadmin identity (tenant 'system'). Normal superadmin logins
+    // resolve through the hashed-identity path below.
     claims = { sub: 'id-superadmin', tenant_id: 'system', role_id: 'role-superadmin', workspace: 'superadmin' };
   } else {
-    // 1. Employee identity by hashed PIN
+    // 1. Any principal (employee, tenant admin, superadmin) resolves solely via
+    //    its hashed identity row. Tenant admins now have their own identities
+    //    (created at onboarding), so the legacy plaintext tenants.admin_pin
+    //    lookup - and its OR-clause bypass - is removed entirely.
     const hash = await sha256Hex(pin);
     const ident = await fetch(
       `${SUPABASE_URL}/rest/v1/identities?pin_hash=eq.${hash}&status=eq.ACTIVE&select=*`,
@@ -132,34 +139,17 @@ Deno.serve(async (req: Request) => {
         { headers }
       ).then(r => r.json()).catch(() => []);
       const employee = Array.isArray(emp) ? emp[0] : null;
-      claims = {
-        sub: employee ? employee.id : identity.id,
-        tenant_id: identity.tenant_id || (employee && employee.tenant_id) || 'tenant_h0qc7wf',
-        role_id: employee ? (employee.role_id || 'role-waiter') : 'role-waiter',
-        workspace: employee ? (employee.workspace_default || 'waiter') : 'waiter'
-      };
-    }
 
-    // 2. Tenant admin login. The SUBMITTED pin must match a tenant's stored
-    //    admin_pin, OR equal the bootstrap TENANT_ADMIN_PIN (which resolves the
-    //    primary tenant). NOTE: the previous `or=(admin_pin.eq.<pin>,
-    //    admin_pin.eq.<TENANT_ADMIN_PIN>)` form matched the tenant whose stored
-    //    admin_pin was the bootstrap value for *any* submitted pin, minting an
-    //    admin token for every login - an auth bypass. It is removed here.
-    if (!claims) {
-      let admins = await fetch(
-        `${SUPABASE_URL}/rest/v1/tenants?admin_pin=eq.${encodeURIComponent(pin)}&select=*&limit=1`,
-        { headers }
-      ).then(r => r.json()).catch(() => []);
-      if ((!Array.isArray(admins) || admins.length === 0) && pin === TENANT_ADMIN_PIN) {
-        admins = await fetch(
-          `${SUPABASE_URL}/rest/v1/tenants?select=*&limit=1`,
-          { headers }
-        ).then(r => r.json()).catch(() => []);
-      }
-      if (Array.isArray(admins) && admins.length > 0) {
-        const t = admins[0];
-        claims = { sub: t.tenant_id, tenant_id: t.tenant_id, role_id: 'role-admin', workspace: 'admin' };
+      if (employee) {
+        claims = {
+          sub: employee.id,
+          tenant_id: employee.tenant_id || identity.tenant_id || 'tenant_h0qc7wf',
+          role_id: employee.role_id || 'role-waiter',
+          workspace: employee.workspace_default || 'waiter'
+        };
+      } else if ((identity.tenant_id || '') === 'system') {
+        // Seeded superadmin identity has no employee row.
+        claims = { sub: identity.id, tenant_id: 'system', role_id: 'role-superadmin', workspace: 'superadmin' };
       }
     }
   }

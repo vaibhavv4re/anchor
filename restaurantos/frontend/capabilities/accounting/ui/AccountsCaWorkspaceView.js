@@ -14,6 +14,8 @@ import { menuMasterModel } from '../../../../../businessos/platform/ordering/men
 import { platformEventBus } from '../../../../../businessos/platform/events/platformEvents.js';
 import { TaxInvoicePrintModal } from '../../billing/ui/TaxInvoicePrintModal.js';
 import { ExportEngine } from '../../../../../businessos/platform/accounting/exportEngine.js';
+import { rbacEngine } from '../../../../../businessos/platform/authorization/rbacEngine.js';
+import { normalizeRoleId } from '../../../../../businessos/platform/authorization/roleCatalog.js';
 
 export class AccountsCaWorkspaceView {
   constructor(deps = {}) {
@@ -83,6 +85,9 @@ export class AccountsCaWorkspaceView {
 
   updateContent(sessionUser = null) {
     if (!this.container) return;
+    // Resolve the acting role once per render so every later re-render (which
+    // passes no session) still knows whether this is a read-only CA audit view.
+    this._resolveSessionRole(sessionUser);
 
     this.container.innerHTML = `
       <!-- TOP FINANCIAL DATA LAYER HEADER -->
@@ -148,6 +153,89 @@ export class AccountsCaWorkspaceView {
     `;
 
     this.bindEvents();
+    this._applyReadOnlyChrome();
+  }
+
+  // Resolve + memoize the acting role id (normalized to a canonical catalog id).
+  _resolveSessionRole(sessionUser) {
+    const incoming = sessionUser && (sessionUser.roleId || sessionUser.role_id);
+    if (incoming) {
+      this._roleId = normalizeRoleId(incoming);
+      return;
+    }
+    if (this._roleId) return;
+    // Fall back to the persisted session (render is normally called with a
+    // session, but realtime refreshes re-render without one).
+    try {
+      const raw = (typeof sessionStorage !== 'undefined' && sessionStorage.getItem('ros_session'))
+        || (typeof localStorage !== 'undefined' && localStorage.getItem('anchor_active_session'));
+      if (raw) {
+        const s = JSON.parse(raw);
+        const rid = s && (s.roleId || s.role_id);
+        if (rid) { this._roleId = normalizeRoleId(rid); return; }
+      }
+    } catch (_) { /* best-effort */ }
+    // Fail closed: an unknown viewer of the accounts workspace is treated as
+    // read-only rather than being handed write authority.
+    this._roleId = 'role-ca';
+  }
+
+  // CA (and any role without accounting.write) gets a read-only audit surface.
+  _isReadOnly() {
+    return !rbacEngine.hasPermission(this._roleId || 'role-ca', 'accounting.write');
+  }
+
+  // Guard for mutating handlers. Returns false (and warns) when read-only.
+  _guardWrite() {
+    if (this._isReadOnly()) {
+      if (typeof alert === 'function') {
+        alert('\ud83d\udd12 Read-only audit mode: your role cannot modify financial records. Use Export to download data.');
+      }
+      return false;
+    }
+    return true;
+  }
+
+  // Insert the read-only banner and disable write-capable controls for auditors.
+  _applyReadOnlyChrome() {
+    if (!this.container) return;
+    if (!this._isReadOnly()) return;
+
+    // Hide the mutating tabs / actions entirely (Tax Setup is a write surface).
+    const taxTabBtn = this.container.querySelector('.btn-ca-tab[data-tab="tax_setup"]');
+    if (taxTabBtn) taxTabBtn.style.display = 'none';
+
+    const writeSelectors = [
+      '#btn-lock-period',
+      '#btn-open-add-supplier-invoice',
+      '#btn-open-add-expense-modal',
+      '#btn-approve-ap-invoice',
+      '.btn-trigger-match',
+      '.btn-open-pay-auth'
+    ];
+    writeSelectors.forEach((sel) => {
+      this.container.querySelectorAll(sel).forEach((el) => {
+        el.disabled = true;
+        el.style.opacity = '0.45';
+        el.style.cursor = 'not-allowed';
+        el.title = 'Read-only audit mode';
+      });
+    });
+
+    if (this.activeTab === 'tax_setup') {
+      // Auditor landed on a write tab - bounce to the read-only overview.
+      this.activeTab = 'overview';
+      this.updateContent();
+      return;
+    }
+
+    // Audit banner under the nav bar.
+    const banner = document.createElement('div');
+    banner.style.cssText = 'background:rgba(245,158,11,0.12); border-bottom:1px solid rgba(245,158,11,0.3); padding:8px 24px; font-size:0.8rem; font-weight:700; color:var(--accent-primary);';
+    banner.textContent = '\ud83d\udd12 Read-only audit mode - records can be viewed and exported, not edited.';
+    const navBar = this.container.children[1];
+    if (navBar && navBar.nextSibling) navBar.parentNode.insertBefore(banner, navBar.nextSibling);
+    else this.container.appendChild(banner);
   }
 
   renderPeriodStatusBadge() {
@@ -1342,6 +1430,7 @@ export class AccountsCaWorkspaceView {
     const btnSave = c.querySelector('#btn-save-tax-config');
     if (btnSave) {
       btnSave.addEventListener('click', () => {
+        if (!this._guardWrite()) return;
         try {
           const cfg = taxConfigurationModel.getTaxConfiguration();
 
@@ -1874,6 +1963,7 @@ export class AccountsCaWorkspaceView {
     const btnLock = this.container.querySelector('#btn-lock-period');
     if (btnLock) {
       btnLock.addEventListener('click', () => {
+        if (!this._guardWrite()) return;
         const periodId = financialPeriodService.getPeriodIdForDate(new Date());
         financialPeriodService.lockPeriod(periodId);
         alert(`🔒 Financial Period ${periodId} successfully LOCKED!`);
@@ -1964,6 +2054,7 @@ export class AccountsCaWorkspaceView {
     if (formAddInv) {
       formAddInv.addEventListener('submit', (e) => {
         e.preventDefault();
+        if (!this._guardWrite()) return;
         const supplierInvoiceNumber = this.container.querySelector('#inp-ap-inv-no').value.trim();
         const supplierCode = this.container.querySelector('#inp-ap-supplier-code').value.trim();
         const poNumber = this.container.querySelector('#inp-ap-po-no').value.trim() || null;
@@ -2003,6 +2094,7 @@ export class AccountsCaWorkspaceView {
     if (formAddExp) {
       formAddExp.addEventListener('submit', (e) => {
         e.preventDefault();
+        if (!this._guardWrite()) return;
         const vendor = this.container.querySelector('#inp-exp-vendor').value.trim();
         const taxable = parseFloat(this.container.querySelector('#inp-exp-taxable').value) || 0;
         alert(`💡 Operational Expense of ₹${taxable.toFixed(2)} to ${vendor} saved!`);
@@ -2031,6 +2123,7 @@ export class AccountsCaWorkspaceView {
     // Run 3-Way Match Trigger
     this.container.querySelectorAll('.btn-trigger-match').forEach(btn => {
       btn.addEventListener('click', () => {
+        if (!this._guardWrite()) return;
         const invId = btn.dataset.invId;
         try {
           const result = apMatchingEngine.perform3WayMatch(invId);
@@ -2046,6 +2139,7 @@ export class AccountsCaWorkspaceView {
     const btnApproveInv = this.container.querySelector('#btn-approve-ap-invoice');
     if (btnApproveInv) {
       btnApproveInv.addEventListener('click', () => {
+        if (!this._guardWrite()) return;
         const invId = btnApproveInv.dataset.invId;
         try {
           supplierInvoiceModel.approveSupplierInvoice(invId, 'CA Auditor');
@@ -2080,6 +2174,7 @@ export class AccountsCaWorkspaceView {
     if (formPayAuth) {
       formPayAuth.addEventListener('submit', (e) => {
         e.preventDefault();
+        if (!this._guardWrite()) return;
         const supplierInvoiceId = this.showPaymentAuthInvoiceId;
         const amount = parseFloat(this.container.querySelector('#inp-pay-amount').value) || 0;
         const paymentMethod = this.container.querySelector('#inp-pay-method').value;

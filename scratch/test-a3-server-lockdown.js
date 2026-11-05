@@ -1,12 +1,13 @@
 /**
- * A3 scenario check (plan Test Plan item 1):
- * AUTH_MODE=server + pin-login Edge Function unreachable (infra fallback) →
- *   - privileged hardcoded PINs (888888 / 999999 / 000000 / 777777) FAIL CLOSED
- *   - unknown PIN FAILS (no fabricated employee synthesis)
- *   - employee PIN matching a real hydrated row still authenticates
+ * A3 scenario check (plan Test Plan: "auth fail-closed when server unreachable").
+ *
+ * Production posture (AUTH_MODE=server): the pin-login Edge Function is the ONLY
+ * authority. When it is unreachable the engine FAILS CLOSED - no session is minted
+ * locally for ANY PIN (privileged admin/superadmin shortcuts or a real employee PIN),
+ * so an offline attacker can never forge an admin/CA role. The data-driven local
+ * path is reachable ONLY when server auth is disabled (clearly-gated offline dev),
+ * and even then it never fabricates an identity from a hardcoded PIN.
  */
-process.env.AUTH_MODE = 'server';
-
 import { AuthEngine } from '../businessos/platform/authentication/authEngine.js';
 
 const employees = [
@@ -16,56 +17,78 @@ const employees = [
 const stubDg = {
   async getCollection(name) {
     if (name === 'employees') return employees;
-    if (name === 'tenants') return [{ tenantId: 'tenant_h0qc7wf', adminPin: '999999' }];
+    if (name === 'tenants') return [];
     return [];
   }
 };
 
-// Simulate pin-login unreachable (404/5xx/network) so the local fallback path
-// governed by the A3 lockdown is exercised.
-class InfraFallbackAuthEngine extends AuthEngine {
-  async _authenticateViaServer() {
-    return { infraUnavailable: true };
+// pin-login unreachable (function undeployed / network down).
+class UnreachableAuthEngine extends AuthEngine {
+  async _authenticateViaServer() { return { infraUnavailable: true }; }
+}
+
+// pin-login reachable & authoritative.
+class ReachableAuthEngine extends AuthEngine {
+  async _authenticateViaServer(pin, deviceId) {
+    if (pin === '222222') {
+      return {
+        success: true,
+        workspace: 'waiter',
+        session: {
+          employeeId: 'emp-real-1', employeeName: 'Suresh Kumar', roleId: 'role-waiter',
+          tenantId: 'tenant_h0qc7wf', workspace: 'waiter', deviceId, status: 'ACTIVE'
+        }
+      };
+    }
+    return { success: false, error: 'Invalid PIN or credentials' };
   }
 }
 
 async function main() {
-  const engine = new InfraFallbackAuthEngine({ dataGateway: stubDg });
   let failures = 0;
   const check = (label, cond) => {
     console.log(`  ${cond ? '✓' : '✗'} ${label}`);
     if (!cond) failures++;
   };
 
-  const privileged = ['888888', '999999', '000000', '777777'];
-  for (const pin of privileged) {
-    const res = await engine.authenticate(pin, 'TEST-SCREEN-A');
-    check(`privileged PIN ${pin} fails closed`, res && res.success === false);
+  // ---- Server mode: FAIL CLOSED when the Edge Function is unreachable ----
+  process.env.AUTH_MODE = 'server';
+  const offEngine = new UnreachableAuthEngine({ dataGateway: stubDg });
+  for (const pin of ['888888', '999999', '000000', '777777', '222222']) {
+    const res = await offEngine.authenticate(pin, 'TEST-SCREEN-A');
+    check(`server-unreachable PIN ${pin} fails closed (no local role mint)`, res && res.success === false);
   }
 
-  const unknown = await engine.authenticate('123456', 'TEST-SCREEN-A');
-  check('unknown PIN rejected (no fabricated employee)', unknown && unknown.success === false);
+  // ---- Server mode: authoritative when reachable ----
+  const onEngine = new ReachableAuthEngine({ dataGateway: stubDg });
+  const ok = await onEngine.authenticate('222222', 'TEST-SCREEN-A');
+  check('server-reachable real PIN authenticates from claims', ok && ok.success === true && ok.session.roleId === 'role-waiter');
+  check('server session carries self-reported deviceId', !!(ok.session && ok.session.deviceId === 'TEST-SCREEN-A'));
+  const bad = await onEngine.authenticate('123456', 'TEST-SCREEN-A');
+  check('server-reachable unknown PIN rejected', bad && bad.success === false);
 
-  const employee = await engine.authenticate('222222', 'TEST-SCREEN-A');
-  check('real employee PIN authenticates via fallback', employee && employee.success === true);
-  check('session carries self-reported deviceId', employee && employee.session && employee.session.deviceId === 'TEST-SCREEN-A');
+  // ---- Offline-dev mode (server auth disabled): data-driven local path only ----
+  delete process.env.AUTH_MODE;
+  const localEngine = new AuthEngine({ dataGateway: stubDg });
+  const localEmp = await localEngine.authenticate('222222', 'TEST-SCREEN-C');
+  check('offline-dev real employee PIN authenticates from data', localEmp && localEmp.success === true);
+  check('offline-dev session carries self-reported deviceId', !!(localEmp.session && localEmp.session.deviceId === 'TEST-SCREEN-C'));
+  const localUnknown = await localEngine.authenticate('123456', 'TEST-SCREEN-C');
+  check('offline-dev unknown PIN rejected (no fabricated employee)', localUnknown && localUnknown.success === false);
 
-  // Typed event contract (A1): EMPLOYEE_AUTHENTICATED fired alongside raw event.
+  // Typed event contract (real authenticate path): EMPLOYEE_AUTHENTICATED fired.
   let typedSeen = false;
-  engine.platformEventBus.subscribe('platform:employee:authenticated', () => { typedSeen = true; });
-  await engine.authenticate('222222', 'TEST-SCREEN-B');
+  localEngine.platformEventBus.subscribe('platform:employee:authenticated', () => { typedSeen = true; });
+  await localEngine.authenticate('222222', 'TEST-SCREEN-D');
   check('EMPLOYEE_AUTHENTICATED typed event published on login', typedSeen);
 
-  // Lock event contract (A1/A2): typed SESSION_LOCKED carries the snapshot.
+  // Lock event contract: typed SESSION_LOCKED carries the snapshot.
   let lockPayload = null;
-  engine.platformEventBus.subscribe('platform:session:locked', (env) => { lockPayload = env && env.payload; });
-  engine.lockSession({ reason: 'MANUAL' });
+  localEngine.platformEventBus.subscribe('platform:session:locked', (env) => { lockPayload = env && env.payload; });
+  localEngine.lockSession({ reason: 'MANUAL' });
   check('SESSION_LOCKED typed event published with snapshot', !!(lockPayload && lockPayload.session && lockPayload.session.employeeName));
 
-  const unlockRes = await engine.unlockSession('222222');
-  check('unlockSession re-mints session for same employee', unlockRes && unlockRes.success === true);
-
-  console.log(failures === 0 ? '\nA3/A1 SCENARIO: PASS' : `\nA3/A1 SCENARIO: FAIL (${failures})`);
+  console.log(failures === 0 ? '\nA3 SCENARIO: PASS' : `\nA3 SCENARIO: FAIL (${failures})`);
   process.exit(failures === 0 ? 0 : 1);
 }
 

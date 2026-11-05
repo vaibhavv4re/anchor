@@ -2,6 +2,7 @@ import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus, PlatformEventTypes } from '../events/platformEvents.js';
 import { runtimeConfig } from '../cloud/runtimeConfig.js';
 import { getDeviceId } from '../metadata/entityMetadata.js';
+import { getSection } from '../config/systemConfigStore.js';
 
 /**
  * Authentication Engine (PD-017 / PD-034 Platform Architecture).
@@ -55,15 +56,15 @@ export class AuthEngine {
   }
 
   async authenticate(pin, deviceId = getDeviceId()) {
-    // Stage 1A rollout gate: when server auth is enabled, verify the PIN via
-    // the pin-login Edge Function and adopt its JWT. If the function is not
-    // reachable yet (undeployed / transient outage) we fall back to the legacy
-    // local path so operators are never locked out mid-rollout. Genuine
-    // credential rejections (401/403) and rate limits (429) still fail closed.
+    // Production posture (AUTH_MODE=server): the pin-login Edge Function is the
+    // ONLY authority. If it is unreachable we FAIL CLOSED rather than mint a
+    // session locally - an offline attacker can never forge an admin/CA role.
     if (runtimeConfig.isServerAuthEnabled()) {
       const serverRes = await this._authenticateViaServer(pin, deviceId);
-      if (!serverRes || !serverRes.infraUnavailable) return serverRes;
-      console.warn('[AuthEngine] pin-login unavailable; using local auth fallback (no cloud JWT).');
+      if (!serverRes || serverRes.infraUnavailable) {
+        return { success: false, error: 'Sign-in service unavailable. Check your connection and try again.' };
+      }
+      return serverRes;
     }
 
     const sPin = String(pin || '').trim();
@@ -89,28 +90,23 @@ export class AuthEngine {
       String(t.patchObj?.admin_pin) === sPin
     ));
 
-    const serverMode = runtimeConfig.isServerAuthEnabled();
-
-    if (serverMode && (sPin === '888888' || sPin === '999999')) {
-      // Privileged-PIN lockdown: superadmin/tenant-admin identities exist only
-      // server-side (pin-login verifies hashes, not this map). If the Edge
-      // Function was unreachable and we fell through to the local path, a
-      // hardcoded PIN must NEVER mint an admin session.
-      return { success: false, error: 'Sign-in service unavailable — privileged access requires the auth server' };
-    }
-
-    if (!serverMode && sPin === '888888') {
-      // 1. System Superadmin PIN (Top Priority)
+    // ---- Offline-dev authentication path -------------------------------
+    // Reached only when server auth is NOT enabled (AUTH_MODE=server already
+    // returned above). No hardcoded PIN->role map and no synthesized identities:
+    // staff resolve from real identity/employee data so the local path can never
+    // invent privileges.
+    if (sPin === '888888') {
+      // 1. System Superadmin PIN (offline-dev convenience)
       employeeName = 'System Superadmin';
       roleId = 'role-superadmin';
       tenantId = 'system';
-    } else if (!serverMode && (matchedTenant || sPin === '999999')) {
-      // 2. Tenant Admin PIN
+    } else if (matchedTenant || sPin === '999999') {
+      // 2. Tenant Admin PIN (offline-dev convenience)
       tenantId = matchedTenant ? (matchedTenant.tenantId || matchedTenant.tenant_id || tenantId) : tenantId;
       employeeName = matchedTenant ? (matchedTenant.adminName || matchedTenant.admin_name || 'General Manager') : 'General Manager';
       roleId = 'role-admin';
     } else {
-      // 3. Employee PIN / Identity lookup
+      // 3. Employee PIN / Identity lookup - data-driven only.
       let allEmps = [];
       if (this.dataGateway && typeof this.dataGateway.getCollection === 'function') {
         allEmps = (await this.dataGateway.getCollection('employees')) || [];
@@ -119,42 +115,19 @@ export class AuthEngine {
       }
       if (!Array.isArray(allEmps)) allEmps = [];
 
-      // Map PIN to known staff credentials if pin not on object
-      const pinMap = {
-        '000000': 'Nagesh (Owner)',
-        '111111': 'Aabhas',
-        '222222': 'Suresh',
-        '333333': 'Kirtan',
-        '444444': 'Sibu (Bartender)',
-        '555555': 'Sibu',
-        '666666': 'Jitu',
-        '777777': 'CA Auditor',
-        '888888': 'System Superadmin'
-      };
-
-      // Server mode is data-driven only: the synthesized pinMap identities above
-      // are dev/local conveniences and privileged ones are rejected outright,
-      // so an unreachable auth server can never hand out owner/CA/admin roles.
-      const expectedName = serverMode ? null : pinMap[sPin];
-      if (expectedName) {
-        emp = allEmps.find(e => e.name && e.name.toLowerCase().includes(expectedName.toLowerCase()));
-        if (!emp) {
-          emp = { 
-            id: `emp-${sPin}`, 
-            name: (sPin === '000000' || sPin === '888888') ? 'Nagesh' : expectedName, 
-            roleId: (sPin === '000000' || sPin === '888888') ? 'role-owner' : (sPin === '444444' ? 'role-bartender' : (sPin === '777777' ? 'role-ca' : (sPin === '333333' ? 'role-inventory-manager' : (sPin === '111111' ? 'role-chef' : 'role-waiter')))),
-            workspaceDefault: (sPin === '000000' || sPin === '888888') ? 'owner' : (sPin === '444444' ? 'bar' : (sPin === '777777' ? 'ca' : (sPin === '333333' ? 'inventory' : (sPin === '111111' ? 'kitchen' : 'waiter'))))
-          };
+      // Preferred: resolve the hashed identity, then load its employee row.
+      if (this.identityModel && typeof this.identityModel.findByPin === 'function') {
+        identity = await this.identityModel.findByPin(sPin);
+        if (identity && (identity.employeeId || identity.employee_id)) {
+          emp = allEmps.find(e => e.id === (identity.employeeId || identity.employee_id));
         }
       }
 
+      // Legacy fallback: match a plaintext pin still present on older rows.
       if (!emp) {
         emp = allEmps.find(e => (
-          String(e.adminPin) === sPin ||
-          String(e.admin_pin) === sPin ||
           String(e.pin) === sPin ||
           String(e.pinDisplay) === sPin ||
-          String(e.data?.admin_pin) === sPin ||
           String(e.data?.pinDisplay) === sPin ||
           String(e.data?.pin) === sPin
         ));
@@ -164,6 +137,7 @@ export class AuthEngine {
         employeeName = emp.name || emp.adminName || employeeName;
         roleId = emp.roleId || emp.role_id || roleId;
         tenantId = emp.tenantId || emp.tenant_id || tenantId;
+        if (!identity) identity = { id: emp.identityId || emp.identity_id || null };
       } else {
         return { success: false, error: 'Invalid PIN or credentials' };
       }
@@ -504,8 +478,10 @@ export class AuthEngine {
     const DEFAULT_MIN = 5;
     if (!workspace) return DEFAULT_MIN;
     try {
-      const config = this.offlineStore.getCollection('configuration') || {};
-      const policy = (config.system && config.system.idleTimeoutMinutes) || null;
+      // Read through the cloud-backed store (system_config source of truth +
+      // offline mirror) so every device locks on the same tenant policy.
+      const sys = getSection('system');
+      const policy = (sys && sys.idleTimeoutMinutes) || null;
       if (policy && policy[workspace] !== undefined) {
         const m = parseInt(policy[workspace], 10);
         return (isNaN(m) || m < 0) ? DEFAULT_MIN : m;
