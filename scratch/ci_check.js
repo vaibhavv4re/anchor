@@ -17,7 +17,7 @@
  *
  * Usage: `node scratch/ci_check.js`
  */
-const { execFileSync } = require('child_process');
+const { execFileSync, spawnSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 
@@ -26,6 +26,17 @@ const SCAN_DIRS = ['businessos', 'restaurantos'];
 // Deno Edge Functions are not Node-ESM and are checked by the Supabase deploy step.
 const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build']);
 const SKIP_PATH_HINTS = [path.join('supabase', 'functions')];
+
+// Phase 6: headless production-hardening scenarios run as a CI gate after the
+// syntax/parse check. Each exits 0 on PASS, non-zero on FAIL (no browser needed).
+const HARDENING_TESTS = [
+  'test-role-catalog-consistency.js',
+  'test-hashed-identity-creation.js',
+  'test-a3-server-lockdown.js',
+  'test-cloud-sync-roundtrip.js',
+  'test-ca-readonly-enforcement.js',
+  'test-supabase-write-projection.js'
+];
 
 function walk(dir, out) {
   let entries;
@@ -67,6 +78,23 @@ function checkFile(file) {
   }
 }
 
+function runHardeningTests() {
+  const failed = [];
+  for (const test of HARDENING_TESTS) {
+    const file = path.join(ROOT, 'scratch', test);
+    if (!fs.existsSync(file)) {
+      failed.push({ test, err: 'test file not found' });
+      continue;
+    }
+    // Inherit stdio so the individual PASS/FAIL lines are visible in CI output.
+    const res = spawnSync(process.execPath, [file], { cwd: ROOT, stdio: 'inherit' });
+    if (res.status !== 0) {
+      failed.push({ test, err: `exit code ${res.status}` });
+    }
+  }
+  return failed;
+}
+
 function main() {
   const files = [];
   for (const d of SCAN_DIRS) {
@@ -84,14 +112,25 @@ function main() {
     }
   }
 
-  if (failures.length === 0) {
-    console.log(`ci_check: OK - ${checked} ES module file(s) parsed.`);
+  if (failures.length > 0) {
+    console.error(`ci_check: FAIL - ${failures.length}/${checked} file(s) failed to parse:\n`);
+    for (const f of failures) {
+      console.error(`--- ${f.file} ---\n${f.err}\n`);
+    }
+    process.exit(1);
+  }
+  console.log(`ci_check: syntax OK - ${checked} ES module file(s) parsed.`);
+
+  // Stage 2: headless production-hardening scenarios.
+  console.log('\nci_check: running hardening test suite...\n');
+  const testFailures = runHardeningTests();
+  if (testFailures.length === 0) {
+    console.log(`\nci_check: OK - syntax + ${HARDENING_TESTS.length} hardening test(s) passed.`);
     process.exit(0);
   }
-
-  console.error(`ci_check: FAIL - ${failures.length}/${checked} file(s) failed to parse:\n`);
-  for (const f of failures) {
-    console.error(`--- ${f.file} ---\n${f.err}\n`);
+  console.error(`\nci_check: FAIL - ${testFailures.length}/${HARDENING_TESTS.length} hardening test(s) failed:`);
+  for (const t of testFailures) {
+    console.error(`  - ${t.test}: ${t.err}`);
   }
   process.exit(1);
 }
