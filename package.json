@@ -8,6 +8,7 @@
     "start": "npx serve .",
     "build": "node scratch/inject_runtime_env.js",
     "check": "node scratch/ci_check.js",
+    "test:pwa": "node scratch/test_pwa_shell.js",
     "test:staging": "node scratch/test-data-gateway.js"
   }
 }

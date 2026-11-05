@@ -81,6 +81,9 @@ export function startModularApp(options = {}) {
       // Manager shift register lifecycle - cloud-backed so a register opened on
       // one screen is visible on every other screen (multi-screen parity).
       'shift_registers',
+      // Attendance / timesheet - cloud-backed so a clock-in on one device shows
+      // on the manager's screen on another device (Phase 4 cross-device parity).
+      'attendance',
       // Fiscal config (single source of truth for the Food/Bar tax split) - read-only
       // under RLS pre-login, so every device resolves the same tax categories.
       'tax_configurations'

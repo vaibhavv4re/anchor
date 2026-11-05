@@ -4,6 +4,19 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>Anchor RestaurantOS v1.0 — Modular Realtime Architecture</title>
+
+  <!-- PWA installability: manifest + theme + iOS home-screen metadata.
+       The service worker (root-scoped /sw.js) caches ONLY the static shell;
+       runtime-env.js and all Supabase traffic are network pass-through by
+       policy, so deploy-time config and live data are never served stale. -->
+  <link rel="manifest" href="/app.webmanifest">
+  <meta name="theme-color" content="#090f17">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Anchor OS">
+  <link rel="apple-touch-icon" href="/restaurantos/frontend/icons/icon-180.png">
+  <link rel="icon" type="image/png" sizes="192x192" href="/restaurantos/frontend/icons/icon-192.png">
   
   <!-- BusinessOS Design System CSS Modules -->
   <link rel="stylesheet" href="./restaurantos/frontend/styles/tokens.css">
@@ -40,5 +53,18 @@
 
   <!-- RestaurantOS Modular Application Bootstrap Entry Point -->
   <script type="module" src="./restaurantos/frontend/main.js"></script>
+
+  <!-- PWA: register the app-shell service worker after boot so it can never
+       delay first paint. Failure is non-fatal (plain browser-tab use still
+       works; only offline shell caching is lost). -->
+  <script>
+    window.addEventListener('load', () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js').catch((err) => {
+          console.warn('[PWA] Service worker registration failed (app still runs):', err);
+        });
+      }
+    });
+  </script>
 </body>
 </html>
