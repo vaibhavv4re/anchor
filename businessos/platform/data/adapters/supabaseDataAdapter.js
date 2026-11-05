@@ -20,10 +20,13 @@ export class SupabaseDataAdapter {
   async getCollection(collection, tenantId = null) {
     const targetTable = this._resolveTable(collection);
     const virtualCollections = [
-      'roles', 'sessions', 'table_runtime_states',
-      'stock_requisitions', 'menu_catalog',
-      'devices', 'system_config'
+      'sessions', 'table_runtime_states',
+      'stock_requisitions', 'menu_catalog'
     ];
+    // roles, devices and system_config are now real cloud tables (see
+    // supabase/production_hardening.sql) so they read/write through the gateway
+    // like every other collection - this is what makes config, devices and the
+    // role catalog shared across devices instead of per-device offline only.
     if (!this.client || virtualCollections.includes(targetTable)) {
       return { success: true, data: [] };
     }
@@ -252,7 +255,7 @@ export class SupabaseDataAdapter {
 
   async create(collection, record) {
     const targetTable = this._resolveTable(collection);
-    if (!this.client || targetTable === 'roles' || targetTable === 'sessions') return record;
+    if (!this.client || targetTable === 'sessions') return record;
     // Stage 2B/3: surface real failures instead of swallowing them, so the
     // DataGateway queues an offline job and the flush retries it. The client
     // returns { success, ... }; a false success is a failure to propagate.
@@ -265,7 +268,7 @@ export class SupabaseDataAdapter {
 
   async update(collection, id, patch) {
     const targetTable = this._resolveTable(collection);
-    if (!this.client || targetTable === 'roles' || targetTable === 'sessions') return patch;
+    if (!this.client || targetTable === 'sessions') return patch;
     const res = await this.client.updateRecord(targetTable, id, patch);
     if (res && res.success) return res.data || patch;
     const err = new Error((res && res.error) || `CLOUD_UPDATE_FAILED:${targetTable}`);
@@ -275,7 +278,7 @@ export class SupabaseDataAdapter {
 
   async delete(collection, id) {
     const targetTable = this._resolveTable(collection);
-    if (!this.client || targetTable === 'roles' || targetTable === 'sessions') return true;
+    if (!this.client || targetTable === 'sessions') return true;
     const filter = (this.client && typeof this.client.getFilterKey === 'function') ? this.client.getFilterKey(targetTable, id) : (targetTable === 'tenants' ? `tenant_id=eq.${id}` : `id=eq.${id}`);
     const res = await this.client.deleteRecords(targetTable, filter);
     if (res && res.success) return true;

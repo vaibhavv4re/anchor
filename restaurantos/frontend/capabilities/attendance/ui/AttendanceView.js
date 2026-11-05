@@ -22,13 +22,20 @@ export class AttendanceView {
     const timesheet = attendanceEngine.getTimesheet();
 
     const rows = timesheet.length ? timesheet.map(r => {
-      const clockIn = new Date(r.clockInTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      const clockOut = r.clockOutTime ? new Date(r.clockOutTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Active Shift';
-      const duration = r.durationMs ? `${(r.durationMs / (1000 * 60)).toFixed(1)} mins` : '--';
+      // Tolerate camelCase (local mirror / new writes) and snake_case (hydrated
+      // cloud rows) so the timesheet renders the same across devices.
+      const inTs = r.clockInTime || r.clock_in_time || r.clockIn;
+      const outTs = r.clockOutTime || r.clock_out_time;
+      const dur = r.durationMs !== undefined ? r.durationMs : r.duration_ms;
+      const empName = r.employeeName || r.employee_name || 'Staff';
+      const empId = r.employeeId || r.employee_id || '';
+      const clockIn = inTs ? new Date(inTs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '--';
+      const clockOut = outTs ? new Date(outTs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : 'Active Shift';
+      const duration = dur ? `${(dur / (1000 * 60)).toFixed(1)} mins` : '--';
 
       return `
         <tr>
-          <td><span style="font-weight:600;">${r.employeeName}</span> (${r.employeeId})</td>
+          <td><span style="font-weight:600;">${empName}</span> (${empId})</td>
           <td><span class="badge badge-info">${r.workspace}</span></td>
           <td>${clockIn}</td>
           <td>${clockOut}</td>

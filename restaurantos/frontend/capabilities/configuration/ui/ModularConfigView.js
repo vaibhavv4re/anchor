@@ -5,6 +5,7 @@
 
 import { offlineStore } from '../../../../../businessos/platform/offline_store/offlineStore.js';
 import { platformEventBus, PlatformEventTypes } from '../../../../../businessos/platform/events/platformEvents.js';
+import { getConfig, saveSection } from '../../../../../businessos/platform/config/systemConfigStore.js';
 import { DataControlCenterView } from './DataControlCenterView.js';
 
 export class ModularConfigView {
@@ -22,7 +23,10 @@ export class ModularConfigView {
   }
 
   updateContent() {
-    const config = offlineStore.getCollection('configuration') || {};
+    // Read through the cloud-backed config store (system_config source of truth
+    // with a synchronous local mirror), so what one device edits is what every
+    // device sees - instead of the old per-device offlineStore-only persistence.
+    const config = getConfig();
 
     this.container.innerHTML = `
       <div style="margin-bottom:var(--space-lg);">
@@ -122,7 +126,100 @@ export class ModularConfigView {
       `;
     }
 
+    if (this.activeTab === 'hardware') {
+      const h = config.hardware || {};
+      const printers = h.printers || [];
+      return `
+        <div style="display:flex; flex-direction:column; gap:var(--space-md); max-width:720px;">
+          <h3>🖨️ Printers & Hardware</h3>
+          <p style="color:var(--text-muted); font-size:0.875rem;">Register receipt / KOT / bar printers. Terminal devices route to these in Device Management.</p>
+          <div id="printer-rows" style="display:flex; flex-direction:column; gap:var(--space-sm);">
+            ${printers.map((p, i) => this._printerRowHtml(p, i)).join('') || `<div style="color:var(--text-muted);">No printers configured yet.</div>`}
+          </div>
+          <div><button class="btn-secondary" id="btn-add-printer">+ Add Printer</button></div>
+          <button class="btn-primary" id="btn-save-hardware" style="align-self:flex-start; margin-top:var(--space-md);">Save Hardware</button>
+        </div>
+      `;
+    }
+
+    if (this.activeTab === 'printing') {
+      const pr = config.printing || {};
+      const printers = (config.hardware && config.hardware.printers) || [];
+      const opts = printers.map(p => `<option value="${p.id}" ${pr.kotPrinterId === p.id ? 'selected' : ''}>${p.name}</option>`).join('');
+      const bosOpts = printers.map(p => `<option value="${p.id}" ${pr.bosPrinterId === p.id ? 'selected' : ''}>${p.name}</option>`).join('');
+      return `
+        <div style="display:flex; flex-direction:column; gap:var(--space-md); max-width:720px;">
+          <h3>📄 Ticket Printing & Routing</h3>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-md);">
+            <div>
+              <label style="display:block; font-size:0.875rem; margin-bottom:4px;">KOT (Kitchen) Printer</label>
+              <select id="cfg-print-kot" style="width:100%;"><option value="">— none —</option>${opts}</select>
+            </div>
+            <div>
+              <label style="display:block; font-size:0.875rem; margin-bottom:4px;">BOS / Bill Printer</label>
+              <select id="cfg-print-bos" style="width:100%;"><option value="">— none —</option>${bosOpts}</select>
+            </div>
+            <div>
+              <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Receipt Header Text</label>
+              <input type="text" id="cfg-print-header" value="${pr.receiptHeader || ''}" style="width:100%;">
+            </div>
+            <div>
+              <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Receipt Footer Text</label>
+              <input type="text" id="cfg-print-footer" value="${pr.receiptFooter || ''}" style="width:100%;">
+            </div>
+          </div>
+          <label style="display:flex; align-items:center; gap:8px;"><input type="checkbox" id="cfg-print-auto" ${pr.autoPrintKot ? 'checked' : ''}> Auto-print KOT on order send</label>
+          <button class="btn-primary" id="btn-save-printing" style="align-self:flex-start;">Save Printing Settings</button>
+        </div>
+      `;
+    }
+
+    if (this.activeTab === 'payments') {
+      const pay = config.payments || {};
+      const methods = pay.methods && pay.methods.length ? pay.methods : ['CASH', 'CARD', 'UPI', 'WALLET'];
+      const toggle = (m) => `<label style="display:inline-flex; align-items:center; gap:6px; margin-right:16px;"><input type="checkbox" class="cfg-pay-method" value="${m}" ${methods.includes(m) ? 'checked' : ''}> ${m}</label>`;
+      return `
+        <div style="display:flex; flex-direction:column; gap:var(--space-md); max-width:720px;">
+          <h3>💳 Payments, Taxes & Charges</h3>
+          <div>
+            <label style="display:block; font-size:0.875rem; margin-bottom:6px;">Accepted Payment Methods</label>
+            ${['CASH', 'CARD', 'UPI', 'WALLET', 'CREDIT'].map(toggle).join('')}
+          </div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:var(--space-md);">
+            <div>
+              <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Service Charge (%)</label>
+              <input type="number" step="0.1" id="cfg-pay-service" value="${pay.serviceChargePercent !== undefined ? pay.serviceChargePercent : 0}" style="width:100%;">
+            </div>
+            <div>
+              <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Default GST Rate (%)</label>
+              <input type="number" step="0.1" id="cfg-pay-gst" value="${pay.gstPercent !== undefined ? pay.gstPercent : 5}" style="width:100%;">
+            </div>
+            <div>
+              <label style="display:block; font-size:0.875rem; margin-bottom:4px;">Rounding Step (₹)</label>
+              <input type="number" step="1" id="cfg-pay-round" value="${pay.roundingStep !== undefined ? pay.roundingStep : 1}" style="width:100%;">
+            </div>
+          </div>
+          <p style="color:var(--text-muted); font-size:0.8rem;">Per-category GST (Food/Bar split) is governed by the Tax Configurations engine; these are the tenant defaults.</p>
+          <button class="btn-primary" id="btn-save-payments" style="align-self:flex-start;">Save Payments & Taxes</button>
+        </div>
+      `;
+    }
+
     return `<div style="color:var(--text-muted);">Tab settings under ${this.activeTab}</div>`;
+  }
+
+  _printerRowHtml(p = {}, i = 0) {
+    const esc = (v) => String(v == null ? '' : v).replace(/"/g, '&quot;');
+    return `
+      <div class="printer-row" style="display:grid; grid-template-columns:1fr 1fr 1fr auto; gap:8px; align-items:center;">
+        <input class="inp-p-name" placeholder="Name (e.g. Kitchen KOT)" value="${esc(p.name)}" style="width:100%;">
+        <input class="inp-p-ip" placeholder="IP / Host" value="${esc(p.ip)}" style="width:100%;">
+        <select class="inp-p-type">
+          ${['RECEIPT', 'KOT', 'BAR', 'KITCHEN'].map(t => `<option value="${t}" ${p.type === t ? 'selected' : ''}>${t}</option>`).join('')}
+        </select>
+        <button type="button" class="btn-secondary btn-del-printer" style="padding:6px 10px;">✕</button>
+      </div>
+    `;
   }
 
   bindEvents() {
@@ -136,35 +233,96 @@ export class ModularConfigView {
 
     const saveBiz = this.container.querySelector('#btn-save-biz');
     if (saveBiz) {
-      saveBiz.addEventListener('click', () => {
-        const config = offlineStore.getCollection('configuration') || {};
-        config.business = {
-          ...config.business,
+      saveBiz.addEventListener('click', async () => {
+        await saveSection('business', {
           name: this.container.querySelector('#cfg-biz-name').value,
           currency: this.container.querySelector('#cfg-biz-currency').value,
           currencySymbol: this.container.querySelector('#cfg-biz-symbol').value
-        };
-        offlineStore.setCollection('configuration', config);
-        platformEventBus.publish(PlatformEventTypes.CONFIG_UPDATED, { section: 'business', config: config.business });
-        alert('Business profile updated!');
+        });
+        alert('Business profile saved (synced to cloud).');
       });
     }
 
     const saveSys = this.container.querySelector('#btn-save-system');
     if (saveSys) {
-      saveSys.addEventListener('click', () => {
-        const config = offlineStore.getCollection('configuration') || {};
-        config.system = config.system || {};
-        config.system.idleTimeoutMinutes = {
-          waiter: parseInt(this.container.querySelector('#cfg-idle-waiter').value) || 0,
-          kitchen: parseInt(this.container.querySelector('#cfg-idle-kitchen').value) || 0,
-          manager: parseInt(this.container.querySelector('#cfg-idle-manager').value) || 0,
-          cashier: parseInt(this.container.querySelector('#cfg-idle-cashier').value) || 0
-        };
-        offlineStore.setCollection('configuration', config);
-        platformEventBus.publish(PlatformEventTypes.CONFIG_UPDATED, { section: 'system', config: config.system });
-        alert('System idle lock timeouts updated!');
+      saveSys.addEventListener('click', async () => {
+        await saveSection('system', {
+          idleTimeoutMinutes: {
+            waiter: parseInt(this.container.querySelector('#cfg-idle-waiter').value) || 0,
+            kitchen: parseInt(this.container.querySelector('#cfg-idle-kitchen').value) || 0,
+            manager: parseInt(this.container.querySelector('#cfg-idle-manager').value) || 0,
+            cashier: parseInt(this.container.querySelector('#cfg-idle-cashier').value) || 0
+          }
+        });
+        alert('System idle lock timeouts saved (synced to cloud).');
       });
     }
+
+    // ---- Hardware (printers) ------------------------------------------------
+    const addPrinter = this.container.querySelector('#btn-add-printer');
+    if (addPrinter) {
+      addPrinter.addEventListener('click', () => {
+        const rows = this.container.querySelector('#printer-rows');
+        if (rows.querySelector('.printer-row')) {
+          rows.insertAdjacentHTML('beforeend', this._printerRowHtml({}, 0));
+        } else {
+          rows.innerHTML = this._printerRowHtml({}, 0);
+        }
+        this._bindPrinterRowDeletes();
+      });
+      this._bindPrinterRowDeletes();
+    }
+
+    const saveHardware = this.container.querySelector('#btn-save-hardware');
+    if (saveHardware) {
+      saveHardware.addEventListener('click', async () => {
+        const printers = Array.from(this.container.querySelectorAll('.printer-row')).map((row, idx) => ({
+          id: row.querySelector('.inp-p-name').dataset.pid || `prt_${idx + 1}`,
+          name: row.querySelector('.inp-p-name').value.trim(),
+          ip: row.querySelector('.inp-p-ip').value.trim(),
+          type: row.querySelector('.inp-p-type').value
+        })).filter(p => p.name);
+        await saveSection('hardware', { printers });
+        alert('Hardware / printers saved (synced to cloud).');
+      });
+    }
+
+    // ---- Printing -----------------------------------------------------------
+    const savePrinting = this.container.querySelector('#btn-save-printing');
+    if (savePrinting) {
+      savePrinting.addEventListener('click', async () => {
+        await saveSection('printing', {
+          kotPrinterId: this.container.querySelector('#cfg-print-kot').value,
+          bosPrinterId: this.container.querySelector('#cfg-print-bos').value,
+          receiptHeader: this.container.querySelector('#cfg-print-header').value,
+          receiptFooter: this.container.querySelector('#cfg-print-footer').value,
+          autoPrintKot: this.container.querySelector('#cfg-print-auto').checked
+        });
+        alert('Printing settings saved (synced to cloud).');
+      });
+    }
+
+    // ---- Payments & Taxes ---------------------------------------------------
+    const savePayments = this.container.querySelector('#btn-save-payments');
+    if (savePayments) {
+      savePayments.addEventListener('click', async () => {
+        const methods = Array.from(this.container.querySelectorAll('.cfg-pay-method')).filter(c => c.checked).map(c => c.value);
+        await saveSection('payments', {
+          methods,
+          serviceChargePercent: parseFloat(this.container.querySelector('#cfg-pay-service').value) || 0,
+          gstPercent: parseFloat(this.container.querySelector('#cfg-pay-gst').value) || 0,
+          roundingStep: parseFloat(this.container.querySelector('#cfg-pay-round').value) || 0
+        });
+        alert('Payments & tax defaults saved (synced to cloud).');
+      });
+    }
+  }
+
+  _bindPrinterRowDeletes() {
+    this.container.querySelectorAll('.btn-del-printer').forEach(btn => {
+      if (btn.dataset.bound) return;
+      btn.dataset.bound = '1';
+      btn.addEventListener('click', () => btn.closest('.printer-row').remove());
+    });
   }
 }

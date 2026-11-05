@@ -229,9 +229,13 @@ export function formatRecordForTable(entityName, job) {
       name: p.name || 'Anchor Bistro & Cafe',
       legal_name: p.legalName || 'Anchor Hospitality Pvt Ltd',
       admin_name: p.adminName || 'General Manager',
-      admin_pin: p.adminPin || '999999',
+      // Phase 2: never persist a plaintext admin PIN. The admin authenticates via a
+      // hashed `identities` row; the retired tenants.admin_pin column stays NULL.
+      admin_pin: null,
       profile_version: p.profileVersion || 1,
-      data: p
+      // Full snapshot for the read path, minus any plaintext credential so the
+      // JSONB mirror can never leak the admin PIN either.
+      data: (() => { const c = { ...p }; delete c.admin_pin; delete c.adminPin; delete c.pin; delete c.pinDisplay; return c; })()
     };
   }
 
@@ -965,6 +969,60 @@ export function formatRecordForTable(entityName, job) {
     };
   }
 
+  // ---- Phase 4 cloud-backed tables (attendance, system_config, devices, roles) ----
+  // These engines write both snake_case physical columns and camelCase conveniences,
+  // but the tables only expose the snake columns + a `data` JSONB. Project to the real
+  // columns (dropping the camel extras) and keep the whole object in `data`; the read
+  // path re-merges `{...row.data, ...row}` so the camel fields survive the round-trip.
+  if (entityName === 'attendance') {
+    return {
+      id: p.id,
+      tenant_id: job.tenantId || p.tenant_id || p.tenantId || 'tenant_h0qc7wf',
+      employee_id: p.employee_id || p.employeeId || null,
+      employee_name: p.employee_name || p.employeeName || null,
+      workspace: p.workspace || null,
+      device_id: p.device_id || p.deviceId || null,
+      clock_in_time: p.clock_in_time || p.clockInTime || null,
+      clock_out_time: p.clock_out_time || p.clockOutTime || null,
+      duration_ms: (p.duration_ms !== undefined ? p.duration_ms : p.durationMs) || null,
+      status: p.status || 'ACTIVE_SHIFT',
+      data: p
+    };
+  }
+
+  if (entityName === 'system_config') {
+    return {
+      id: p.id,
+      tenant_id: job.tenantId || p.tenant_id || p.tenantId || 'tenant_h0qc7wf',
+      section: p.section || null,
+      data: (p.data && p.data.values) ? p.data : { values: p.values || {} },
+      updated_at: new Date().toISOString()
+    };
+  }
+
+  if (entityName === 'devices') {
+    return {
+      id: p.id,
+      tenant_id: job.tenantId || p.tenant_id || p.tenantId || 'tenant_h0qc7wf',
+      device_name: p.device_name || p.name || null,
+      device_type: p.device_type || p.deviceProfile || 'POS_TERMINAL',
+      ip_address: p.ip_address || p.ip || null,
+      status: p.status || 'ONLINE',
+      data: p
+    };
+  }
+
+  if (entityName === 'roles') {
+    return {
+      id: p.id,
+      name: p.name || null,
+      workspace: p.workspace || null,
+      tenant_scoped: p.tenant_scoped !== undefined ? p.tenant_scoped : (p.tenantScoped !== undefined ? p.tenantScoped : true),
+      permissions: p.permissions || [],
+      data: p
+    };
+  }
+
   return p;
 }
 
@@ -1412,6 +1470,36 @@ export function formatPatchForTable(entityName, patch) {
     copyIfPresent('completedAt', 'completed_at');
     result.updated_at = new Date().toISOString();
     result.data = { ...(p.data || p), ...(result.status ? { status: result.status } : {}) };
+  } else if (entityName === 'attendance') {
+    copyIfPresent('employee_id', 'employee_id');
+    copyIfPresent('employeeId', 'employee_id');
+    copyIfPresent('clock_in_time', 'clock_in_time');
+    copyIfPresent('clockInTime', 'clock_in_time');
+    copyIfPresent('clock_out_time', 'clock_out_time');
+    copyIfPresent('clockOutTime', 'clock_out_time');
+    copyIfPresent('duration_ms', 'duration_ms');
+    copyIfPresent('durationMs', 'duration_ms');
+    copyIfPresent('status', 'status');
+    result.data = { ...(p.data || p) };
+  } else if (entityName === 'system_config') {
+    copyIfPresent('section', 'section');
+    result.data = (p.data && p.data.values) ? p.data : { values: p.values || (p.data || {}) };
+    result.updated_at = new Date().toISOString();
+  } else if (entityName === 'devices') {
+    copyIfPresent('device_name', 'device_name');
+    copyIfPresent('name', 'device_name');
+    copyIfPresent('device_type', 'device_type');
+    copyIfPresent('deviceProfile', 'device_type');
+    copyIfPresent('ip_address', 'ip_address');
+    copyIfPresent('ip', 'ip_address');
+    copyIfPresent('status', 'status');
+    result.data = { ...(p.data || p) };
+  } else if (entityName === 'roles') {
+    copyIfPresent('name', 'name');
+    copyIfPresent('workspace', 'workspace');
+    copyIfPresent('permissions', 'permissions');
+    result.updated_at = new Date().toISOString();
+    result.data = { ...(p.data || p) };
   } else {
     Object.keys(p).forEach(k => {
       result[k] = p[k];

@@ -85,14 +85,14 @@ export class SuperAdminWorkspaceView {
                     <h4 style="font-size:1.1rem; margin:0;">${t.name}</h4>
                     <p style="font-size:0.8rem; color:var(--text-muted); margin-top:2px; margin-bottom:0;">ID: <code>${t.tenantId || t.tenant_id || t.id}</code> • ${t.currency || (t.regional ? t.regional.currency : 'INR')}</p>
                     <div style="font-size:0.82rem; margin-top:6px; background:var(--bg-surface-2); padding:4px 8px; border-radius:4px; display:inline-block;">
-                      👤 Admin: <strong>${t.adminName || t.admin_name || 'General Manager'}</strong> | 🔑 PIN: <strong style="color:var(--status-success); font-size:0.95rem;">${t.adminPin || t.admin_pin || '999999'}</strong>
+                      👤 Admin: <strong>${t.adminName || t.admin_name || 'General Manager'}</strong> | 🔑 PIN: <strong style="color:var(--text-muted); font-size:0.95rem;">•••••• (hashed)</strong>
                     </div>
                   </div>
                   <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
-                    <button class="btn-primary btn-switch-admin" data-pin="${t.adminPin || t.admin_pin || '999999'}" style="padding:6px 12px; font-size:0.85rem; font-weight:700;">
+                    <button class="btn-primary btn-switch-admin" data-id="${t.tenantId || t.tenant_id || t.id}" style="padding:6px 12px; font-size:0.85rem; font-weight:700;">
                       ⚡ Switch to Admin
                     </button>
-                    <button class="btn-secondary btn-reset-pin" data-id="${t.tenantId || t.tenant_id || t.id}" data-name="${t.name}" data-pin="${t.adminPin || t.admin_pin || '999999'}" style="padding:6px 10px; font-size:0.8rem;">
+                    <button class="btn-secondary btn-reset-pin" data-id="${t.tenantId || t.tenant_id || t.id}" data-name="${t.name}" style="padding:6px 10px; font-size:0.8rem;">
                       ✏️ Reset PIN
                     </button>
                     <button class="btn-secondary btn-delete-tenant" data-id="${t.tenantId || t.tenant_id || t.id}" data-name="${t.name}" style="color:var(--status-danger); padding:6px 10px; font-size:0.8rem; border-color:var(--status-danger);">Delete</button>
@@ -207,10 +207,13 @@ export class SuperAdminWorkspaceView {
     const switchBtns = mount.querySelectorAll('.btn-switch-admin');
     switchBtns.forEach(btn => {
       btn.addEventListener('click', async () => {
-        const pin = btn.dataset.pin || '999999';
+        // Plaintext admin PINs are no longer stored, so the operator enters the
+        // PIN they assigned; it is authenticated via hashed identities.
+        const pin = prompt('Enter the Admin PIN to switch into this tenant\'s Admin workspace:');
+        if (!pin || pin.trim().length !== 6 || isNaN(pin.trim())) return;
         const ae = this.authEngine || (window.__APP__ && window.__APP__.application ? window.__APP__.application.appDependencies.authEngine : null);
         if (ae) {
-          const res = await ae.authenticate(pin, 'DEV-FLOOR-01');
+          const res = await ae.authenticate(pin.trim(), 'DEV-FLOOR-01');
           if (res.success) {
             window.location.reload();
           } else {
@@ -226,8 +229,7 @@ export class SuperAdminWorkspaceView {
       btn.addEventListener('click', async () => {
         const tId = btn.dataset.id;
         const tName = btn.dataset.name;
-        const currentPin = btn.dataset.pin;
-        const newPin = prompt(`Reset Admin PIN for restaurant "${tName}" (Current PIN: ${currentPin}):`, '999999');
+        const newPin = prompt(`Reset Admin PIN for restaurant "${tName}":`, '999999');
 
         if (!newPin || newPin.trim().length !== 6 || isNaN(newPin.trim())) {
           if (newPin !== null) alert('Please enter a valid 6-digit numerical PIN.');
@@ -237,18 +239,20 @@ export class SuperAdminWorkspaceView {
         const cleanPin = newPin.trim();
 
         if (gw && typeof gw.update === 'function') {
-          await gw.update('tenants', tId, { adminPin: cleanPin, admin_pin: cleanPin });
-          
-          // Also update General Manager in employees collection
+          // Re-hash onto the admin's identity row; never store plaintext. Locate
+          // the tenant's admin employee to find the linked identity id.
           const employees = (await gw.getCollection('employees')) || [];
           const managerEmp = employees.find(e => (e.tenantId === tId || e.tenant_id === tId) && (e.roleId === 'role-admin' || e.role_id === 'role-admin'));
-          if (managerEmp) {
-            const updatedData = { ...(managerEmp.data || {}), pinDisplay: cleanPin };
-            await gw.update('employees', managerEmp.id, { data: updatedData, pinDisplay: cleanPin });
+          const identityId = managerEmp && (managerEmp.identityId || managerEmp.identity_id || managerEmp.data?.identityId);
+          if (identityId) {
+            const pinHash = await hashPin(cleanPin);
+            await gw.update('identities', identityId, { pin_hash: pinHash, pinHash, status: 'ACTIVE' });
           }
+          // Drop any legacy plaintext admin_pin held on the tenant row.
+          await gw.update('tenants', tId, { adminPin: null, admin_pin: null });
         }
 
-        alert(`✅ Admin PIN for "${tName}" updated to: ${cleanPin}`);
+        alert(`✅ Admin PIN for "${tName}" reset successfully.`);
         await this.render(mount, session);
       });
     });
@@ -299,6 +303,14 @@ export class SuperAdminWorkspaceView {
         }
 
         const tenantId = 'tenant_' + Math.random().toString(36).substring(2, 9);
+        // Security-critical: the tenant admin is a real identity now. We hash
+        // the admin PIN and persist ONLY the hash on an `identities` row; the
+        // plaintext tenants.admin_pin column is no longer written (login path
+        // for admins is resolved via hashed identities in pin-login).
+        const adminPinHash = await hashPin(adminPin);
+        const adminIdentityId = 'id_' + Math.random().toString(36).substring(2, 9);
+        const adminEmployeeId = 'emp_' + Math.random().toString(36).substring(2, 9);
+
         const newTenant = {
           id: tenantId,
           tenantId,
@@ -308,26 +320,40 @@ export class SuperAdminWorkspaceView {
           timezone: tz,
           adminName,
           admin_name: adminName,
-          adminPin,
-          admin_pin: adminPin,
+          adminIdentityId,
+          createdAt: new Date().toISOString()
+        };
+
+        const newIdentity = {
+          id: adminIdentityId,
+          tenant_id: tenantId,
+          employee_id: adminEmployeeId,
+          pin_hash: adminPinHash,
+          pinHash: adminPinHash,
+          status: 'ACTIVE',
           createdAt: new Date().toISOString()
         };
 
         const newEmployee = {
-          id: 'emp_' + Math.random().toString(36).substring(2, 9),
-          identityId: 'id_' + Math.random().toString(36).substring(2, 9),
+          id: adminEmployeeId,
+          identityId: adminIdentityId,
+          identity_id: adminIdentityId,
           tenantId,
+          tenant_id: tenantId,
           employeeCode: 'EMP-00001',
           name: adminName,
           roleId: 'role-admin',
+          role_id: 'role-admin',
           workspaceDefault: 'admin',
+          workspace_default: 'admin',
           status: 'ACTIVE',
-          data: { pinDisplay: adminPin }
+          data: { identityId: adminIdentityId, roleId: 'role-admin' }
         };
 
         if (gw) {
           if (typeof gw.create === 'function') {
             await gw.create('tenants', newTenant);
+            await gw.create('identities', newIdentity);
             await gw.create('employees', newEmployee);
           }
           if (gw.localAdapter && typeof gw.localAdapter.setCollection === 'function') {
@@ -336,6 +362,9 @@ export class SuperAdminWorkspaceView {
 
             const currentEmployees = gw.getCachedCollection('employees') || [];
             gw.localAdapter.setCollection('employees', [...currentEmployees, newEmployee]);
+
+            const currentIdentities = gw.getCachedCollection('identities') || [];
+            gw.localAdapter.setCollection('identities', [...currentIdentities, newIdentity]);
           }
           // Force async re-fetch from cloud/gateway
           await gw.getCollection('tenants');

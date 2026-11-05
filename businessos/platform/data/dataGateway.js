@@ -669,7 +669,7 @@ export class DataGateway {
     if (collection === 'offline_journal') {
       return this.getCachedCollection('offline_journal', tenantId);
     }
-    if (this._shouldAttemptCloudRead() && this.cloudAdapter && collection !== 'roles') {
+    if (this._shouldAttemptCloudRead() && this.cloudAdapter) {
       try {
         const res = await this.cloudAdapter.getCollection(collection, tenantId);
         const isSuccess = (res && typeof res === 'object' && res.success === true) || Array.isArray(res);
@@ -724,7 +724,7 @@ export class DataGateway {
       if (collection === 'supplier_catalogue') this.localAdapter.setCollection('supplier_catalog', data);
       if (collection === 'supplier_catalog') this.localAdapter.setCollection('supplier_catalogue', data);
     }
-    if (this.isOnline && this.cloudAdapter && collection !== 'roles') {
+    if (this.isOnline && this.cloudAdapter) {
       try {
         if (typeof this.cloudAdapter.setCollection === 'function') {
           await this.cloudAdapter.setCollection(collection, data);
@@ -741,7 +741,7 @@ export class DataGateway {
   }
 
   async getById(collection, id, tenantId = null) {
-    if (this.isOnline && this.cloudAdapter && collection !== 'roles') {
+    if (this.isOnline && this.cloudAdapter) {
       try {
         const record = await this.cloudAdapter.getById(collection, id, tenantId);
         if (record !== undefined) {
@@ -770,7 +770,7 @@ export class DataGateway {
     if (this.localAdapter) {
       this.localAdapter.create(collection, record);
     }
-    if (this.isOnline && this.cloudAdapter && collection !== 'roles') {
+    if (this.isOnline && this.cloudAdapter) {
       try {
         const cloudRecord = await this.cloudAdapter.create(collection, record);
         if (cloudRecord && this.localAdapter) {
@@ -783,7 +783,7 @@ export class DataGateway {
         this._recordOfflineMutation('CREATE', collection, record, record.tenantId);
         this._scheduleFastFlush();
       }
-    } else if (collection !== 'roles') {
+    } else {
       console.log(`[DataGateway] collection=${collection} mode=OFFLINE queuing offline CREATE job`);
       this._recordOfflineMutation('CREATE', collection, record, record.tenantId);
     }
@@ -794,7 +794,7 @@ export class DataGateway {
     if (this.localAdapter) {
       this.localAdapter.update(collection, id, patch);
     }
-    if (this.isOnline && this.cloudAdapter && collection !== 'roles') {
+    if (this.isOnline && this.cloudAdapter) {
       try {
         const cloudRecord = await this.cloudAdapter.update(collection, id, patch);
         return cloudRecord || patch;
@@ -803,7 +803,7 @@ export class DataGateway {
         this._recordOfflineMutation('UPDATE', collection, { id, patch }, patch.tenantId);
         this._scheduleFastFlush();
       }
-    } else if (collection !== 'roles') {
+    } else {
       console.log(`[DataGateway] collection=${collection}:${id} mode=OFFLINE queuing offline UPDATE job`);
       this._recordOfflineMutation('UPDATE', collection, { id, patch }, patch.tenantId);
     }
@@ -814,7 +814,7 @@ export class DataGateway {
     if (this.localAdapter) {
       this.localAdapter.delete(collection, id);
     }
-    if (this.isOnline && this.cloudAdapter && collection !== 'roles') {
+    if (this.isOnline && this.cloudAdapter) {
       try {
         await this.cloudAdapter.delete(collection, id);
       } catch (e) {
@@ -822,7 +822,7 @@ export class DataGateway {
         this._recordOfflineMutation('DELETE', collection, { id });
         this._scheduleFastFlush();
       }
-    } else if (collection !== 'roles') {
+    } else {
       console.log(`[DataGateway] collection=${collection}:${id} mode=OFFLINE queuing offline DELETE job`);
       this._recordOfflineMutation('DELETE', collection, { id });
     }

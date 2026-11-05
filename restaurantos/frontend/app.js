@@ -8,6 +8,7 @@ import { getDeviceId } from '../../businessos/platform/metadata/entityMetadata.j
 import { platformEventBus, PlatformEventTypes } from '../../businessos/platform/events/platformEvents.js';
 import { notificationEngine } from '../../businessos/platform/notifications/notificationEngine.js';
 import { rbacEngine } from '../../businessos/platform/authorization/rbacEngine.js';
+import { normalizeRoleId, catalogWorkspaceFor } from '../../businessos/platform/authorization/roleCatalog.js';
 import { runCapabilityGroup1TestSuite } from '../../businessos/platform/tests/capability_group_1.test.js';
 import { runCapabilityGroup2TestSuite } from './capabilities/restaurant_layout/tests/capability_group_2.test.js';
 import { runCapabilityGroup3TestSuite } from './capabilities/guest_service/tests/capability_group_3.test.js';
@@ -35,6 +36,7 @@ import { KitchenProductionView } from './capabilities/kitchen/ui/KitchenProducti
 import { KitchenInventoryView } from './capabilities/kitchen/ui/KitchenInventoryView.js';
 import { KitchenMenuView } from './capabilities/kitchen/ui/KitchenMenuView.js';
 import { KitchenRecipeView } from './capabilities/kitchen/ui/KitchenRecipeView.js';
+import { KitchenReportsView } from './capabilities/kitchen/ui/KitchenReportsView.js';
 
 import { MenuBrowserView } from './capabilities/order_management/ui/MenuBrowserView.js';
 import { ActiveSessionView } from './capabilities/guest_service/ui/ActiveSessionView.js';
@@ -145,7 +147,15 @@ export class ApplicationShell {
   async renderWorkspace(session) {
     if (!this.appEl) return;
 
-    const displayRoleName = session.roleName || session.role_name || session.role || (session.roleId ? session.roleId.replace('role-', '').replace(/-/g, ' ').toUpperCase() : session.workspace || 'Staff');
+    // Route through the canonical role catalog so legacy role-id strings
+    // (role-bar, role-inventory-manager, ...) collapse to their canonical form
+    // and the workspace derived from the role always matches the catalog.
+    const canonicalRoleId = normalizeRoleId(session.roleId);
+    // session.workspace wins for explicit non-role routes (kds, accounts alias);
+    // otherwise the workspace is derived from the catalog role.
+    const routingWorkspace = session.workspace || catalogWorkspaceFor(canonicalRoleId);
+
+    const displayRoleName = session.roleName || session.role_name || session.role || (canonicalRoleId ? canonicalRoleId.replace('role-', '').replace(/-/g, ' ').toUpperCase() : routingWorkspace || 'Staff');
 
     this.appEl.innerHTML = `
       <div class="flex-col h-full" style="min-height:100vh;">
@@ -207,41 +217,41 @@ export class ApplicationShell {
     }
     this._activeWorkspaceInstance = null;
 
-    if (session.workspace === 'superadmin' || session.roleId === 'role-superadmin') {
+    if (routingWorkspace === 'superadmin' || canonicalRoleId === 'role-superadmin') {
       const superAdminWs = new SuperAdminWorkspaceView(opts);
       this._activeWorkspaceInstance = superAdminWs;
       await superAdminWs.render(rootMount, session);
-    } else if (session.workspace === 'admin') {
+    } else if (routingWorkspace === 'admin' || canonicalRoleId === 'role-admin') {
       const adminWs = new AdminWorkspaceView(opts);
       this._activeWorkspaceInstance = adminWs;
       await adminWs.render(rootMount, session);
-    } else if (session.workspace === 'manager' || session.roleId === 'role-manager') {
+    } else if (routingWorkspace === 'manager' || canonicalRoleId === 'role-manager') {
       const managerWs = new ManagerWorkspaceView(opts);
       this._activeWorkspaceInstance = managerWs;
       await managerWs.render(rootMount, session);
-    } else if (session.workspace === 'inventory') {
+    } else if (routingWorkspace === 'inventory' || canonicalRoleId === 'role-inventory') {
       const inventoryWs = new InventoryWorkspaceView(opts);
       this._activeWorkspaceInstance = inventoryWs;
       await inventoryWs.render(rootMount, session);
-    } else if (session.workspace === 'owner' || session.roleId === 'role-owner') {
+    } else if (routingWorkspace === 'owner' || canonicalRoleId === 'role-owner') {
       const ownerWs = new OwnerWorkspaceView(opts);
       this._activeWorkspaceInstance = ownerWs;
       await ownerWs.render(rootMount, session);
-    } else if (session.workspace === 'bar' || session.roleId === 'role-bartender') {
+    } else if (routingWorkspace === 'bar' || canonicalRoleId === 'role-bartender') {
       const barWs = new BarWorkspaceView(opts);
       this._activeWorkspaceInstance = barWs;
       await barWs.render(rootMount, session);
-    } else if (session.workspace === 'retail' || session.roleId === 'role-retail-manager') {
+    } else if (routingWorkspace === 'retail' || canonicalRoleId === 'role-retail-manager') {
       const retailWs = new RetailWorkspaceView(opts);
       this._activeWorkspaceInstance = retailWs;
       await retailWs.render(rootMount, session);
-    } else if (session.workspace === 'ca' || session.workspace === 'accounts' || session.roleId === 'role-ca') {
+    } else if (routingWorkspace === 'ca' || routingWorkspace === 'accounts' || canonicalRoleId === 'role-ca') {
       const caWs = new AccountsCaWorkspaceView(opts);
       this._activeWorkspaceInstance = caWs;
       await caWs.render(rootMount, session);
-    } else if (this.activeSubView === 'kds' || session.workspace === 'kds') {
+    } else if (this.activeSubView === 'kds' || routingWorkspace === 'kds') {
       this.renderKDSWorkspace(rootMount, session);
-    } else if (session.workspace === 'waiter' || session.roleId === 'role-waiter') {
+    } else if (routingWorkspace === 'waiter' || canonicalRoleId === 'role-waiter') {
       const waiterWs = new WaiterWorkspaceView(opts);
       this._activeWorkspaceInstance = waiterWs;
       await waiterWs.render(rootMount, session);
@@ -258,6 +268,47 @@ export class ApplicationShell {
       this.bindSidebarEvents(session);
       this.mountSubView(session);
     }
+  }
+
+  // Map each sidebar sub-view to the permission required to open it. Views not
+  // listed require no specific permission (open to any authenticated role).
+  _subViewPermission(view) {
+    return {
+      'ca': 'accounting.view',
+      'accounts': 'accounting.view',
+      'cashier': 'cashier.view',
+      'inbox': 'cashier.view',
+      'invoices': 'cashier.view',
+      'payments': 'cashier.view',
+      'reports': 'reports.view',
+      'kitchen': 'kitchen.view',
+      'kds': 'kitchen.view',
+      'floor': 'floor.view',
+      'menu_browser': 'order.create',
+      'active_sessions': 'session.view',
+      'kitchen_inventory': 'inventory.view',
+      'kitchen_menu': 'inventory.view',
+      'kitchen_recipe': 'recipe.view',
+      'attendance': 'attendance.view',
+      'users': 'user.create',
+      'devices': 'user.create',
+      'config': 'config.manage'
+    }[view] || null;
+  }
+
+  // True when the session's role may open a sub-view. Unknown roles fail closed
+  // (catalogHasPermission returns false for unrecognised role ids).
+  _canViewSubView(session, view) {
+    const perm = this._subViewPermission(view);
+    if (!perm) return true;
+    const roleId = (session && (session.roleId || session.role_id)) || 'role-waiter';
+    return this.rbacEngine.hasPermission(roleId, perm);
+  }
+
+  // Sidebar entry helper: emits the nav button only when the role may open it.
+  _navItem(session, view, active, label) {
+    if (!this._canViewSubView(session, view)) return '';
+    return `<button class="nav-item ${active ? 'active' : ''}" data-view="${view}">${label}</button>`;
   }
 
   renderSidebarNav(session) {
@@ -337,21 +388,25 @@ export class ApplicationShell {
       <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; margin-bottom:4px; padding-left:8px;">Workspace Modules</div>
       
       <button class="nav-item ${this.activeSubView === 'dashboard' ? 'active' : ''}" data-view="dashboard">📌 Main Overview</button>
-      <button class="nav-item ${this.activeSubView === 'ca' || this.activeSubView === 'accounts' ? 'active' : ''}" data-view="ca">📚 Accounts & Compliance</button>
-      <button class="nav-item ${this.activeSubView === 'cashier' ? 'active' : ''}" data-view="cashier">💰 Bill Inbox & Cashier</button>
-      <button class="nav-item ${this.activeSubView === 'kitchen' ? 'active' : ''}" data-view="kitchen">👨‍🍳 Kitchen Tower</button>
-      <button class="nav-item ${this.activeSubView === 'kds' ? 'active' : ''}" data-view="kds">🔥 Live KDS Display</button>
-      <button class="nav-item ${this.activeSubView === 'floor' ? 'active' : ''}" data-view="floor">🗺️ Floor & Layout</button>
-      <button class="nav-item ${this.activeSubView === 'menu_browser' ? 'active' : ''}" data-view="menu_browser">🍽️ POS Menu Browser</button>
-      <button class="nav-item ${this.activeSubView === 'active_sessions' ? 'active' : ''}" data-view="active_sessions">🛎️ Active Guest Sessions</button>
+      ${this._navItem(session, 'ca', this.activeSubView === 'ca' || this.activeSubView === 'accounts', '📚 Accounts & Compliance')}
+      ${this._navItem(session, 'cashier', this.activeSubView === 'cashier', '💰 Bill Inbox & Cashier')}
+      ${this._navItem(session, 'kitchen', this.activeSubView === 'kitchen', '👨‍🍳 Kitchen Tower')}
+      ${this._navItem(session, 'kds', this.activeSubView === 'kds', '🔥 Live KDS Display')}
+      ${this._navItem(session, 'floor', this.activeSubView === 'floor', '🗺️ Floor & Layout')}
+      ${this._navItem(session, 'menu_browser', this.activeSubView === 'menu_browser', '🍽️ POS Menu Browser')}
+      ${this._navItem(session, 'active_sessions', this.activeSubView === 'active_sessions', '🛎️ Active Guest Sessions')}
 
-      <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; margin-top:12px; margin-bottom:4px; padding-left:8px;">Inventory & Stock</div>
-      <button class="nav-item ${this.activeSubView === 'kitchen_inventory' ? 'active' : ''}" data-view="kitchen_inventory">📦 Kitchen Stock</button>
-      <button class="nav-item ${this.activeSubView === 'kitchen_menu' ? 'active' : ''}" data-view="kitchen_menu">📋 Menu Master</button>
-      <button class="nav-item ${this.activeSubView === 'kitchen_recipe' ? 'active' : ''}" data-view="kitchen_recipe">📖 Recipe Book</button>
+      ${this._canViewSubView(session, 'kitchen_inventory') ? `
+        <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; margin-top:12px; margin-bottom:4px; padding-left:8px;">Inventory & Stock</div>
+        ${this._navItem(session, 'kitchen_inventory', this.activeSubView === 'kitchen_inventory', '📦 Kitchen Stock')}
+        ${this._navItem(session, 'kitchen_menu', this.activeSubView === 'kitchen_menu', '📋 Menu Master')}
+        ${this._navItem(session, 'kitchen_recipe', this.activeSubView === 'kitchen_recipe', '📖 Recipe Book')}
+      ` : ''}
 
-      <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; margin-top:12px; margin-bottom:4px; padding-left:8px;">Staff & Operations</div>
-      <button class="nav-item ${this.activeSubView === 'attendance' ? 'active' : ''}" data-view="attendance">⏱️ Timesheet</button>
+      ${this._canViewSubView(session, 'attendance') ? `
+        <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; margin-top:12px; margin-bottom:4px; padding-left:8px;">Staff & Operations</div>
+        ${this._navItem(session, 'attendance', this.activeSubView === 'attendance', '⏱️ Timesheet')}
+      ` : ''}
 
       ${isManagerOrAdmin ? `
         <div style="font-size:0.75rem; color:var(--text-muted); font-weight:600; text-transform:uppercase; margin-top:12px; margin-bottom:4px; padding-left:8px;">Administration</div>
@@ -422,6 +477,13 @@ export class ApplicationShell {
     }
     this._activeSubViewInstance = null;
     mount.innerHTML = '';
+
+    // RBAC enforcement (fail-closed): a role cannot mount a sub-view it lacks the
+    // permission for, even if it reached the view through state/URL rather than nav.
+    if (!this._canViewSubView(session, this.activeSubView)) {
+      mount.innerHTML = `<div class="card" style="padding:40px; text-align:center; color:var(--text-muted);">\ud83d\udd12 You do not have permission to open this section.</div>`;
+      return;
+    }
 
     const opts = {
       repositories: this.repositories,
@@ -553,16 +615,8 @@ export class ApplicationShell {
         const view = new KitchenInventoryView(opts);
         if (typeof view.render === 'function') view.render(body, session);
       } else if (this.kitchenActiveTab === 'reports') {
-        body.innerHTML = `
-          <div class="card animate-fade-in" style="background:var(--bg-surface-1); padding:40px; text-align:center;">
-            <div style="font-size:3rem; margin-bottom:12px;">📊</div>
-            <h2 style="font-size:1.6rem; margin-bottom:8px;">Tab 5 — Kitchen Reports & Analytics</h2>
-            <p style="color:var(--text-muted); font-size:0.9rem; max-width:520px; margin:0 auto 20px;">
-              Food cost calculations, preparation yield tracking, waste logs, ingredient consumption reports, and production performance analytics.
-            </p>
-            <span class="badge badge-info" style="font-size:0.85rem; padding:6px 14px;">Operational Cockpit</span>
-          </div>
-        `;
+        const view = new KitchenReportsView(opts);
+        if (typeof view.render === 'function') view.render(body, session);
       }
 
       mount.querySelectorAll('.btn-kitchen-tab').forEach(btn => {

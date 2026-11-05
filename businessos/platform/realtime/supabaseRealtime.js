@@ -12,11 +12,11 @@
  */
 
 import { offlineStore } from '../offline_store/offlineStore.js';
-import { platformEventBus } from '../events/platformEvents.js';
+import { platformEventBus, PlatformEventTypes } from '../events/platformEvents.js';
 import { runtimeConfig } from '../cloud/runtimeConfig.js';
 import { getSupabaseClient, destroySupabaseClient } from './supabaseClientFactory.js';
 
-const REALTIME_TABLES = ['orders', 'table_sessions', 'bill_revisions', 'invoices', 'payments', 'stock_balances', 'cancellation_requests', 'prepared_item_holds', 'shift_registers', 'production_batches'];
+const REALTIME_TABLES = ['orders', 'table_sessions', 'bill_revisions', 'invoices', 'payments', 'stock_balances', 'cancellation_requests', 'prepared_item_holds', 'shift_registers', 'production_batches', 'attendance', 'system_config', 'roles'];
 const CHANNEL_JOIN_TIMEOUT_MS = 5000;
 const POLL_INTERVAL_MS = 10000; // 10s fallback; realtime primary is <1s
 
@@ -67,7 +67,7 @@ export class SupabaseRealtime {
             'inventory_categories', 'inventory_uoms', 'orders', 'table_sessions',
             'bill_revisions', 'invoices', 'payments',
             'cancellation_requests', 'prepared_item_holds', 'disposition_policies',
-            'shift_registers', 'production_batches'
+            'shift_registers', 'production_batches', 'attendance'
           ], 'tenant_h0qc7wf');
           console.log('☁️ [SupabaseRealtime] Full cloud refresh completed on reconnect.');
         } catch (e) {
@@ -782,6 +782,15 @@ export class SupabaseRealtime {
       // into the same local cache key the service reads so every screen stays
       // consistent without a full hydrate round-trip.
       this._upsertCloudRecord(table, newRecord);
+    } else if ((table === 'attendance' || table === 'system_config' || table === 'roles') && newRecord) {
+      // Phase 4 cloud-sync surfaces: mirror the row into the local cache and
+      // notify the live views (timesheet, config, role catalog) to re-render.
+      this._upsertCloudRecord(table, newRecord);
+      if (table === 'system_config') {
+        platformEventBus.publish(PlatformEventTypes.CONFIG_UPDATED, { section: newRecord.section, source: 'realtime_sync' });
+      } else if (table === 'attendance') {
+        platformEventBus.publish('attendance:updated', { source: 'realtime_sync' });
+      }
     }
 
     if (!isFromBroadcast) {

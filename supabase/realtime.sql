@@ -36,6 +36,11 @@ ALTER TABLE public.cash_registers        REPLICA IDENTITY FULL;
 ALTER TABLE public.register_transactions REPLICA IDENTITY FULL;
 ALTER TABLE public.shift_registers        REPLICA IDENTITY FULL;
 ALTER TABLE public.production_batches     REPLICA IDENTITY FULL;
+-- Phase 4 cloud-sync surfaces (also enabled by production_hardening.sql; kept
+-- here so a single realtime migration is complete on its own).
+ALTER TABLE public.attendance             REPLICA IDENTITY FULL;
+ALTER TABLE public.system_config          REPLICA IDENTITY FULL;
+ALTER TABLE public.roles                  REPLICA IDENTITY FULL;
 
 -- 2. Ensure the `supabase_realtime` publication exists.
 --    Supabase creates this by default; guard just in case.
@@ -63,7 +68,10 @@ DECLARE
     'cash_registers',
     'register_transactions',
     'shift_registers',
-    'production_batches'
+    'production_batches',
+    'attendance',
+    'system_config',
+    'roles'
   ];
 BEGIN
   FOREACH t IN ARRAY tables LOOP
@@ -98,5 +106,5 @@ SELECT
   )               AS in_realtime_publication
 FROM pg_class c
 WHERE c.relkind = 'r'
-  AND c.relname IN ('orders','table_sessions','bill_revisions','invoices','payments','stock_balances','cancellation_requests','prepared_item_holds','retail_sales','cash_registers','register_transactions','shift_registers','production_batches')
+  AND c.relname IN ('orders','table_sessions','bill_revisions','invoices','payments','stock_balances','cancellation_requests','prepared_item_holds','retail_sales','cash_registers','register_transactions','shift_registers','production_batches','attendance','system_config','roles')
 ORDER BY c.relname;
