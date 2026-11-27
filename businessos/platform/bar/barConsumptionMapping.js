@@ -178,9 +178,10 @@ export function resolveBarConsumption(menuItem, variant = null, options = {}) {
   const itemCode = String(menuItem.itemCode || menuItem.item_code || menuItem.id || '').toUpperCase();
   const orderQty = parseFloat(options.orderQty || 1);
   const cat = String(menuItem.category || menuItem.category_code || '').toUpperCase();
+  const explicitMode = String(menuItem.consumptionMode || menuItem.consumption_mode || '').toUpperCase().trim();
 
   // 1. RECIPE MODE: Cocktails and Mocktails
-  if (BAR_COCKTAIL_CODES.has(itemCode) || cat.includes('COCKTAIL') || cat.includes('MOCKTAIL')) {
+  if (explicitMode === 'RECIPE' || BAR_COCKTAIL_CODES.has(itemCode) || cat.includes('COCKTAIL') || cat.includes('MOCKTAIL')) {
     const recipeId = menuItem.recipeId || menuItem.recipe_id || null;
     return {
       success: true,
@@ -195,7 +196,8 @@ export function resolveBarConsumption(menuItem, variant = null, options = {}) {
   }
 
   // 2. DIRECT SKU MAPPING (POUR or UNIT)
-  const mappedSku = BAR_SKU_MAP[itemCode];
+  // Dynamic link on menu item / variant takes precedence over compiled BAR_SKU_MAP
+  const mappedSku = menuItem.linkedInventorySku || menuItem.linked_inventory_sku || variant?.linkedInventorySku || variant?.linked_inventory_sku || menuItem.inventoryItemCode || BAR_SKU_MAP[itemCode];
   if (!mappedSku) {
     return {
       success: false,
@@ -209,7 +211,11 @@ export function resolveBarConsumption(menuItem, variant = null, options = {}) {
   const isSoftDrink = cat.includes('BEVERAGE');
   const vName = String(variant?.name || variant?.variantName || '').toLowerCase();
 
-  const mode = isBeerOrBreezer ? 'UNIT' : (isSoftDrink && vName.includes('portion') ? 'UNIT' : 'POUR');
+  const mode = (explicitMode === 'DIRECT_UNIT' || explicitMode === 'UNIT')
+    ? 'UNIT'
+    : (explicitMode === 'DIRECT_POUR' || explicitMode === 'POUR')
+      ? 'POUR'
+      : (isBeerOrBreezer ? 'UNIT' : (isSoftDrink && vName.includes('portion') ? 'UNIT' : 'POUR'));
 
   let deductionQtyPerServing = 0;
   // Resolve the item's canonical stock unit (hybrid packaging model): packaged
@@ -236,11 +242,18 @@ export function resolveBarConsumption(menuItem, variant = null, options = {}) {
         servingMl = 30;
       } else if (vName.includes('60')) {
         servingMl = 60;
+      } else if (vName.includes('90')) {
+        servingMl = 90;
+      } else if (vName.includes('180')) {
+        servingMl = 180;
       } else if (vName.includes('200') || vName.includes('glass')) {
         servingMl = 200;
       } else if (vName.includes('750') || vName.includes('bottle')) {
         servingMl = 750;
       }
+    }
+    if (servingMl <= 0 && (menuItem.defaultServingSize || menuItem.servingSize)) {
+      servingMl = parseFloat(menuItem.defaultServingSize || menuItem.servingSize) || 0;
     }
 
     if (servingMl <= 0) {

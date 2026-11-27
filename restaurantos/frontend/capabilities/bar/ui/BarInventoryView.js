@@ -151,10 +151,11 @@ export class BarInventoryView {
       }
     });
 
-    // Filter to Bar items (categories CAT-BEV-ALC, CAT-BEV-SOFT or department BAR or code BARxxxx)
+    // Filter to active Bar items (categories CAT-BEV-ALC, CAT-BEV-SOFT, CAT-BAR-* or department BAR or code BARxxxx)
     const barMasterItems = allItems.filter(i => {
+      if (i.active === false || String(i.status || '').toUpperCase() === 'ARCHIVED') return false;
       const cat = String(i.categoryCode || i.category || '').toUpperCase();
-      const dept = String(i.department || '').toUpperCase();
+      const dept = String(i.department || i.departmentUsageScope || '').toUpperCase();
       const code = String(i.itemCode || i.item_code || i.id || '').toUpperCase();
       return cat.includes('BEV') || cat.includes('BAR') || dept.includes('BAR') || code.startsWith('BAR');
     });

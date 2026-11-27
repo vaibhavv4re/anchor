@@ -24,9 +24,10 @@
 import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
 import { StockTransferRepository } from '../repositories/stockTransferRepository.js';
+import { CANONICAL_LOCATIONS } from '../inventory/storageLocationConfig.js';
 
-export const RETAIL_STORE_LOCATION = 'LOC-RETAIL';
-export const MAIN_WAREHOUSE_LOCATION = 'LOC-805';
+export const RETAIL_STORE_LOCATION = CANONICAL_LOCATIONS.RETAIL;
+export const MAIN_WAREHOUSE_LOCATION = CANONICAL_LOCATIONS.MAIN;
 export const RETAIL_DEPARTMENT = 'Retail';
 
 export const RetailReplenishmentStatus = Object.freeze({

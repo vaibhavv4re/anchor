@@ -23,9 +23,10 @@ import { offlineStore } from '../offline_store/offlineStore.js';
 import { platformEventBus } from '../events/platformEvents.js';
 import { StockTransferRepository } from '../repositories/stockTransferRepository.js';
 import { BAR_SKU_MAP, getBarPackSizeMl } from './barConsumptionMapping.js';
+import { CANONICAL_LOCATIONS } from '../inventory/storageLocationConfig.js';
 
-export const BAR_STORE_LOCATION = 'LOC-314';
-export const MAIN_WAREHOUSE_LOCATION = 'LOC-805';
+export const BAR_STORE_LOCATION = CANONICAL_LOCATIONS.BAR;
+export const MAIN_WAREHOUSE_LOCATION = CANONICAL_LOCATIONS.MAIN;
 export const BAR_DEPARTMENT = 'Bar Store';
 
 export const BarStockStatus = Object.freeze({

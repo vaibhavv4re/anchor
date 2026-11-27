@@ -16,6 +16,7 @@ import { DataGateway } from '../data/dataGateway.js';
 import { SupabaseClient } from '../cloud/supabaseClient.js';
 import { SupabaseDataAdapter } from '../data/adapters/supabaseDataAdapter.js';
 import { resolveBarConsumption, BAR_SKU_MAP, BAR_COCKTAIL_CODES } from '../bar/barConsumptionMapping.js';
+import { resolveDepartmentLocation, isDepartmentLocation } from './storageLocationConfig.js';
 
 export function isBarInventorySku(itemCode) {
   const code = String(itemCode || '').toUpperCase().trim();
@@ -56,11 +57,6 @@ export class InventoryConsumptionService {
    * Prioritizes kitchen locations (LOC-886, LOC-KIT, LOC-901, LOC-KITCHEN) for food ingredients.
    */
   resolveLocationForItem(itemCode, tenantId = 'tenant_h0qc7wf') {
-    // 1. Authoritative Bar Store isolation: all Bar SKUs strictly map to LOC-314
-    if (isBarInventorySku(itemCode)) {
-      return 'LOC-314';
-    }
-
     const dg = this._getDataGateway();
     let balances = [];
     if (dg && typeof dg.getCachedCollection === 'function') {
@@ -73,25 +69,48 @@ export class InventoryConsumptionService {
     const norm = (s) => String(s || '').toUpperCase().trim().replace(/[-_]/g, '');
     const target = norm(itemCode);
 
-    // 2. Kitchen Store match
+    // 1. Authoritative Bar Store isolation: resolves to configured Bar location (canonical: LOC-BAR)
+    // Falls back to legacy LOC-314 only if stock balance currently sits exclusively at LOC-314.
+    if (isBarInventorySku(itemCode)) {
+      const configuredBarLoc = resolveDepartmentLocation('BAR', tenantId);
+      const barBal = balances.find(b => {
+        const code = norm(b.itemCode || b.item_code);
+        const loc = String(b.locationCode || b.location_code || '').toUpperCase().trim();
+        return code === target && loc === configuredBarLoc && parseFloat(b.quantity || 0) > 0;
+      });
+      if (barBal) return configuredBarLoc;
+
+      const legacyBarBal = balances.find(b => {
+        const code = norm(b.itemCode || b.item_code);
+        const loc = String(b.locationCode || b.location_code || '').toUpperCase().trim();
+        return code === target && loc === 'LOC-314' && parseFloat(b.quantity || 0) > 0;
+      });
+      if (legacyBarBal) return 'LOC-314';
+
+      return configuredBarLoc;
+    }
+
+    // 2. Kitchen Store match (configured Kitchen location, canonical: LOC-KITCHEN, plus legacy aliases)
+    const configuredKitLoc = resolveDepartmentLocation('KITCHEN', tenantId);
     const kitBal = balances.find(b => {
       const code = norm(b.itemCode || b.item_code);
       const loc = String(b.locationCode || b.location_code || '').toUpperCase().trim();
-      const isKit = loc === 'LOC-886' || loc === 'LOC-KIT' || loc === 'LOC-901' || loc === 'LOC-KITCHEN' || loc.includes('KIT');
-      return (code === target || code.includes(target) || target.includes(code)) && isKit;
+      return (code === target || code.includes(target) || target.includes(code)) && isDepartmentLocation(loc, 'KITCHEN', tenantId);
     });
     if (kitBal) return kitBal.locationCode || kitBal.location_code;
 
-    // 3. Any non-bar location match
+    // 3. Any non-bar, non-retail location match
     const anyBal = balances.find(b => {
       const code = norm(b.itemCode || b.item_code);
       const loc = String(b.locationCode || b.location_code || '').toUpperCase().trim();
-      return (code === target || code.includes(target) || target.includes(code)) && loc !== 'LOC-314';
+      return (code === target || code.includes(target) || target.includes(code))
+        && !isDepartmentLocation(loc, 'BAR', tenantId)
+        && !isDepartmentLocation(loc, 'RETAIL', tenantId);
     });
     if (anyBal) return anyBal.locationCode || anyBal.location_code;
 
-    // 4. Authoritative kitchen default
-    return 'LOC-886';
+    // 4. Authoritative configured kitchen default (LOC-KITCHEN)
+    return configuredKitLoc;
   }
 
   /**
@@ -204,7 +223,7 @@ export class InventoryConsumptionService {
                 quantity: barResult.totalDeduction,
                 uom: barResult.baseUom || 'LTR',
                 source: `BAR_${barResult.mode}_MAPPING`,
-                locationCode: 'LOC-314'
+                locationCode: resolveDepartmentLocation('BAR', tId)
               }
             ]
           };
@@ -227,6 +246,14 @@ export class InventoryConsumptionService {
     // Step 2: Hard gate for deductionDisabled (Cocktail safeguard)
     if (resolved && resolved.deductionDisabled) {
       console.warn(`[InventoryConsumptionService] ⚠️ ${resolved.warningCode || 'Deduction Disabled'} for line item "${item.name || item.itemName || item.itemCode}". Skipping consumption without stock mutation.`);
+      this._recordConsumptionException(tId, {
+        orderId,
+        orderLineId,
+        itemCode: itemCodeUpper,
+        itemName: item.name || item.itemName || itemCodeUpper,
+        reason: resolved.warningCode || 'RECIPE_MISSING_DEDUCTION_DISABLED',
+        occurredAt
+      });
       return {
         success: false,
         status: 'SKIPPED',
@@ -238,6 +265,14 @@ export class InventoryConsumptionService {
 
     if (!resolved || !Array.isArray(resolved.consumption) || resolved.consumption.length === 0) {
       console.log(`[InventoryConsumptionService] No BOM resolved for line item "${item.name || item.itemName || item.itemCode}". Skipping consumption.`);
+      this._recordConsumptionException(tId, {
+        orderId,
+        orderLineId,
+        itemCode: itemCodeUpper,
+        itemName: item.name || item.itemName || itemCodeUpper,
+        reason: 'NO_BOM_CONFIGURED',
+        occurredAt
+      });
       return {
         success: true,
         skipped: true,
@@ -865,6 +900,29 @@ export class InventoryConsumptionService {
         }
       }
     });
+  }
+
+  /**
+   * Log consumption exception (e.g. unrecipied dish sold) for operational visibility.
+   * Does NOT block customer billing or kitchen fulfillment.
+   * @param {string} tenantId
+   * @param {Object} exception { orderId, orderLineId, itemCode, itemName, reason, occurredAt }
+   */
+  _recordConsumptionException(tenantId, exception) {
+    try {
+      const list = offlineStore.getCollection('inventory_consumption_exceptions', tenantId) || [];
+      list.push({
+        id: `exc_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        tenantId,
+        ...exception,
+        status: 'PENDING_RECONCILIATION',
+        recordedAt: new Date().toISOString()
+      });
+      // Cap at 200 items
+      if (list.length > 200) list.shift();
+      offlineStore.setCollection('inventory_consumption_exceptions', list, tenantId);
+      platformEventBus.publish('inventory:exception:missing_recipe', { tenantId, ...exception });
+    } catch (_) {}
   }
 }
 

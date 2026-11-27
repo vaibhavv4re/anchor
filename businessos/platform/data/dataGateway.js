@@ -364,7 +364,11 @@ export class DataGateway {
           await this.cloudAdapter.create(_ent, payload);
         } else if (_type === 'UPDATE') {
           const id = payload.id || (payload.patch && payload.patch.id);
-          const patch = payload.patch || payload;
+          const rawPatch = payload.patch || payload;
+          const jobTenant = job.tenantId || job.tenant_id || (payload && (payload.tenantId || payload.tenant_id));
+          const patch = (rawPatch && typeof rawPatch === 'object' && !rawPatch.tenantId && !rawPatch.tenant_id && jobTenant)
+            ? { ...rawPatch, tenantId: jobTenant }
+            : rawPatch;
           await this.cloudAdapter.update(_ent, id, patch);
         } else if (_type === 'DELETE') {
           await this.cloudAdapter.delete(_ent, payload.id);

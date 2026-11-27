@@ -11,6 +11,7 @@
 
 import { offlineStore } from '../offline_store/offlineStore.js';
 import { recipeModel } from './recipeModel.js';
+import { resolveDepartmentLocation, isDepartmentLocation } from '../inventory/storageLocationConfig.js';
 
 export function convertRecipeUomToNormalized(qty, recipeUom, baseUom) {
   const q = parseFloat(qty) || 0;
@@ -422,24 +423,25 @@ export class ProductionModel {
       const qtyToDeduct = ing.scaledBaseQty;
 
       // Append PRODUCTION_CONSUMPTION ledger entry
+      const kitLoc = resolveDepartmentLocation('KITCHEN', targetTenantId);
       const txnRecord = {
         id: `txn-cons-${Math.random().toString(36).substring(2, 9)}`,
         referenceNo: batch.batchCode,
         transactionType: 'PRODUCTION_CONSUMPTION',
         itemCode: lineCode,
         itemName: ing.inventoryItemName,
-        locationCode: 'LOC-KIT',
+        locationCode: kitLoc,
         quantity: -qtyToDeduct,
         uom: ing.baseUom,
         notes: `Production consumption for batch ${batch.batchCode} (${batch.inventoryItemName})`,
         timestamp: now,
         tenantId: targetTenantId
       };
-      // Deduct from Kitchen Store (LOC-886 / LOC-KIT) stock balance
+      // Deduct from configured Kitchen Store stock balance
       let kitBalIdx = stockBalances.findIndex(s => {
         const itemMatch = String(s.itemCode || s.item_code || s.itemId || s.id) === lineCode || lineCode.includes(String(s.itemCode || s.item_code || ''));
         const loc = String(s.locationCode || s.location_code || '').toUpperCase().trim();
-        const locMatch = loc === 'LOC-886' || loc === 'LOC-KIT' || loc === 'LOC-901' || loc === 'LOC-KITCHEN' || loc === 'KITCHEN_STORE';
+        const locMatch = isDepartmentLocation(loc, 'KITCHEN', targetTenantId) || loc === 'KITCHEN_STORE';
         return itemMatch && locMatch;
       });
 
@@ -457,13 +459,14 @@ export class ProductionModel {
     const masterItem = masterInv.find(i => String(i.itemCode || i.item_code || i.id || '') === outputItemCode);
 
     if (outputItemCode && (masterItem || outputItemCode.startsWith('SF') || outputItemCode.startsWith('PREP'))) {
+      const kitLoc = resolveDepartmentLocation('KITCHEN', targetTenantId);
       const outputTxn = {
         id: `txn-out-${Math.random().toString(36).substring(2, 9)}`,
         referenceNo: batch.batchCode,
         transactionType: 'PRODUCTION_OUTPUT',
         itemCode: outputItemCode,
         itemName: batch.inventoryItemName,
-        locationCode: 'LOC-886',
+        locationCode: kitLoc,
         quantity: yieldNum,
         uom: batch.targetUom,
         notes: `Production output yield for batch ${batch.batchCode}`,
@@ -475,7 +478,7 @@ export class ProductionModel {
       let outputBalIdx = stockBalances.findIndex(s => {
         const itemMatch = String(s.itemCode || s.item_code || s.itemId || s.id) === outputItemCode || outputItemCode.includes(String(s.itemCode || s.item_code || ''));
         const loc = String(s.locationCode || s.location_code || '').toUpperCase().trim();
-        const locMatch = loc === 'LOC-886' || loc === 'LOC-KIT' || loc === 'LOC-901' || loc === 'LOC-KITCHEN' || loc === 'KITCHEN_STORE';
+        const locMatch = isDepartmentLocation(loc, 'KITCHEN', targetTenantId) || loc === 'KITCHEN_STORE';
         return itemMatch && locMatch;
       });
 
@@ -494,8 +497,8 @@ export class ProductionModel {
           itemCode: outputItemCode,
           itemName: batch.inventoryItemName,
           inventoryItemName: batch.inventoryItemName,
-          location_code: 'LOC-886',
-          locationCode: 'LOC-886',
+          location_code: kitLoc,
+          locationCode: kitLoc,
           quantity: yieldNum,
           currentStock: yieldNum,
           uom: batch.targetUom,
@@ -558,6 +561,8 @@ export class ProductionModel {
     const reqNum = list.length + 1;
     const reqCode = `REQ-${now.getFullYear()}-${String(reqNum).padStart(4, '0')}`;
 
+    const mainLoc = resolveDepartmentLocation('MAIN', targetTenantId);
+    const kitLoc = resolveDepartmentLocation('KITCHEN', targetTenantId);
     const newReq = {
       id: reqCode,
       requestNumber: reqCode,
@@ -565,10 +570,10 @@ export class ProductionModel {
       reqCode,
       department: 'Kitchen Production',
       requestedBy: 'Kitchen Chef (Production)',
-      sourceLocation: 'LOC-805',
-      source_location: 'LOC-805',
-      destinationLocation: 'LOC-886',
-      destination_location: 'LOC-886',
+      sourceLocation: mainLoc,
+      source_location: mainLoc,
+      destinationLocation: kitLoc,
+      destination_location: kitLoc,
       recipeId,
       recipeCode,
       inventoryItemName,

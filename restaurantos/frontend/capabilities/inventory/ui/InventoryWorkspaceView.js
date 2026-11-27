@@ -18,6 +18,8 @@ import { CategoryRepository } from '../../../../../businessos/platform/repositor
 import { retailReplenishmentModel } from '../../../../../businessos/platform/retail/retailReplenishmentModel.js';
 import { barReplenishmentModel } from '../../../../../businessos/platform/bar/barReplenishmentModel.js';
 import { UOM_REGISTRY } from '../../../../../businessos/platform/uom/uomRegistry.js';
+import { LEGACY_LOCATION_ALIASES, consolidateLegacyLocations } from '../../../../../businessos/platform/inventory/storageLocationConfig.js';
+import { auditInventoryMaster, cleanupInventoryMaster } from '../../../../../businessos/platform/inventory/inventoryAuditHelper.js';
 
 export class InventoryWorkspaceView {
   constructor(deps = {}) {
@@ -1503,13 +1505,21 @@ export class InventoryWorkspaceView {
         return { raw: i, code, cat, segment: this._classifyItemSegment(i, categories) };
       });
 
-      const segCounts = { ALL: withSeg.length, FOOD: 0, BAR: 0, OPERATING: 0 };
-      withSeg.forEach(x => { segCounts[x.segment] = (segCounts[x.segment] || 0) + 1; });
+      const invAudit = auditInventoryMaster(items);
+      const segCounts = { ALL: 0, FOOD: 0, BAR: 0, OPERATING: 0 };
+      withSeg.forEach(x => {
+        const isArch = x.raw.active === false || String(x.raw.status || '').toUpperCase() === 'ARCHIVED';
+        if (isArch) return;
+        segCounts.ALL += 1;
+        segCounts[x.segment] = (segCounts[x.segment] || 0) + 1;
+      });
 
       const filtered = withSeg.filter(x => {
+        const isArch = x.raw.active === false || String(x.raw.status || '').toUpperCase() === 'ARCHIVED';
+        if (statusFilter === 'ALL' && isArch) return false;
         if (seg !== 'ALL' && x.segment !== seg) return false;
         if (catFilter !== 'ALL' && x.cat !== catFilter) return false;
-        const isAct = x.raw.active !== false;
+        const isAct = x.raw.active !== false && String(x.raw.status || '').toUpperCase() !== 'ARCHIVED';
         if (statusFilter === 'ACTIVE' && !isAct) return false;
         if (statusFilter === 'INACTIVE' && isAct) return false;
         if (q) {
@@ -1636,6 +1646,20 @@ export class InventoryWorkspaceView {
             ${SEGS.map(s => `<button type="button" class="master-seg-btn" data-seg="${s.key}" style="${segBtnStyle(seg === s.key)}">${s.label} <span style="opacity:0.75; margin-left:4px;">(${s.count})</span></button>`).join('')}
           </div>
 
+          ${invAudit.needsCleanup ? `
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; padding:12px 16px; margin-bottom:14px; border-radius:6px; background:rgba(245, 158, 11, 0.1); border:1px solid var(--status-warning);">
+              <div>
+                <div style="font-weight:700; color:var(--status-warning);">⚠️ Master Inventory Audit: ${invAudit.totalActiveRows} Active Rows (${invAudit.uniqueCodesCount} Unique SKUs)</div>
+                <div style="font-size:0.82rem; color:var(--text-muted); margin-top:2px;">
+                  Detected <strong>${invAudit.duplicateCodeCount}</strong> duplicate item-code row(s), <strong>${invAudit.duplicateNameCount}</strong> same-name overlap(s), and <strong>${invAudit.legacyNonPackCount}</strong> legacy/non-pack SKU(s) outside the canonical 257-item pack.
+                </div>
+              </div>
+              <button type="button" id="btn-cleanup-inventory-master" style="padding:8px 16px; font-weight:700; background:var(--status-warning); color:#000; border:none; border-radius:6px; cursor:pointer;">
+                🧹 Deduplicate &amp; Archive Legacy SKUs
+              </button>
+            </div>
+          ` : ''}
+
           <!-- Filter bar -->
           <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:14px; align-items:center;">
             <input type="search" id="inp-master-search" placeholder="🔍 Search item code or name..." value="${q.replace(/"/g, '&quot;')}" style="flex:1; min-width:220px; padding:8px 12px; border-radius:6px; border:1px solid var(--border-subtle); background:var(--bg-surface-2); color:var(--text-main);">
@@ -1700,7 +1724,32 @@ export class InventoryWorkspaceView {
 
       const btnTemplate = mount.querySelector('#btn-inv-master-template');
       if (btnTemplate) btnTemplate.addEventListener('click', () => this.handleMasterInventoryTemplateDownload());
+
+      const btnCleanupInv = mount.querySelector('#btn-cleanup-inventory-master');
+      if (btnCleanupInv) {
+        btnCleanupInv.addEventListener('click', async () => {
+          try {
+            btnCleanupInv.disabled = true;
+            btnCleanupInv.innerHTML = '⏳ Cleaning up...';
+            const res = await cleanupInventoryMaster({ tenantId, dataGateway: this.dataGateway, archiveLegacy: true });
+            alert(`✅ Master Inventory Cleaned!\n• Duplicate rows deleted: ${res.deduplicatedCount}\n• Legacy SKUs soft-archived: ${res.archivedLegacyCount}\n• Active canonical SKUs remaining: ${res.activeRemainingCount}`);
+            this.render(this.container, this._session);
+          } catch (err) {
+            alert(`Cleanup failed: ${err.message}`);
+            btnCleanupInv.disabled = false;
+            btnCleanupInv.innerHTML = '🧹 Deduplicate & Archive Legacy SKUs';
+          }
+        });
+      }
     } else if (tabKey === 'inv-locations' || tabKey === 'locations') {
+      const seenCodes = new Set();
+      const legacyOrDupes = locations.filter(l => {
+        const c = String(l.locationCode || l.location_code || l.id || '').toUpperCase().trim();
+        if (LEGACY_LOCATION_ALIASES[c] || seenCodes.has(c)) return true;
+        seenCodes.add(c);
+        return false;
+      });
+
       mount.innerHTML = `
         <div class="card animate-fade-in" style="background:var(--bg-surface-1); padding:24px; border-radius:8px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:12px;">
@@ -1723,6 +1772,21 @@ export class InventoryWorkspaceView {
               </button>
             </div>
           </div>
+
+          ${legacyOrDupes.length > 0 ? `
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; padding:14px 16px; margin-bottom:16px; border-radius:6px; background:rgba(245, 158, 11, 0.1); border:1px solid var(--status-warning);">
+              <div>
+                <div style="font-weight:700; color:var(--status-warning);">⚠️ ${legacyOrDupes.length} Legacy / Duplicate Storage Location(s) Detected</div>
+                <div style="font-size:0.82rem; color:var(--text-muted); margin-top:2px;">
+                  Remap existing items &amp; stock balances from old codes (<code>LOC-805</code>, <code>LOC-886</code>, <code>LOC-314</code>) to canonical codes (<code>LOC-MWH</code>, <code>LOC-KITCHEN</code>, <code>LOC-BAR</code>, <code>LOC-RETAIL</code>) and remove duplicates.
+                </div>
+              </div>
+              <button class="btn-primary" id="btn-consolidate-locations" style="padding:9px 16px; font-weight:700; background:var(--status-warning); color:#000; border:none; border-radius:6px; cursor:pointer;">
+                🧹 Migrate Mappings &amp; Clean Up
+              </button>
+            </div>
+          ` : ''}
+
           <div class="table-responsive">
             <table class="data-table" style="width:100%; border-collapse:collapse; font-size:0.85rem;">
               <thead>
@@ -1753,6 +1817,23 @@ export class InventoryWorkspaceView {
 
       const btnExportLoc = mount.querySelector('#btn-export-loc-csv');
       if (btnExportLoc) btnExportLoc.addEventListener('click', () => this.exportLocationsCSV(locations));
+
+      const btnConsolidate = mount.querySelector('#btn-consolidate-locations');
+      if (btnConsolidate) {
+        btnConsolidate.addEventListener('click', async () => {
+          try {
+            btnConsolidate.disabled = true;
+            btnConsolidate.innerHTML = '⏳ Migrating...';
+            const res = await consolidateLegacyLocations(tenantId, this.dataGateway);
+            alert(`✅ Storage Locations Consolidated!\n• Inventory items remapped: ${res.migratedItems}\n• Stock balances migrated: ${res.migratedBalances}\n• Old/duplicate locations removed: ${res.removedLocations}`);
+            this.render(this.container, this._session);
+          } catch (err) {
+            alert(`Consolidation failed: ${err.message}`);
+            btnConsolidate.disabled = false;
+            btnConsolidate.innerHTML = '🧹 Migrate Mappings & Clean Up';
+          }
+        });
+      }
     } else if (tabKey === 'inv-suppliers' || tabKey === 'suppliers') {
       const activeSuppliers = suppliers.length ? suppliers : supplierImportController.getDefaultSuppliers();
       const inactiveCount = activeSuppliers.filter(s => s.active === false).length;

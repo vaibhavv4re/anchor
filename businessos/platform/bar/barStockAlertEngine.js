@@ -27,10 +27,11 @@ import {
   computeBarStockStatus,
   BarStockStatus,
   BAR_POLICY_CLASSIFICATION_MAP,
-  calculateSuggestedRestockQuantity
+  calculateSuggestedRestockQuantity,
+  BAR_STORE_LOCATION as CANONICAL_BAR_LOC
 } from './barReplenishmentModel.js';
 
-export const BAR_STORE_LOCATION = 'LOC-314';
+export const BAR_STORE_LOCATION = CANONICAL_BAR_LOC;
 
 export const BarAlertEventTypes = Object.freeze({
   THRESHOLD_BREACHED: 'stock:threshold_breached',

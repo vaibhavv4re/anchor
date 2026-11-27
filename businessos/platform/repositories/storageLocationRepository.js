@@ -1,4 +1,5 @@
 import { attachStandardMetadata } from '../metadata/entityMetadata.js';
+import { formatLocationCode } from '../inventory/storageLocationConfig.js';
 
 /**
  * StorageLocationRepository domain persistence abstraction.
@@ -55,11 +56,12 @@ export class StorageLocationRepository {
       }
     }
 
+    const resolvedCode = formatLocationCode(data.locationCode || data.shortName);
     let newLoc = {
       id: 'loc-' + Math.random().toString(36).substring(2, 7),
-      locationCode: data.locationCode || ('LOC-' + Math.floor(100 + Math.random() * 900)),
+      locationCode: resolvedCode,
       locationName: data.locationName || 'Storage Area',
-      shortName: data.shortName || '',
+      shortName: data.shortName || resolvedCode.replace(/^LOC-/, ''),
       locationType: data.locationType || 'Store',
       level: data.level || 'Store',
       parentLocationCode: data.parentLocationCode || '',
@@ -378,6 +380,30 @@ export class StorageLocationRepository {
         foodStorage: false,
         alcoholStorage: true,
         notes: 'Access restricted to Bar Manager.'
+      },
+      {
+        id: 'loc-7-' + tid,
+        tenantId: tid,
+        locationCode: 'LOC-RETAIL',
+        locationName: 'Retail Store',
+        shortName: 'RETAIL',
+        locationType: 'Retail Store',
+        level: 'Store',
+        parentLocationCode: 'LOC-MWH',
+        path: 'MWH / RETAIL',
+        status: 'ACTIVE',
+        description: 'Direct-to-guest retail merchandise, packaged foods, and take-home goods.',
+        purposes: ['Finished Goods', 'Retail'],
+        condition: 'Ambient',
+        tempMin: null,
+        tempMax: null,
+        permissions: { receive: false, transferIn: true, transferOut: true, issue: true, production: false, count: true, adjustment: false },
+        responsibleWorkspace: 'retail',
+        responsibleManager: 'Retail Manager',
+        restrictedAccess: false,
+        foodStorage: true,
+        alcoholStorage: false,
+        notes: 'Front-of-house retail counter stock.'
       }
     ];
 

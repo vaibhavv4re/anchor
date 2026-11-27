@@ -1,750 +1,716 @@
 /**
  * Capability 1.3 - Kitchen & Chef Workspace: Actual Restaurant Menu Dataset
- * Canonical 69 Coastal Dishes from Anchor Menu Documentation (Reconciled).
+ * Canonical Food Menu by Chef Varun Inamdar (Anchor Harbour Bar & Kitchen).
+ * Supersedes previous coastal menu dataset. Recipes intentionally unlinked (recipeId: null)
+ * for Phase 1 Clean Sweep; to be mapped in Phase 2 after Master Inventory compliance.
  */
 
+function buildVariants(itemCode, defs) {
+  return defs.map(([name, price, dietaryType]) => ({
+    variantId: `var-${itemCode.toLowerCase()}-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')}`,
+    variantCode: `${itemCode}-${name.toUpperCase().replace(/[^A-Z0-9]+/g, '').slice(0, 6)}`,
+    variantName: name,
+    name,
+    price,
+    sellingPrice: price,
+    dietaryType: dietaryType || undefined,
+    bomMode: 'INDEPENDENT',
+    scalingFactor: 1.0
+  }));
+}
+
 export const ACTUAL_ANCHOR_MENU = [
-  {
-    "id": "menu-item-sou-001",
-    "itemCode": "MENU-SOU-001",
-    "itemName": "Kokum & Coconut Soup",
-    "category": "SOUPS",
-    "dietaryType": "VEG",
-    "sellingPrice": 240,
-    "portionSize": "250ml",
-    "spicinessLevel": "MEDIUM",
-    "region": "Konkan / Maharashtra",
-    "description": "A light coconut broth balanced with the refreshing tang of kokum, the treasured fruit of the Konkan coast.",
-    "recipeNotes": "Hot sol kadhi variation - tangy creamy coconut sweetness and green chilly spice + coconut milk base",
-    "routing": "KITCHEN_LINE",
-    "recipeId": "rcp-9kdifhl"
-  },
-  {
-    "id": "menu-item-sou-002",
-    "itemCode": "MENU-SOU-002",
-    "itemName": "Green Chicken Soup",
-    "category": "SOUPS",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 280,
-    "portionSize": "250ml",
-    "spicinessLevel": "MEDIUM",
-    "region": "Goa",
-    "description": "Shredded chicken simmered with fresh coriander, mint and vegetables, inspired by Goa's vibrant Cafreal flavours.",
-    "recipeNotes": "Cafreal style - vinegar & lemon tang and fresh green flavours of mint, coriander, ginger garlic cafreal masala + chicken broth base",
-    "routing": "KITCHEN_LINE",
-    "recipeId": "rcp-0nm3jf8"
-  },
-  {
-    "id": "menu-item-sou-003",
-    "itemCode": "MENU-SOU-003",
-    "itemName": "Pepper Mutton Soup",
-    "category": "SOUPS",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 320,
-    "portionSize": "250ml",
-    "spicinessLevel": "SPICY",
-    "region": "Kerala / Tamil Nadu",
-    "description": "A slow-cooked mutton broth infused with freshly cracked black pepper, honouring Cochin's centuries-old spice trade.",
-    "recipeNotes": "Kerala mutton curry spice - whole black peppercorns, cloves, cinnamon, fried onion + paya broth base",
-    "routing": "KITCHEN_LINE",
-    "recipeId": "rcp-xm745yn",
-    "hasVariants": true,
-    "variants": [
-      {
-        "id": "var-1787571302168-1",
-        "variantId": "var-1787571302168-1",
-        "variantName": "Half",
-        "price": 180,
-        "sellingPrice": 180,
-        "recipeId": "rcp-4l0hdks",
-        "bomMode": "INDEPENDENT",
-        "availabilityStatus": "AVAILABLE"
-      },
-      {
-        "id": "var-1787571302168-2",
-        "variantId": "var-1787571302168-2",
-        "variantName": "Full",
-        "price": 320,
-        "sellingPrice": 320,
-        "recipeId": "rcp-ss5d6vm",
-        "bomMode": "DERIVED",
-        "scalingFactor": 2.0,
-        "availabilityStatus": "AVAILABLE"
-      }
-    ]
-  },
-  {
-    "id": "menu-item-sou-004",
-    "itemCode": "MENU-SOU-004",
-    "itemName": "Coastal Karnataka Lentil Soup",
-    "category": "SOUPS",
-    "dietaryType": "VEG",
-    "sellingPrice": 220,
-    "portionSize": "250ml",
-    "spicinessLevel": "MILD",
-    "region": "Karnataka",
-    "description": "Wholesome lentils gently simmered with vegetables, tamarind and roasted spices, inspired by Karnataka sambar.",
-    "recipeNotes": "Mild sambar spice with carrots, cauliflower, tadka of curry leaves & mustard seeds + thin Tur dal base",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-sou-005",
-    "itemCode": "MENU-SOU-005",
-    "itemName": "Tomato Soup",
-    "category": "SOUPS",
-    "dietaryType": "VEG",
-    "sellingPrice": 210,
-    "portionSize": "250ml",
-    "spicinessLevel": "MILD",
-    "region": "Konkan / Maharashtra",
-    "description": "Roasted tomatoes, garlic, cumin and crushed peppercorns \u2014 a beloved coastal comfort.",
-    "recipeNotes": "Tomato che saar style. Charred tomatoes, cumin, crushed peppercorns in ghee tadka",
-    "routing": "KITCHEN_LINE",
-    "recipeId": "rcp-ajgdpxm"
-  },
-  {
-    "id": "menu-item-sou-006",
-    "itemCode": "MENU-SOU-006",
-    "itemName": "Captain's Hot Pot",
-    "category": "SOUPS",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 340,
-    "portionSize": "300ml",
-    "spicinessLevel": "SPICY",
-    "region": "Harbour Trade Routes",
-    "description": "A bold seafood broth simmered with garlic, ginger, fresh chillies, vegetables and peppers.",
-    "recipeNotes": "Robust seafood-forward broth with fresh seafood catch and coastal herbs",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-str-001",
-    "itemCode": "MENU-STR-001",
-    "itemName": "Kokani Papad Basket",
-    "category": "GARDEN & GRAIN",
-    "dietaryType": "VEG",
-    "sellingPrice": 180,
-    "description": "Crispy fried papads made from jowar, bajra and ragi paired with our 3 signature house dips.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-str-002",
-    "itemCode": "MENU-STR-002",
-    "itemName": "Spicy Banana Donuts",
-    "category": "GARDEN & GRAIN",
-    "dietaryType": "VEG",
-    "sellingPrice": 240,
-    "description": "Savory raw banana and lentil fritters spiced with cumin, ginger and green chillies.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-str-003",
-    "itemCode": "MENU-STR-003",
-    "itemName": "Coastal Leaf Roll",
-    "category": "GARDEN & GRAIN",
-    "dietaryType": "VEG",
-    "sellingPrice": 260,
-    "description": "Steamed and crisped colocasia leaf pinwheels stuffed with spiced gram flour paste (Alu Vadi style).",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-str-004",
-    "itemCode": "MENU-STR-004",
-    "itemName": "Stuffed Mushrooms",
-    "category": "GARDEN & GRAIN",
-    "dietaryType": "VEG",
-    "sellingPrice": 290,
-    "description": "Button mushrooms stuffed with spiced cottage cheese, herbs and slow-roasted coastal spices.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-str-005",
-    "itemCode": "MENU-STR-005",
-    "itemName": "Green Herb Paneer",
-    "category": "GARDEN & GRAIN",
-    "dietaryType": "VEG",
-    "sellingPrice": 320,
-    "description": "Fresh malai paneer cubes marinated in a vibrant Goan Cafreal herb paste and charcoal grilled.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-str-006",
-    "itemCode": "MENU-STR-006",
-    "itemName": "Smoked Damao Paneer",
-    "category": "GARDEN & GRAIN",
-    "dietaryType": "VEG",
-    "sellingPrice": 340,
-    "description": "Paneer skewers marinated in our signature Damao red spice blend, chargrilled with a gentle smoky glaze.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-str-007",
-    "itemCode": "MENU-STR-007",
-    "itemName": "Grilled Spicy Potatoes",
-    "category": "GARDEN & GRAIN",
-    "dietaryType": "VEG",
-    "sellingPrice": 220,
-    "description": "Baby potatoes parboiled and tossed in Byadgi chilli paste, garlic and mustard oil, finished on the griddle.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-str-008",
-    "itemCode": "MENU-STR-008",
-    "itemName": "Ghee Roast Vegetables",
-    "category": "GARDEN & GRAIN",
-    "dietaryType": "VEG",
-    "sellingPrice": 340,
-    "description": "Crispy seasonal vegetables tossed in Mangalorean ghee roast masala (SF0004) with fried curry leaves.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-str-009",
-    "itemCode": "MENU-STR-009",
-    "itemName": "Mustard Pepper Paneer",
-    "category": "GARDEN & GRAIN",
-    "dietaryType": "VEG",
-    "sellingPrice": 340,
-    "description": "Charcoal grilled paneer skewers glazed with Kasundi mustard and coarsely cracked Tellicherry black pepper.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-prw-001",
-    "itemCode": "MENU-PRW-001",
-    "itemName": "Prawns Koliwada",
-    "category": "FROM THE SEA - PRAWNS",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 520,
-    "description": "Fresh tiger prawns coated in ajwain, red chilli batter and deep-fried crisp Koliwada style.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-prw-002",
-    "itemCode": "MENU-PRW-002",
-    "itemName": "Butter Garlic Prawns",
-    "category": "FROM THE SEA - PRAWNS",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 560,
-    "description": "Tiger prawns pan-tossed in generous golden butter, minced garlic and fresh coastal herbs.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-prw-003",
-    "itemCode": "MENU-PRW-003",
-    "itemName": "Damao Masala Prawns",
-    "category": "FROM THE SEA - PRAWNS",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 560,
-    "description": "Juicy prawns simmered in signature Damao red masala with charred tomatoes and onions.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-prw-004",
-    "itemCode": "MENU-PRW-004",
-    "itemName": "Pickled Prawns",
-    "category": "FROM THE SEA - PRAWNS",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 540,
-    "description": "Prawns pan-seared in traditional Goan toddy vinegar, garlic and fiery peri-peri pickled spices.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-prw-005",
-    "itemCode": "MENU-PRW-005",
-    "itemName": "Ghee Roast Prawns",
-    "category": "FROM THE SEA - PRAWNS",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 590,
-    "description": "Tiger prawns slow-roasted in desi ghee with roasted Byadgi chillies and Mangalorean masala (SF0004).",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-prw-006",
-    "itemCode": "MENU-PRW-006",
-    "itemName": "Mustard Pepper Prawns",
-    "category": "FROM THE SEA - PRAWNS",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 560,
-    "description": "Prawns chargrilled in a robust Kasundi mustard and cracked black pepper glaze.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-chk-001",
-    "itemCode": "MENU-CHK-001",
-    "itemName": "Classic Mamna Skewers",
-    "category": "FROM THE SHORE - CHICKEN",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 380,
-    "description": "Juicy chicken mince skewers seasoned with turmeric, ginger, garlic and green chillies, butter-glazed.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-chk-002",
-    "itemCode": "MENU-CHK-002",
-    "itemName": "Spiced Chourizo Skewers",
-    "category": "FROM THE SHORE - CHICKEN",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 420,
-    "description": "Chicken skewers infused with Goan chourizo-inspired smoked paprika, garlic and vinegar marinade.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-chk-003",
-    "itemCode": "MENU-CHK-003",
-    "itemName": "Smoked Damao Tikka",
-    "category": "FROM THE SHORE - CHICKEN",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 420,
-    "description": "Boneless chicken marinated in Damao red spice blend and charcoal grilled with a smoky finish.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-chk-004",
-    "itemCode": "MENU-CHK-004",
-    "itemName": "Kasundi Chicken Tikka",
-    "category": "FROM THE SHORE - CHICKEN",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 420,
-    "description": "Tender chicken tikka marinated in pungent Bengali Kasundi mustard and hung curd, grilled over coals.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-chk-005",
-    "itemCode": "MENU-CHK-005",
-    "itemName": "Green Herb Roasted Chicken",
-    "category": "FROM THE SHORE - CHICKEN",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 440,
-    "description": "Chicken pieces marinated in fresh mint, coriander and green chilli Cafreal masala, charcoal roasted.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-chk-006",
-    "itemCode": "MENU-CHK-006",
-    "itemName": "Whole Chicken Roast",
-    "category": "FROM THE SHORE - CHICKEN",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 650,
-    "description": "Whole chicken marinated in aromatic red coastal spices, charcoal roasted until smoky outside and juicy within.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-chk-007",
-    "itemCode": "MENU-CHK-007",
-    "itemName": "Ghee Roast Chicken",
-    "category": "FROM THE SHORE - CHICKEN",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 440,
-    "description": "Chicken pan-seared in rich Mangalorean ghee roast masala (SF0004) and desi ghee, bold and smoky.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-chk-008",
-    "itemCode": "MENU-CHK-008",
-    "itemName": "Malabari Pepper Chicken",
-    "category": "FROM THE SHORE - CHICKEN",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 420,
-    "description": "Pan-seared chicken with coarsely cracked Malabar black peppercorns, cumin and fennel.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-chk-009",
-    "itemCode": "MENU-CHK-009",
-    "itemName": "Malvani Chicken Sukka",
-    "category": "FROM THE SHORE - CHICKEN",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 440,
-    "description": "Chicken cooked dry with roasted fresh coconut, dried red chillies and Malvani aromatic spices.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-chk-010",
-    "itemCode": "MENU-CHK-010",
-    "itemName": "Spiced Chicken Lollipops",
-    "category": "FROM THE SHORE - CHICKEN",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 380,
-    "description": "Crispy fried chicken wings marinated in tangy Goan Recheado spice paste and vinegar.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-chk-011",
-    "itemCode": "MENU-CHK-011",
-    "itemName": "Chilli Chicken Wings",
-    "category": "FROM THE SHORE - CHICKEN",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 360,
-    "description": "Crispy chicken wings wok-tossed with fresh chillies, garlic and coastal Indo-Chinese glaze.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-chk-012",
-    "itemCode": "MENU-CHK-012",
-    "itemName": "Andhra Chicken Wings",
-    "category": "FROM THE SHORE - CHICKEN",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 360,
-    "description": "Batter-fried chicken wings wok-tossed with fiery Guntur red chillies, curry leaves and sesame.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-mut-001",
-    "itemCode": "MENU-MUT-001",
-    "itemName": "Mutton Mamna Skewers",
-    "category": "FROM THE SHORE - MUTTON",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 480,
-    "description": "Minced mutton skewers seasoned with garlic, turmeric and fresh green chillies, butter-glazed over charcoal.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-mut-002",
-    "itemCode": "MENU-MUT-002",
-    "itemName": "Mutton Ghee Roast (Tawa Starter)",
-    "category": "FROM THE SHORE - MUTTON",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 560,
-    "description": "Tender mutton slow-cooked and pan-seared dry with Byadgi chillies, ghee and Mangalorean masala (SF0004).",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-mut-003",
-    "itemCode": "MENU-MUT-003",
-    "itemName": "Malabari Pepper Mutton",
-    "category": "FROM THE SHORE - MUTTON",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 520,
-    "description": "Tender mutton pan-fried with freshly crushed Tellicherry peppercorns, cumin and fennel.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-mut-004",
-    "itemCode": "MENU-MUT-004",
-    "itemName": "Green Herb Mutton",
-    "category": "FROM THE SHORE - MUTTON",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 540,
-    "description": "Tender mutton marinated with fresh coriander, mint, green chillies and Cafreal spices, chargrilled.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-cur-001",
-    "itemCode": "MENU-CUR-001",
-    "itemName": "Goan Vegetable Curry",
-    "category": "CURRIES & DAALS",
-    "dietaryType": "VEG",
-    "sellingPrice": 340,
-    "description": "Seasonal vegetables simmered in a classic Goan Xacuti curry of roasted coconut and toasted spices.",
-    "routing": "CURRY_STATION"
-  },
-  {
-    "id": "menu-item-cur-002",
-    "itemCode": "MENU-CUR-002",
-    "itemName": "Malvani Jackfruit Rassa",
-    "category": "CURRIES & DAALS",
-    "dietaryType": "VEG",
-    "sellingPrice": 360,
-    "description": "Tender raw jackfruit simmered in a traditional Malvani rassa with roasted coconut and citrusy triphal.",
-    "routing": "CURRY_STATION"
-  },
-  {
-    "id": "menu-item-cur-003",
-    "itemCode": "MENU-CUR-003",
-    "itemName": "Smoked Paneer in Green Gravy",
-    "category": "CURRIES & DAALS",
-    "dietaryType": "VEG",
-    "sellingPrice": 390,
-    "description": "Chargrilled paneer cubes simmered in a vibrant gravy of spinach, fresh mint, coriander and green chillies.",
-    "routing": "CURRY_STATION"
-  },
-  {
-    "id": "menu-item-cur-004",
-    "itemCode": "MENU-CUR-004",
-    "itemName": "Stuffed Brinjal Curry",
-    "category": "CURRIES & DAALS",
-    "dietaryType": "VEG",
-    "sellingPrice": 320,
-    "description": "Small brinjals stuffed with spiced coconut-peanut blend and simmered in roasted coconut gravy (Bharleli Vangi).",
-    "routing": "CURRY_STATION"
-  },
-  {
-    "id": "menu-item-cur-005",
-    "itemCode": "MENU-CUR-005",
-    "itemName": "Konkan Leaf Curry",
-    "category": "CURRIES & DAALS",
-    "dietaryType": "VEG",
-    "sellingPrice": 320,
-    "description": "Colocasia leaves and stems slow-cooked with tamarind, jaggery and roasted spices (Alu che Fadfade).",
-    "routing": "CURRY_STATION"
-  },
-  {
-    "id": "menu-item-cur-006",
-    "itemCode": "MENU-CUR-006",
-    "itemName": "Smoked Paneer in Red Gravy",
-    "category": "CURRIES & DAALS",
-    "dietaryType": "VEG",
-    "sellingPrice": 390,
-    "description": "Chargrilled paneer simmered in a rich onion-tomato gravy with Damao spices and gentle smoke finish.",
-    "routing": "CURRY_STATION"
-  },
-  {
-    "id": "menu-item-cur-007",
-    "itemCode": "MENU-CUR-007",
-    "itemName": "Mangalorean Vegetable Korma",
-    "category": "CURRIES & DAALS",
-    "dietaryType": "VEG",
-    "sellingPrice": 340,
-    "description": "Seasonal vegetables simmered in a creamy coconut gravy with Byadgi chillies, fennel and aromatic herbs.",
-    "routing": "CURRY_STATION"
-  },
-  {
-    "id": "menu-item-cur-008",
-    "itemCode": "MENU-CUR-008",
-    "itemName": "Jackfruit Green Curry",
-    "category": "CURRIES & DAALS",
-    "dietaryType": "VEG",
-    "sellingPrice": 360,
-    "description": "Tender raw jackfruit slow-cooked in a Goan Cafreal herb and coconut milk base.",
-    "routing": "CURRY_STATION"
-  },
-  {
-    "id": "menu-item-cur-009",
-    "itemCode": "MENU-CUR-009",
-    "itemName": "Yellow Dal Tadka",
-    "category": "CURRIES & DAALS",
-    "dietaryType": "VEG",
-    "sellingPrice": 240,
-    "description": "Slow-cooked yellow lentils finished with a fragrant tempering of cumin, garlic, dried red chillies and ghee.",
-    "routing": "CURRY_STATION"
-  },
-  {
-    "id": "menu-item-cur-010",
-    "itemCode": "MENU-CUR-010",
-    "itemName": "Yellow Dal Fry",
-    "category": "CURRIES & DAALS",
-    "dietaryType": "VEG",
-    "sellingPrice": 260,
-    "description": "Yellow lentils sauteed with onions, tomatoes, green chillies and finished with sizzling garlic tadka.",
-    "routing": "CURRY_STATION"
-  },
-  {
-    "id": "menu-item-cur-011",
-    "itemCode": "MENU-CUR-011",
-    "itemName": "Yellow Dal Varan",
-    "category": "CURRIES & DAALS",
-    "dietaryType": "VEG",
-    "sellingPrice": 220,
-    "description": "Homestyle Tur dal delicately seasoned with turmeric, rock salt and pure desi cow ghee.",
-    "routing": "CURRY_STATION"
-  },
-  {
-    "id": "menu-item-cur-012",
-    "itemCode": "MENU-CUR-012",
-    "itemName": "Sprouted Moong Gassi",
-    "category": "CURRIES & DAALS",
-    "dietaryType": "VEG",
-    "sellingPrice": 280,
-    "description": "Sprouted green gram simmered in a coconut gravy with roasted coriander, tamarind and curry leaves.",
-    "routing": "CURRY_STATION"
-  },
-  {
-    "id": "menu-item-mck-001",
-    "itemCode": "MENU-MCK-001",
-    "itemName": "Damao Homestyle Curry",
-    "category": "MEAT CURRIES - CHICKEN",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 480,
-    "description": "Tender chicken simmered in rich onion and tomato gravy with signature Damao Masala.",
-    "routing": "CURRY_STATION"
-  },
-  {
-    "id": "menu-item-mck-002",
-    "itemCode": "MENU-MCK-002",
-    "itemName": "Smoked Damao Tikka Masala",
-    "category": "MEAT CURRIES - CHICKEN",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 530,
-    "description": "Chargrilled chicken tikka pieces simmered in rich Damao onion-tomato gravy with a gentle smoky glaze.",
-    "routing": "CURRY_STATION"
-  },
-  {
-    "id": "menu-item-mck-003",
-    "itemCode": "MENU-MCK-003",
-    "itemName": "Classic Xacuti Masala",
-    "category": "MEAT CURRIES - CHICKEN",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 510,
-    "description": "Tender chicken simmered in Goan Xacuti curry of slow-roasted grated coconut and toasted spices.",
-    "routing": "CURRY_STATION"
-  },
-  {
-    "id": "menu-item-mck-004",
-    "itemCode": "MENU-MCK-004",
-    "itemName": "Red Vindaloo Curry",
-    "category": "MEAT CURRIES - CHICKEN",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 520,
-    "description": "Chicken slow-cooked in a vibrant Goan curry of toddy vinegar, garlic and Red Pepper Dip (SF0008).",
-    "routing": "CURRY_STATION",
-    "recipeId": "rcp-gdwg7zo"
-  },
-  {
-    "id": "menu-item-mck-005",
-    "itemCode": "MENU-MCK-005",
-    "itemName": "Green Herb Masala",
-    "category": "MEAT CURRIES - CHICKEN",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 490,
-    "description": "Chicken pieces simmered in fresh mint, coriander and green chilli Cafreal gravy.",
-    "routing": "CURRY_STATION"
-  },
-  {
-    "id": "menu-item-mmt-001",
-    "itemCode": "MENU-MMT-001",
-    "itemName": "Mutton Xacuti",
-    "category": "MEAT CURRIES - MUTTON",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 620,
-    "description": "Tender mutton slow-cooked in a complex Goan Xacuti gravy of roasted coconut, poppy seeds and spices.",
-    "routing": "CURRY_STATION"
-  },
-  {
-    "id": "menu-item-mmt-002",
-    "itemCode": "MENU-MMT-002",
-    "itemName": "Mutton Malvani Rassa",
-    "category": "MEAT CURRIES - MUTTON",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 580,
-    "description": "Slow-cooked mutton in an authentic Malvani broth with roasted coconut paste and citrusy triphal.",
-    "routing": "CURRY_STATION"
-  },
-  {
-    "id": "menu-item-mmt-003",
-    "itemCode": "MENU-MMT-003",
-    "itemName": "Mutton Ghee Roast Curry",
-    "category": "MEAT CURRIES - MUTTON",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 640,
-    "description": "Tender mutton simmered in a rich, velvety Mangalorean ghee roast gravy (SF0004) with Byadgi chillies.",
-    "routing": "CURRY_STATION"
-  },
-  {
-    "id": "menu-item-ric-001",
-    "itemCode": "MENU-RIC-001",
-    "itemName": "Steamed Rice",
-    "category": "RICE",
-    "dietaryType": "VEG",
-    "sellingPrice": 160,
-    "description": "Fragrant steamed Kolam rice, an essential accompaniment to coastal curries.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-ric-002",
-    "itemCode": "MENU-RIC-002",
-    "itemName": "Sticky Indrayani Rice",
-    "category": "RICE",
-    "dietaryType": "VEG",
-    "sellingPrice": 180,
-    "description": "Naturally sticky and fragrant Indrayani rice from the Western Ghats, served with pure ghee.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-ric-003",
-    "itemCode": "MENU-RIC-003",
-    "itemName": "Jeera Rice",
-    "category": "RICE",
-    "dietaryType": "VEG",
-    "sellingPrice": 210,
-    "description": "Aromatic long-grain basmati rice delicately tempered with cumin seeds and pure desi ghee.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-ric-004",
-    "itemCode": "MENU-RIC-004",
-    "itemName": "Vegetable Pulav",
-    "category": "RICE",
-    "dietaryType": "VEG",
-    "sellingPrice": 280,
-    "description": "Basmati rice cooked with garden-fresh vegetables, cinnamon, cloves and saffron-scented herbs.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-ric-005",
-    "itemCode": "MENU-RIC-005",
-    "itemName": "Jackfruit Biryani",
-    "category": "RICE",
-    "dietaryType": "VEG",
-    "sellingPrice": 380,
-    "description": "Tender young jackfruit and basmati rice slow dum-cooked with fried onions, mint and coastal biryani masala.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-ric-006",
-    "itemCode": "MENU-RIC-006",
-    "itemName": "Classic Chicken Biryani",
-    "category": "RICE",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 460,
-    "description": "Slow sealed dum-cooked biryani with marinated chicken, saffron milk, mint and caramelised onions.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-ric-007",
-    "itemCode": "MENU-RIC-007",
-    "itemName": "Classic Mutton Biryani",
-    "category": "RICE",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 520,
-    "description": "Fragrant basmati rice layered with succulent bone-in mutton, Malabar whole spices and pure ghee in dum.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-ric-008",
-    "itemCode": "MENU-RIC-008",
-    "itemName": "Stewed Mutton Rice",
-    "category": "RICE",
-    "dietaryType": "NON_VEG",
-    "sellingPrice": 480,
-    "description": "Comforting one-pot coastal preparation of rice slow-simmered in rich mutton bone broth and spices.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-brd-001",
-    "itemCode": "MENU-BRD-001",
-    "itemName": "Rice Bhakri",
-    "category": "COASTAL BREADS",
-    "dietaryType": "VEG",
-    "sellingPrice": 60,
-    "description": "Hand-rolled rustic rice flour flatbread (Tandalachi Bhakari) toasted on iron tawa.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-brd-002",
-    "itemCode": "MENU-BRD-002",
-    "itemName": "Amboli",
-    "category": "COASTAL BREADS",
-    "dietaryType": "VEG",
-    "sellingPrice": 90,
-    "description": "Soft, spongy fermented rice and black gram pancake, staple across Konkan coast.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-brd-003",
-    "itemCode": "MENU-BRD-003",
-    "itemName": "Chapati",
-    "category": "COASTAL BREADS",
-    "dietaryType": "VEG",
-    "sellingPrice": 40,
-    "description": "Soft whole wheat flatbread freshly prepared on the tawa.",
-    "routing": "KITCHEN_LINE"
-  },
-  {
-    "id": "menu-item-brd-004",
-    "itemCode": "MENU-BRD-004",
-    "itemName": "Poi",
-    "category": "COASTAL BREADS",
-    "dietaryType": "VEG",
-    "sellingPrice": 110,
-    "description": "Traditional Goan wood-fired hollow whole-wheat bread, perfect for dipping into curries.",
-    "routing": "KITCHEN_LINE"
+  // ==========================================
+  // 1. SOUPS
+  // ==========================================
+  {
+    id: 'menu-sou-001',
+    itemCode: 'MENU-SOU-001',
+    itemName: 'Sopa de Tomate',
+    category: 'SOUPS',
+    dietaryType: 'VEG',
+    sellingPrice: 250,
+    description: 'With cream & croutons',
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-sou-002',
+    itemCode: 'MENU-SOU-002',
+    itemName: 'Manchow Soup',
+    category: 'SOUPS',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 250,
+    hasVariants: true,
+    variants: buildVariants('MENU-SOU-002', [
+      ['Vegetables', 250, 'VEG'],
+      ['Chicken', 275, 'NON_VEG'],
+      ['Prawns', 305, 'NON_VEG'],
+      ['Crab', 325, 'NON_VEG']
+    ]),
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-sou-003',
+    itemCode: 'MENU-SOU-003',
+    itemName: 'Red Dragon Soup',
+    category: 'SOUPS',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 250,
+    hasVariants: true,
+    variants: buildVariants('MENU-SOU-003', [
+      ['Vegetables', 250, 'VEG'],
+      ['Chicken', 275, 'NON_VEG'],
+      ['Prawns', 305, 'NON_VEG'],
+      ['Crab', 325, 'NON_VEG']
+    ]),
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+
+  // ==========================================
+  // 2. SHARING PLATES — FROM THE GARDEN
+  // ==========================================
+  {
+    id: 'menu-spg-001',
+    itemCode: 'MENU-SPG-001',
+    itemName: 'Gobhi Manchurian',
+    category: 'SHARING PLATES - FROM THE GARDEN',
+    dietaryType: 'VEG',
+    sellingPrice: 330,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-spg-002',
+    itemCode: 'MENU-SPG-002',
+    itemName: 'Dragon Paneer',
+    category: 'SHARING PLATES - FROM THE GARDEN',
+    dietaryType: 'VEG',
+    sellingPrice: 385,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-spg-003',
+    itemCode: 'MENU-SPG-003',
+    itemName: 'Masala Crispy Corn',
+    category: 'SHARING PLATES - FROM THE GARDEN',
+    dietaryType: 'VEG',
+    sellingPrice: 330,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+
+  // ==========================================
+  // 2. SHARING PLATES — FROM THE PASTURE
+  // ==========================================
+  {
+    id: 'menu-spp-001',
+    itemCode: 'MENU-SPP-001',
+    itemName: 'Chicken Cafreal',
+    category: 'SHARING PLATES - FROM THE PASTURE',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 495,
+    description: 'With potato wedges',
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-spp-002',
+    itemCode: 'MENU-SPP-002',
+    itemName: 'Kaleji Kali Miri',
+    category: 'SHARING PLATES - FROM THE PASTURE',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 495,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-spp-003',
+    itemCode: 'MENU-SPP-003',
+    itemName: 'Pulicat Chicken Lollypop',
+    category: 'SHARING PLATES - FROM THE PASTURE',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 495,
+    description: '65 style',
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+
+  // ==========================================
+  // 2. SHARING PLATES — FROM THE OCEAN
+  // ==========================================
+  {
+    id: 'menu-spo-001',
+    itemCode: 'MENU-SPO-001',
+    itemName: 'Rawas Koliwada',
+    category: 'SHARING PLATES - FROM THE OCEAN',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 660,
+    description: 'With Portuguese piri piri mayonnaise',
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-spo-002',
+    itemCode: 'MENU-SPO-002',
+    itemName: 'Mangalorean Prawns Ghee Roast',
+    category: 'SHARING PLATES - FROM THE OCEAN',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 715,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-spo-003',
+    itemCode: 'MENU-SPO-003',
+    itemName: 'Crabs Butter Garlic',
+    category: 'SHARING PLATES - FROM THE OCEAN',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 0,
+    isMarketPrice: true,
+    description: 'As per catch (Market price)',
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+
+  // ==========================================
+  // 2. SHARING PLATES — FROM THE TANDOOR
+  // ==========================================
+  {
+    id: 'menu-spt-001',
+    itemCode: 'MENU-SPT-001',
+    itemName: 'Tandoori Aloo',
+    category: 'SHARING PLATES - FROM THE TANDOOR',
+    dietaryType: 'VEG',
+    sellingPrice: 330,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-spt-002',
+    itemCode: 'MENU-SPT-002',
+    itemName: 'Banjara Broccoli Tikka',
+    category: 'SHARING PLATES - FROM THE TANDOOR',
+    dietaryType: 'VEG',
+    sellingPrice: 360,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-spt-003',
+    itemCode: 'MENU-SPT-003',
+    itemName: 'Paneer Coentros Salsa',
+    category: 'SHARING PLATES - FROM THE TANDOOR',
+    dietaryType: 'VEG',
+    sellingPrice: 415,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-spt-004',
+    itemCode: 'MENU-SPT-004',
+    itemName: 'Tandoori Jheenga',
+    category: 'SHARING PLATES - FROM THE TANDOOR',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 765,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-spt-005',
+    itemCode: 'MENU-SPT-005',
+    itemName: 'Classic Chicken Tikka',
+    category: 'SHARING PLATES - FROM THE TANDOOR',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 545,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-spt-006',
+    itemCode: 'MENU-SPT-006',
+    itemName: 'Chicken Mamna',
+    category: 'SHARING PLATES - FROM THE TANDOOR',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 660,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-spt-007',
+    itemCode: 'MENU-SPT-007',
+    itemName: 'Mutton Mamna',
+    category: 'SHARING PLATES - FROM THE TANDOOR',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 825,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+
+  // ==========================================
+  // 3. FROM THE WOOD FIRED GRILL
+  // ==========================================
+  {
+    id: 'menu-wfg-001',
+    itemCode: 'MENU-WFG-001',
+    itemName: 'Tandoori Eggs',
+    category: 'FROM THE WOOD FIRED GRILL',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 495,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-wfg-002',
+    itemCode: 'MENU-WFG-002',
+    itemName: 'Tandoori Pomfret',
+    category: 'FROM THE WOOD FIRED GRILL',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 0,
+    isMarketPrice: true,
+    description: 'As per catch',
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-wfg-003',
+    itemCode: 'MENU-WFG-003',
+    itemName: 'Prawns Mirchi Tandoori',
+    category: 'FROM THE WOOD FIRED GRILL',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 715,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-wfg-004',
+    itemCode: 'MENU-WFG-004',
+    itemName: 'Chicken Peri Peri Tikka',
+    category: 'FROM THE WOOD FIRED GRILL',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 605,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-wfg-005',
+    itemCode: 'MENU-WFG-005',
+    itemName: 'Barbeque Sticky Wings',
+    category: 'FROM THE WOOD FIRED GRILL',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 605,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-wfg-006',
+    itemCode: 'MENU-WFG-006',
+    itemName: 'Mutton Boti Kebab',
+    category: 'FROM THE WOOD FIRED GRILL',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 825,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+
+  // ==========================================
+  // 4. MAINS — OLD CALCUTTA CHINESE
+  // ==========================================
+  {
+    id: 'menu-occ-001',
+    itemCode: 'MENU-OCC-001',
+    itemName: 'American Chopsuey',
+    category: 'MAINS - OLD CALCUTTA CHINESE',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 415,
+    hasVariants: true,
+    variants: buildVariants('MENU-OCC-001', [
+      ['Vegetables', 415, 'VEG'],
+      ['Chicken & Egg', 495, 'NON_VEG']
+    ]),
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-occ-002',
+    itemCode: 'MENU-OCC-002',
+    itemName: 'Schezwan Gravy',
+    category: 'MAINS - OLD CALCUTTA CHINESE',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 330,
+    hasVariants: true,
+    variants: buildVariants('MENU-OCC-002', [
+      ['Veg Balls', 330, 'VEG'],
+      ['Mushroom', 385, 'VEG'],
+      ['Egg Frittata', 385, 'NON_VEG'],
+      ['Chicken', 415, 'NON_VEG'],
+      ['Paneer', 440, 'VEG'],
+      ['Prawns', 495, 'NON_VEG']
+    ]),
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-occ-003',
+    itemCode: 'MENU-OCC-003',
+    itemName: 'Manchurian Gravy',
+    category: 'MAINS - OLD CALCUTTA CHINESE',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 330,
+    hasVariants: true,
+    variants: buildVariants('MENU-OCC-003', [
+      ['Veg Balls', 330, 'VEG'],
+      ['Mushroom', 385, 'VEG'],
+      ['Egg Frittata', 385, 'NON_VEG'],
+      ['Chicken', 415, 'NON_VEG'],
+      ['Paneer', 440, 'VEG'],
+      ['Prawns', 495, 'NON_VEG']
+    ]),
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-occ-004',
+    itemCode: 'MENU-OCC-004',
+    itemName: 'Hakka Noodles',
+    category: 'MAINS - OLD CALCUTTA CHINESE',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 360,
+    hasVariants: true,
+    variants: buildVariants('MENU-OCC-004', [
+      ['Vegetables', 360, 'VEG'],
+      ['Egg', 415, 'NON_VEG'],
+      ['Chicken & Egg', 440, 'NON_VEG'],
+      ['Prawns', 495, 'NON_VEG'],
+      ['Mixed', 605, 'NON_VEG'],
+      ['Mutton', 660, 'NON_VEG']
+    ]),
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-occ-005',
+    itemCode: 'MENU-OCC-005',
+    itemName: 'Fried Rice',
+    category: 'MAINS - OLD CALCUTTA CHINESE',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 360,
+    hasVariants: true,
+    variants: buildVariants('MENU-OCC-005', [
+      ['Vegetables', 360, 'VEG'],
+      ['Egg', 415, 'NON_VEG'],
+      ['Chicken & Egg', 440, 'NON_VEG'],
+      ['Prawns', 495, 'NON_VEG'],
+      ['Mixed', 605, 'NON_VEG'],
+      ['Mutton', 660, 'NON_VEG']
+    ]),
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-occ-006',
+    itemCode: 'MENU-OCC-006',
+    itemName: 'Manchurian Rice',
+    category: 'MAINS - OLD CALCUTTA CHINESE',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 360,
+    hasVariants: true,
+    variants: buildVariants('MENU-OCC-006', [
+      ['Vegetables', 360, 'VEG'],
+      ['Egg', 385, 'NON_VEG'],
+      ['Chicken & Egg', 440, 'NON_VEG'],
+      ['Prawns', 495, 'NON_VEG'],
+      ['Mixed', 605, 'NON_VEG'],
+      ['Mutton', 660, 'NON_VEG']
+    ]),
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-occ-007',
+    itemCode: 'MENU-OCC-007',
+    itemName: 'Schezwan Sauce (Add-on)',
+    category: 'MAINS - OLD CALCUTTA CHINESE',
+    dietaryType: 'VEG',
+    sellingPrice: 110,
+    description: 'Applies to Hakka Noodles / Fried Rice',
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+
+  // ==========================================
+  // 5. MAINS — INDIAN REGIONAL & COASTAL CURRIES
+  // ==========================================
+  {
+    id: 'menu-irc-001',
+    itemCode: 'MENU-IRC-001',
+    itemName: 'Malabari Pomfret Moilee',
+    category: 'MAINS - INDIAN REGIONAL & COASTAL CURRIES',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 715,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-irc-002',
+    itemCode: 'MENU-IRC-002',
+    itemName: 'Chulivarcha Kombdi Rassa',
+    category: 'MAINS - INDIAN REGIONAL & COASTAL CURRIES',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 605,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-irc-003',
+    itemCode: 'MENU-IRC-003',
+    itemName: 'Agri Mutton Curry',
+    category: 'MAINS - INDIAN REGIONAL & COASTAL CURRIES',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 825,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-irc-004',
+    itemCode: 'MENU-IRC-004',
+    itemName: 'Goan Curry',
+    category: 'MAINS - INDIAN REGIONAL & COASTAL CURRIES',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 0,
+    isMarketPrice: true,
+    description: 'As per catch',
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-irc-005',
+    itemCode: 'MENU-IRC-005',
+    itemName: 'Andhra Vepudu',
+    category: 'MAINS - INDIAN REGIONAL & COASTAL CURRIES',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 0,
+    isMarketPrice: true,
+    description: 'As per catch',
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-irc-006',
+    itemCode: 'MENU-IRC-006',
+    itemName: 'Fresh Catch of the Day',
+    category: 'MAINS - INDIAN REGIONAL & COASTAL CURRIES',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 0,
+    isMarketPrice: true,
+    description: 'As per catch',
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+
+  // ==========================================
+  // 6. LENTILS & RICE
+  // ==========================================
+  {
+    id: 'menu-lar-001',
+    itemCode: 'MENU-LAR-001',
+    itemName: 'Dal Tadka',
+    category: 'LENTILS & RICE',
+    dietaryType: 'VEG',
+    sellingPrice: 275,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-lar-002',
+    itemCode: 'MENU-LAR-002',
+    itemName: 'Dal Makhani',
+    category: 'LENTILS & RICE',
+    dietaryType: 'VEG',
+    sellingPrice: 360,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-lar-003',
+    itemCode: 'MENU-LAR-003',
+    itemName: 'Dal Gosht',
+    category: 'LENTILS & RICE',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 715,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-lar-004',
+    itemCode: 'MENU-LAR-004',
+    itemName: 'Steamed Rice',
+    category: 'LENTILS & RICE',
+    dietaryType: 'VEG',
+    sellingPrice: 165,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-lar-005',
+    itemCode: 'MENU-LAR-005',
+    itemName: 'Ghee Jeera Rice',
+    category: 'LENTILS & RICE',
+    dietaryType: 'VEG',
+    sellingPrice: 215,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-lar-006',
+    itemCode: 'MENU-LAR-006',
+    itemName: 'Bombay Tawa Biryani',
+    category: 'LENTILS & RICE',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 495,
+    hasVariants: true,
+    variants: buildVariants('MENU-LAR-006', [
+      ['Paneer Tikka', 495, 'VEG'],
+      ['Tandoori Jheenga', 715, 'NON_VEG']
+    ]),
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-lar-007',
+    itemCode: 'MENU-LAR-007',
+    itemName: 'Cocktail Chicken Biryani',
+    category: 'LENTILS & RICE',
+    dietaryType: 'NON_VEG',
+    sellingPrice: 825,
+    description: 'With tikka, kaleji & seekh kebab',
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+
+  // ==========================================
+  // 7. BREADS
+  // ==========================================
+  {
+    id: 'menu-brd-001',
+    itemCode: 'MENU-BRD-001',
+    itemName: 'Home-baked Poiee',
+    category: 'BREADS',
+    dietaryType: 'VEG',
+    sellingPrice: 70,
+    portionSize: '2 pcs',
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-brd-002',
+    itemCode: 'MENU-BRD-002',
+    itemName: 'Home-baked Laadi Pav',
+    category: 'BREADS',
+    dietaryType: 'VEG',
+    sellingPrice: 45,
+    portionSize: '2 pcs',
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-brd-003',
+    itemCode: 'MENU-BRD-003',
+    itemName: 'Whole Wheat Tandoori Roti',
+    category: 'BREADS',
+    dietaryType: 'VEG',
+    sellingPrice: 55,
+    hasVariants: true,
+    variants: buildVariants('MENU-BRD-003', [
+      ['Plain', 55, 'VEG'],
+      ['Butter', 70, 'VEG']
+    ]),
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-brd-004',
+    itemCode: 'MENU-BRD-004',
+    itemName: 'Whole Wheat Lachcha Paratha',
+    category: 'BREADS',
+    dietaryType: 'VEG',
+    sellingPrice: 105,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-brd-005',
+    itemCode: 'MENU-BRD-005',
+    itemName: 'Naan',
+    category: 'BREADS',
+    dietaryType: 'VEG',
+    sellingPrice: 80,
+    hasVariants: true,
+    variants: buildVariants('MENU-BRD-005', [
+      ['Plain', 80, 'VEG'],
+      ['Butter', 90, 'VEG'],
+      ['Garlic', 105, 'VEG'],
+      ['Masala', 105, 'VEG']
+    ]),
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-brd-006',
+    itemCode: 'MENU-BRD-006',
+    itemName: 'Whole Wheat Ajwaini Tawa Paratha',
+    category: 'BREADS',
+    dietaryType: 'VEG',
+    sellingPrice: 105,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+
+  // ==========================================
+  // 8. DESSERT ARMÁRIO
+  // ==========================================
+  {
+    id: 'menu-des-001',
+    itemCode: 'MENU-DES-001',
+    itemName: 'Home-baked Bebinca Cake',
+    category: 'DESSERT ARMÁRIO',
+    dietaryType: 'VEG',
+    sellingPrice: 220,
+    description: 'With vanilla ice cream',
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-des-002',
+    itemCode: 'MENU-DES-002',
+    itemName: 'Alphonso Mango',
+    category: 'DESSERT ARMÁRIO',
+    dietaryType: 'VEG',
+    sellingPrice: 220,
+    routing: 'KITCHEN_LINE',
+    recipeId: null
+  },
+  {
+    id: 'menu-des-003',
+    itemCode: 'MENU-DES-003',
+    itemName: 'Ice Cream Selection',
+    category: 'DESSERT ARMÁRIO',
+    dietaryType: 'VEG',
+    sellingPrice: 165,
+    hasVariants: true,
+    variants: buildVariants('MENU-DES-003', [
+      ['Kalkatta Meetha Paan', 165, 'VEG'],
+      ['Mishri Gulkand', 165, 'VEG'],
+      ['Malabar Vanilla', 165, 'VEG'],
+      ['Caramel Butterscotch', 165, 'VEG'],
+      ['Strawberry Jam & Almonds', 165, 'VEG'],
+      ['Masala Peru', 165, 'VEG'],
+      ['Dry Fruit Overload', 165, 'VEG']
+    ]),
+    routing: 'KITCHEN_LINE',
+    recipeId: null
   }
 ];

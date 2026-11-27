@@ -4,6 +4,8 @@ PRODUCT_FAMILY,FAM-SPICES,Spices & Seasonings,,,Whole/powder spices and blended 
 PRODUCT_FAMILY,FAM-CONDIMENTS,"Oils, Sauces & Condiments",,,"Cooking oils, sauces, vinegars, canned toppings",true
 PRODUCT_FAMILY,FAM-BAKING,"Bakery, Sugar & Confectionery",,,NEW - jaggery icing sugar leaveners cocoa vanilla,true
 PRODUCT_FAMILY,FAM-OPERATING,Operating Supplies & Disposables,,,NEW - foil cling napkins towels skewers,true
+PRODUCT_FAMILY,FAM-FRESH,"Fresh Meats, Seafood & Produce",,,Perishable meats seafood dairy vegetables and fruits,true
+PRODUCT_FAMILY,FAM-BAR,"Bar, Liquors & Beverages",,,Spirits beers craft brews RTDs mixers and soft beverages,true
 CATEGORY,CAT-RICE,Rice & Staples,FAM-GRAINS,KG,EXISTING - reused for Basmati/Indrayani/Rice Flour,true
 CATEGORY,CAT-GRAIN-FLOUR,"Flours, Meals & Semolina",FAM-GRAINS,KG,NEW - atta maida besan corn sujee panko bajra,true
 CATEGORY,CAT-PULSES-DAL,Pulses & Dals,FAM-GRAINS,KG,NEW - toor moong chana masoor,true
@@ -21,3 +23,14 @@ CATEGORY,CAT-SAUCE-VINEGAR,"Sauces, Ketchups & Vinegars",FAM-CONDIMENTS,LTR,NEW 
 CATEGORY,CAT-CANNED-TOPPING,Canned & Pickled Toppings,FAM-CONDIMENTS,CAN,NEW - tomato puree mushrooms olives jalapeno,true
 CATEGORY,CAT-BAKING-CONFECTION,"Bakery, Sugar & Confectionery",FAM-BAKING,KG,NEW - jaggery icing sugar baking powder soda cocoa vanilla,true
 CATEGORY,CAT-CONSUMABLE,Consumables & Operating Supplies,FAM-OPERATING,PCS,EXISTING - reused for foil cling napkins towels skewers,true
+CATEGORY,CAT-MEAT-POULTRY,"Meats, Poultry & Eggs",FAM-FRESH,KG,Fresh chicken mutton chicken liver and eggs,true
+CATEGORY,CAT-SEAFOOD,"Seafood & Shellfish",FAM-FRESH,KG,Fresh rawas pomfret prawns crab and catch of the day,true
+CATEGORY,CAT-FRESH-VEG,"Fresh Vegetables, Fruits & Herbs",FAM-FRESH,KG,Onions tomatoes broccoli mushrooms herbs mango watermelon,true
+CATEGORY,CAT-DAIRY,"Dairy, Paneer & Cream",FAM-FRESH,KG,Paneer butter fresh cream milk curd,true
+CATEGORY,CAT-ICECREAM-DESSERT,"Ice Creams & Prepared Desserts",FAM-BAKING,LTR,7 artisan ice cream flavours bebinca poiee laadi pav,true
+CATEGORY,CAT-ASIAN-NOODLES,"Asian Noodles & Pantry",FAM-GRAINS,KG,Hakka noodles crispy chopsuey noodles schezwan paste,true
+CATEGORY,CAT-BAR-SPIRITS,"Spirits, Malts, Liqueurs & Feni",FAM-BAR,LTR,Whisky single malt bourbon rum gin tequila vodka liqueur mahua feni,true
+CATEGORY,CAT-BAR-BEER,"Bottled & Canned Beers",FAM-BAR,LTR,Mild and strong bottled/canned beers across 330/500/650ml,true
+CATEGORY,CAT-BAR-CRAFT,"Craft Beer (Draft / Kegs)",FAM-BAR,LTR,Hefeweizen Lager Belgian Wit craft brews,true
+CATEGORY,CAT-BAR-BREEZER,"RTDs & Breezers",FAM-BAR,PCS,Flavoured breezers 275ml bottles,true
+CATEGORY,CAT-BAR-MIXERS,"Soft Drinks, Water & Mixers",FAM-BAR,PCS,Bottled water cold drinks soda tonic and bar juices,true

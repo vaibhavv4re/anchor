@@ -13,10 +13,12 @@ import { offlineStore } from '../offline_store/offlineStore.js';
 import { ACTUAL_ANCHOR_MENU } from '../../../restaurantos/frontend/capabilities/kitchen/data/actualMenuData.js';
 
 export const BAR_CATEGORIES = new Set([
-  'BLENDED SCOTCH WHISKY', 'MILD BEER', 'COCKTAILS', 'MOCKTAILS',
-  'DOMESTIC WHISKY', 'VODKA', 'HOUSE WINES', 'PREMIUM WHISKY',
-  'STRONG BEER', 'BEVERAGE', 'BRANDY', 'GIN', 'RUM',
-  'SINGLE MALT SCOTCH WHISKY', 'TEQUILA', 'BREEZER', 'BEVERAGES', 'BAR', 'BEERS'
+  'BLENDED SCOTCH WHISKY', 'BLENDED SCOTCH & IRISH WHISKY', 'MILD BEER', 'PREMIUM BEER',
+  'COCKTAILS', 'MOCKTAILS', 'BREEZER', 'BREEZERS', 'BEVERAGE', 'BEVERAGES',
+  'DOMESTIC WHISKY', 'WHISKY', 'BOURBON', 'SINGLE MALT', 'SINGLE MALT SCOTCH WHISKY',
+  'PREMIUM WHISKY', 'VODKA', 'HOUSE WINES', 'STRONG BEER', 'CRAFT BEER',
+  'BRANDY', 'GIN', 'RUM', 'TEQUILA', 'LIQUEUR', 'MAHUA SPIRIT', 'FENI',
+  'LOCAL SPIRITS', 'BAR', 'BEERS'
 ]);
 
 export function isBarMenuItem(item) {
@@ -24,9 +26,9 @@ export function isBarMenuItem(item) {
   const routing = (item.routing || '').toUpperCase();
   const prodArea = (item.productionArea || item.production_area || '').toUpperCase();
   const cat = (item.category || '').toUpperCase();
-  if (routing === 'BAR' || prodArea === 'BAR') return true;
+  if (routing === 'BAR' || routing === 'BAR_LINE' || prodArea === 'BAR') return true;
   if (BAR_CATEGORIES.has(cat)) return true;
-  if (cat.includes('WHISKY') || cat.includes('BEER') || cat.includes('WINE') || cat.includes('COCKTAIL')) return true;
+  if (cat.includes('WHISKY') || cat.includes('BEER') || cat.includes('WINE') || cat.includes('COCKTAIL') || cat.includes('MOCKTAIL') || cat.includes('BREEZER') || cat.includes('SPIRIT')) return true;
   return false;
 }
 
@@ -388,7 +390,19 @@ class KitchenMenuModel {
    * @param {string|null} tenantId 
    * @returns {{ success: boolean, importedCount: number }}
    */
-  importActualMenu(tenantId = null) {
+  importActualMenu(tenantId = null, options = { cleanSweep: true }) {
+    let archivedCount = 0;
+    if (options.cleanSweep !== false) {
+      const newCodes = new Set(ACTUAL_ANCHOR_MENU.map(i => i.itemCode));
+      const existingKitchen = this.getAll(tenantId, { domain: 'KITCHEN', showArchived: false });
+      existingKitchen.forEach(oldItem => {
+        if (!newCodes.has(oldItem.itemCode)) {
+          this.archiveItem(oldItem.id);
+          archivedCount++;
+        }
+      });
+    }
+
     let count = 0;
     ACTUAL_ANCHOR_MENU.forEach(rawItem => {
       this.saveItem({
@@ -399,7 +413,7 @@ class KitchenMenuModel {
       });
       count++;
     });
-    return { success: true, importedCount: count };
+    return { success: true, importedCount: count, archivedCount };
   }
 
   /**

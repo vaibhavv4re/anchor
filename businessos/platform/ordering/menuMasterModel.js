@@ -13,54 +13,76 @@ import { ACTUAL_ANCHOR_MENU } from '../../../restaurantos/frontend/capabilities/
  */
 const CATEGORY_ICONS = {
   'SOUPS': '🥣',
-  'GARDEN & GRAIN': '🥗',
-  'STARTERS - GARDEN & GRAIN': '🥗',
-  'FROM THE SEA - PRAWNS': '🍤',
-  'STARTERS - HARBOUR & COAST': '🍤',
-  'FROM THE SHORE - CHICKEN': '🍗',
-  'FROM THE SHORE - MUTTON': '🍖',
-  'CURRIES & DAALS': '🍛',
-  'MEAT CURRIES - CHICKEN': '🍛',
-  'MEAT CURRIES - MUTTON': '🍛',
-  'MAINS - COASTAL CURRIES': '🥘',
-  'MAIN COURSE': '🍛',
-  'STARTERS': '🍢',
-  'RICE': '🍚',
-  'BREADS & RICE': '🍚',
-  'COASTAL BREADS': '🍞',
-  'DESSERTS': '🍨',
-  'BEVERAGES & BAR': '🍹',
+  'SHARING PLATES - FROM THE GARDEN': '🥗',
+  'SHARING PLATES - FROM THE PASTURE': '🍗',
+  'SHARING PLATES - FROM THE OCEAN': '🍤',
+  'SHARING PLATES - FROM THE TANDOOR': '🔥',
+  'FROM THE WOOD FIRED GRILL': '🔥',
+  'MAINS - OLD CALCUTTA CHINESE': '🥡',
+  'MAINS - INDIAN REGIONAL & COASTAL CURRIES': '🍛',
+  'LENTILS & RICE': '🍚',
+  'BREADS': '🍞',
+  'DESSERT ARMÁRIO': '🍨',
+  'COCKTAILS': '🍸',
+  'MOCKTAILS': '🍹',
+  'BREEZERS': '🍾',
   'BEVERAGES': '🥤',
+  'SINGLE MALT': '🥃',
+  'BLENDED SCOTCH & IRISH WHISKY': '🥃',
+  'BOURBON': '🥃',
+  'WHISKY': '🥃',
+  'RUM': '🏴‍☠️',
+  'GIN': '🍸',
+  'TEQUILA': '🌵',
+  'VODKA': '🍸',
+  'LIQUEUR': '🧪',
+  'MAHUA SPIRIT': '🥃',
+  'FENI': '🥃',
+  'LOCAL SPIRITS': '🥃',
+  'PREMIUM BEER': '🍺',
+  'STRONG BEER': '🍺',
+  'CRAFT BEER': '🍻',
+  'BEVERAGES & BAR': '🍹',
   'BEVERAGE': '🥤',
   'BAR': '🍺',
   'ALCOHOL': '🍺'
 };
 
 /**
- * Unambiguous short chip labels. The menu has two sections that share a protein
- * (starters "FROM THE SHORE - CHICKEN" vs curries "MEAT CURRIES - CHICKEN"), so
- * we keep the section word to avoid two identical "Chicken" chips.
+ * Unambiguous short chip labels.
  */
 const CONCISE_LABELS = {
   'SOUPS': 'Soups',
-  'GARDEN & GRAIN': 'Veg Starters',
-  'STARTERS - GARDEN & GRAIN': 'Veg Starters',
-  'FROM THE SEA - PRAWNS': 'Prawns',
-  'STARTERS - HARBOUR & COAST': 'Seafood Starters',
-  'FROM THE SHORE - CHICKEN': 'Chicken Starters',
-  'FROM THE SHORE - MUTTON': 'Mutton Starters',
-  'CURRIES & DAALS': 'Curries & Daals',
-  'MEAT CURRIES - CHICKEN': 'Chicken Curries',
-  'MEAT CURRIES - MUTTON': 'Mutton Curries',
-  'MAINS - COASTAL CURRIES': 'Coastal Mains',
-  'MAIN COURSE': 'Mains',
-  'STARTERS': 'Starters',
-  'RICE': 'Rice',
-  'BREADS & RICE': 'Breads & Rice',
-  'COASTAL BREADS': 'Breads',
-  'DESSERTS': 'Desserts',
-  'BEVERAGES & BAR': 'Beverages',
+  'SHARING PLATES - FROM THE GARDEN': 'Garden Plates',
+  'SHARING PLATES - FROM THE PASTURE': 'Pasture Plates',
+  'SHARING PLATES - FROM THE OCEAN': 'Ocean Plates',
+  'SHARING PLATES - FROM THE TANDOOR': 'Tandoor Plates',
+  'FROM THE WOOD FIRED GRILL': 'Wood Grill',
+  'MAINS - OLD CALCUTTA CHINESE': 'Calcutta Chinese',
+  'MAINS - INDIAN REGIONAL & COASTAL CURRIES': 'Regional & Coastal',
+  'LENTILS & RICE': 'Lentils & Rice',
+  'BREADS': 'Breads',
+  'DESSERT ARMÁRIO': 'Desserts',
+  'COCKTAILS': 'Cocktails',
+  'MOCKTAILS': 'Mocktails',
+  'BREEZERS': 'Breezers',
   'BEVERAGES': 'Beverages',
+  'SINGLE MALT': 'Single Malt',
+  'BLENDED SCOTCH & IRISH WHISKY': 'Scotch & Irish',
+  'BOURBON': 'Bourbon',
+  'WHISKY': 'Whisky',
+  'RUM': 'Rum',
+  'GIN': 'Gin',
+  'TEQUILA': 'Tequila',
+  'VODKA': 'Vodka',
+  'LIQUEUR': 'Liqueur',
+  'MAHUA SPIRIT': 'Mahua',
+  'FENI': 'Feni',
+  'LOCAL SPIRITS': 'Local Spirits',
+  'PREMIUM BEER': 'Premium Beer',
+  'STRONG BEER': 'Strong Beer',
+  'CRAFT BEER': 'Craft Beer',
+  'BEVERAGES & BAR': 'Beverages',
   'BEVERAGE': 'Beverages',
   'BAR': 'Bar',
   'ALCOHOL': 'Bar'
@@ -128,9 +150,12 @@ class MenuMasterModel {
         spicinessLevel: item.spicinessLevel || 'MEDIUM',
         routing: item.routing || (item.category === 'BEVERAGES & BAR' || item.category === 'BAR' ? 'BAR_LINE' : 'KITCHEN_LINE'),
         menuDomain: this._classifyDomain(item),
+        consumptionMode: item.consumptionMode || (this._classifyDomain(item) === 'BAR' ? 'DIRECT_POUR' : 'RECIPE'),
+        linkedInventorySku: item.linkedInventorySku || item.linked_inventory_sku || null,
         recipeId: item.recipeId || item.recipe_id || (item.data ? (item.data.recipeId || item.data.recipe_id) : null) || null,
         recipe_id: item.recipeId || item.recipe_id || (item.data ? (item.data.recipeId || item.data.recipe_id) : null) || null,
         isAvailable: isItemAvailable,
+        isMarketPrice: Boolean(item.isMarketPrice),
         hasVariants: variants.length > 0 || !!item.hasVariants,
         variants,
         modifiers: Array.isArray(item.modifiers) ? item.modifiers : (item.spicinessLevel ? [`Spicy: ${item.spicinessLevel}`] : ['Standard'])
@@ -186,8 +211,8 @@ class MenuMasterModel {
     const cat = String(raw.category || raw.categoryId || '').toUpperCase();
     const code = String(raw.itemCode || raw.id || '').toUpperCase();
     const routing = String(raw.routing || '').toUpperCase();
-    if (routing === 'BAR_LINE') return 'BAR';
-    if (/(^|[^A-Z])(BAR|LIQUOR|ALCOHOL|BEVERAGE|BEVERAGES|COCKTAIL|COCKTAILS|MOCKTAIL|MOCKTAILS|SHAKE|SHAKES|JUICE|JUICES|DRINKS)([^A-Z]|$)/.test(cat)) return 'BAR';
+    if (routing === 'BAR_LINE' || routing === 'BAR') return 'BAR';
+    if (/(^|[^A-Z])(BAR|LIQUOR|ALCOHOL|BEVERAGE|BEVERAGES|COCKTAIL|COCKTAILS|MOCKTAIL|MOCKTAILS|SHAKE|SHAKES|JUICE|JUICES|DRINKS|WHISKY|SCOTCH|SINGLE MALT|BOURBON|RUM|GIN|TEQUILA|VODKA|LIQUEUR|MAHUA|FENI|BEER|BREEZER|BREEZERS|SPIRITS)([^A-Z]|$)/.test(cat)) return 'BAR';
     if (/^(RC-BAR|BAR[-_]|BEV[-_]|BEVERAGE)/.test(code)) return 'BAR';
     return 'FOOD';
   }

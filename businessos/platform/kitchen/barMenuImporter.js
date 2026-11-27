@@ -12,103 +12,155 @@
 import { kitchenMenuModel } from './kitchenMenuModel.js';
 import { offlineStore } from '../offline_store/offlineStore.js';
 
-export const ANCHOR_HARBOUR_64_MENU_ITEMS = [
-  // House Wines (3)
-  { Section: 'House Wines', Item: 'Red Wine', '30 ml': 220, '60 ml': 400, '750 ml': 1800 },
-  { Section: 'House Wines', Item: 'White Wine', '30 ml': 220, '60 ml': 400, '750 ml': 1800 },
-  { Section: 'House Wines', Item: 'Sparkling White', '30 ml': 280, '60 ml': 520, '750 ml': 2400 },
+export const ANCHOR_HARBOUR_BAR_MENU_ITEMS = [
+  // 1. Cocktails (7)
+  { Section: 'Cocktails', Item: 'Seaside Balcony', Price: 545 },
+  { Section: 'Cocktails', Item: 'Afternoon Garden', Price: 545 },
+  { Section: 'Cocktails', Item: 'Kitchen Pantry', Price: 545 },
+  { Section: 'Cocktails', Item: 'Feni Cellar', Price: 545 },
+  { Section: 'Cocktails', Item: 'Orchard', Price: 545 },
+  { Section: 'Cocktails', Item: 'Courtyard', Price: 545 },
+  { Section: 'Cocktails', Item: 'Sunset Terrace', Price: 545 },
 
-  // Single Malt Scotch Whisky (2)
-  { Section: 'Single Malt Scotch Whisky', Item: 'Glenfiddich 12 Yr Old', '30 ml': 450, '60 ml': 850, '90 ml': 1250, '180 ml': 2400 },
-  { Section: 'Single Malt Scotch Whisky', Item: 'Singleton Luscious 12 Yr Old', '30 ml': 480, '60 ml': 900, '90 ml': 1320, '180 ml': 2550 },
+  // 2. Mocktails (7)
+  { Section: 'Mocktails', Item: 'Tropical Grove', Price: 325 },
+  { Section: 'Mocktails', Item: 'Virgin Watermelon & Basil Mojito', Price: 325 },
+  { Section: 'Mocktails', Item: 'Shikanji', Price: 325 },
+  { Section: 'Mocktails', Item: 'Ginger Me (Frozen)', Price: 325 },
+  { Section: 'Mocktails', Item: 'Mango Mastani', Price: 325 },
+  { Section: 'Mocktails', Item: 'Guava Mary', Price: 325 },
+  { Section: 'Mocktails', Item: 'Fresh Juice', Price: 165 },
 
-  // Blended Scotch Whisky (11)
-  { Section: 'Blended Scotch Whisky', Item: 'Chivas Regal 12 Yrs', '30 ml': 320, '60 ml': 600, '90 ml': 880, '180 ml': 1750 },
-  { Section: 'Blended Scotch Whisky', Item: 'J.W. Black Label', '30 ml': 340, '60 ml': 640, '90 ml': 940, '180 ml': 1850 },
-  { Section: 'Blended Scotch Whisky', Item: 'J.W. Red Label', '30 ml': 240, '60 ml': 450, '90 ml': 650, '180 ml': 1250 },
-  { Section: 'Blended Scotch Whisky', Item: 'Jack Daniels', '30 ml': 320, '60 ml': 600, '90 ml': 880, '180 ml': 1750 },
-  { Section: 'Blended Scotch Whisky', Item: 'Black Dog Gold', '30 ml': 260, '60 ml': 490, '90 ml': 720, '180 ml': 1400 },
-  { Section: 'Blended Scotch Whisky', Item: 'Teachers Highland', '30 ml': 220, '60 ml': 400, '90 ml': 580, '180 ml': 1150 },
-  { Section: 'Blended Scotch Whisky', Item: '100 Pipers', '30 ml': 200, '60 ml': 380, '90 ml': 550, '180 ml': 1050 },
-  { Section: 'Blended Scotch Whisky', Item: 'Black & White', '30 ml': 200, '60 ml': 380, '90 ml': 550, '180 ml': 1050 },
-  { Section: 'Blended Scotch Whisky', Item: 'Vat 69', '30 ml': 190, '60 ml': 360, '90 ml': 520, '180 ml': 990 },
-  { Section: 'Blended Scotch Whisky', Item: 'Ballantine\'s Finest Scotch', '30 ml': 240, '60 ml': 450, '90 ml': 650, '180 ml': 1250 },
-  { Section: 'Blended Scotch Whisky', Item: 'Jameson', '30 ml': 260, '60 ml': 490, '90 ml': 720, '180 ml': 1400 },
+  // 3. Breezers (3)
+  { Section: 'Breezers', Item: 'Breezer Blackberry', '275 ml': 215 },
+  { Section: 'Breezers', Item: 'Breezer Cranberry', '275 ml': 215 },
+  { Section: 'Breezers', Item: 'Breezer Jamaican Passion', '275 ml': 215 },
 
-  // Premium Whisky (3)
-  { Section: 'Premium Whisky', Item: 'Blenders Pride Reserve', '30 ml': 160, '60 ml': 300, '90 ml': 430, '180 ml': 820 },
-  { Section: 'Premium Whisky', Item: 'Blenders Pride', '30 ml': 140, '60 ml': 260, '90 ml': 380, '180 ml': 720 },
-  { Section: 'Premium Whisky', Item: 'Antiquity Blue', '30 ml': 160, '60 ml': 300, '90 ml': 430, '180 ml': 820 },
+  // 4. Beverages (3)
+  { Section: 'Beverages', Item: 'Bottled Water', Price: 40 },
+  { Section: 'Beverages', Item: 'Cold Drink', Price: 40 },
+  { Section: 'Beverages', Item: 'Soda', Price: 40 },
 
-  // Domestic Whisky (4)
-  { Section: 'Domestic Whisky', Item: 'Signature', '30 ml': 130, '60 ml': 240, '90 ml': 350, '180 ml': 660 },
-  { Section: 'Domestic Whisky', Item: 'Royal Challenge', '30 ml': 120, '60 ml': 220, '90 ml': 320, '180 ml': 600 },
-  { Section: 'Domestic Whisky', Item: 'Royal Stag', '30 ml': 110, '60 ml': 200, '90 ml': 290, '180 ml': 550 },
-  { Section: 'Domestic Whisky', Item: 'Imperial Blue', '30 ml': 100, '60 ml': 180, '90 ml': 260, '180 ml': 490 },
+  // 5. Single Malt (4)
+  { Section: 'Single Malt', Item: 'Glenfiddich 12 Yr', '30 ml': 280, '60 ml': 550, '90 ml': 1090, '180 ml': 2160, '375 ml': 4300, '750 ml': 8580 },
+  { Section: 'Single Malt', Item: 'Glenmorangie 12 Yr', '30 ml': 280, '60 ml': 550, '90 ml': 1090, '180 ml': 2160, '375 ml': 4300, '750 ml': 8580 },
+  { Section: 'Single Malt', Item: 'Singleton Glendullan 12 Yr', '30 ml': 270, '60 ml': 520, '90 ml': 1020, '180 ml': 2020, '375 ml': 4020, '750 ml': 8010 },
+  { Section: 'Single Malt', Item: 'Amrut Amalgam', '30 ml': 240, '60 ml': 460, '90 ml': 910, '180 ml': 1800, '375 ml': 3590, '750 ml': 7150 },
 
-  // Brandy (2)
-  { Section: 'Brandy', Item: 'Monarch Brandy', '30 ml': 140, '60 ml': 260, '90 ml': 380, '180 ml': 720 },
-  { Section: 'Brandy', Item: 'Dr. Brandy', '30 ml': 120, '60 ml': 220, '90 ml': 320, '180 ml': 600 },
+  // 6. Blended Scotch & Irish Whisky (21)
+  { Section: 'Blended Scotch & Irish Whisky', Item: 'J.W. Blue Label', '30 ml': 1250, '60 ml': 2480, '90 ml': 4950, '180 ml': 9880, '375 ml': 19710, '750 ml': 39325 },
+  { Section: 'Blended Scotch & Irish Whisky', Item: 'J.W. Gold Label', '30 ml': 380, '60 ml': 750, '90 ml': 1490, '180 ml': 2970, '375 ml': 5920, '750 ml': 11800 },
+  { Section: 'Blended Scotch & Irish Whisky', Item: 'J.W. Double Black', '30 ml': 230, '60 ml': 440, '90 ml': 870, '180 ml': 1720, '375 ml': 3430, '750 ml': 6830 },
+  { Section: 'Blended Scotch & Irish Whisky', Item: 'J.W. Black Label', '30 ml': 180, '60 ml': 350, '90 ml': 690, '375 ml': 1370, '750 ml': 2730 },
+  { Section: 'Blended Scotch & Irish Whisky', Item: 'J.W. Red Label', '30 ml': 120, '60 ml': 220, '90 ml': 420, '375 ml': 830, '750 ml': 1640 },
+  { Section: 'Blended Scotch & Irish Whisky', Item: '100 Pipers', '30 ml': 140, '60 ml': 260, '90 ml': 510, '375 ml': 1010, '750 ml': 2010 },
+  { Section: 'Blended Scotch & Irish Whisky', Item: 'Chivas Regal 12 Yr', '30 ml': 180, '60 ml': 350, '90 ml': 690, '180 ml': 1370, '375 ml': 2730, '750 ml': 5435 },
+  { Section: 'Blended Scotch & Irish Whisky', Item: 'Amrut Fusion', '30 ml': 260, '60 ml': 510, '90 ml': 1000, '180 ml': 1980, '375 ml': 3950, '750 ml': 7865 },
+  { Section: 'Blended Scotch & Irish Whisky', Item: 'Macintosh', '30 ml': 90, '60 ml': 170, '90 ml': 320, '375 ml': 620, '750 ml': 1220 },
+  { Section: 'Blended Scotch & Irish Whisky', Item: 'Monkey Shoulder', '30 ml': 210, '60 ml': 410, '90 ml': 800, '180 ml': 1590, '375 ml': 3160, '750 ml': 6295 },
+  { Section: 'Blended Scotch & Irish Whisky', Item: 'Jameson Black Barrel', '30 ml': 200, '60 ml': 390, '90 ml': 770, '180 ml': 1520, '375 ml': 3020, '750 ml': 6010 },
+  { Section: 'Blended Scotch & Irish Whisky', Item: 'Jameson Stout Edition', '30 ml': 170, '60 ml': 330, '90 ml': 640, '180 ml': 1260, '375 ml': 2510, '750 ml': 5005 },
+  { Section: 'Blended Scotch & Irish Whisky', Item: 'Jameson Irish', '30 ml': 160, '60 ml': 300, '90 ml': 590, '375 ml': 1160, '750 ml': 2300 },
+  { Section: 'Blended Scotch & Irish Whisky', Item: 'Seven Islands Malt', '30 ml': 250, '60 ml': 480, '90 ml': 940, '180 ml': 1870, '375 ml': 3730, '750 ml': 7440 },
+  { Section: 'Blended Scotch & Irish Whisky', Item: 'Royal Ranthambore', '30 ml': 140, '60 ml': 260, '90 ml': 510, '180 ml': 1010, '375 ml': 2010, '750 ml': 4005 },
+  { Section: 'Blended Scotch & Irish Whisky', Item: 'Teachers 50', '30 ml': 170, '60 ml': 320, '90 ml': 620, '180 ml': 1220, '375 ml': 2430, '750 ml': 4835 },
+  { Section: 'Blended Scotch & Irish Whisky', Item: 'Teachers Highland', '30 ml': 140, '60 ml': 270, '90 ml': 520, '180 ml': 1030, '375 ml': 2050, '750 ml': 4080 },
+  { Section: 'Blended Scotch & Irish Whisky', Item: 'Black Dog Centenary', '30 ml': 140, '60 ml': 260, '90 ml': 510, '180 ml': 1010, '375 ml': 2010, '750 ml': 4005 },
+  { Section: 'Blended Scotch & Irish Whisky', Item: 'Black Dog Deluxe', '30 ml': 150, '60 ml': 290, '90 ml': 560, '375 ml': 1110, '750 ml': 2200 },
+  { Section: 'Blended Scotch & Irish Whisky', Item: 'Ballantines', '30 ml': 120, '60 ml': 220, '90 ml': 420, '375 ml': 820, '750 ml': 1620 },
+  { Section: 'Blended Scotch & Irish Whisky', Item: 'Black & White', '30 ml': 110, '60 ml': 200, '90 ml': 380, '375 ml': 750, '750 ml': 1480 },
 
-  // Gin (2)
-  { Section: 'Gin', Item: 'Bombay Sapphire', '30 ml': 260, '60 ml': 490, '90 ml': 720, '180 ml': 1400 },
-  { Section: 'Gin', Item: 'Greater Than London Dry Gin', '30 ml': 180, '60 ml': 340, '90 ml': 490, '180 ml': 950 },
+  // 7. Bourbon (2)
+  { Section: 'Bourbon', Item: 'Jack Daniels', '30 ml': 180, '60 ml': 350, '90 ml': 690, '375 ml': 1370, '750 ml': 2730 },
+  { Section: 'Bourbon', Item: 'Jim Beam', '30 ml': 140, '60 ml': 260, '90 ml': 510, '180 ml': 1010, '375 ml': 2010, '750 ml': 4005 },
 
-  // Tequila (1)
-  { Section: 'Tequila', Item: 'Don Julio Blanco', '30 ml': 450, '60 ml': 850, '90 ml': 1250, '180 ml': 2400 },
+  // 8. Whisky (16)
+  { Section: 'Whisky', Item: 'Woodburns', '30 ml': 160, '60 ml': 300, '90 ml': 590, '375 ml': 1160, '750 ml': 2300 },
+  { Section: 'Whisky', Item: 'Vat 69', '30 ml': 140, '60 ml': 260, '90 ml': 500, '375 ml': 980, '750 ml': 1940 },
+  { Section: 'Whisky', Item: 'Oaksmith Nagomi', '30 ml': 110, '60 ml': 200, '90 ml': 380, '180 ml': 750, '375 ml': 1490, '750 ml': 2970 },
+  { Section: 'Whisky', Item: 'Oaksmith Gold', '30 ml': 90, '60 ml': 160, '90 ml': 300, '375 ml': 580, '750 ml': 1150 },
+  { Section: 'Whisky', Item: 'Oaksmith Silver', '30 ml': 80, '60 ml': 140, '90 ml': 260, '375 ml': 500, '750 ml': 990 },
+  { Section: 'Whisky', Item: 'Rockford Reserve', '30 ml': 90, '60 ml': 160, '90 ml': 300, '180 ml': 580, '375 ml': 1150, '750 ml': 2290 },
+  { Section: 'Whisky', Item: 'Rockford Classic', '30 ml': 80, '60 ml': 150, '90 ml': 280, '375 ml': 550, '750 ml': 1080 },
+  { Section: 'Whisky', Item: 'William Lawson\'s', '30 ml': 100, '60 ml': 190, '90 ml': 370, '375 ml': 730, '750 ml': 1440 },
+  { Section: 'Whisky', Item: 'Blenders Pride Reserve', '30 ml': 90, '60 ml': 160, '90 ml': 300, '180 ml': 580, '375 ml': 1150, '750 ml': 2290 },
+  { Section: 'Whisky', Item: 'Blenders Pride', '30 ml': 80, '60 ml': 150, '90 ml': 280, '375 ml': 550, '750 ml': 1080 },
+  { Section: 'Whisky', Item: 'Antiquity Blue', '30 ml': 90, '60 ml': 170, '90 ml': 320, '375 ml': 630, '750 ml': 1250 },
+  { Section: 'Whisky', Item: 'Signature Premier', '30 ml': 90, '60 ml': 160, '90 ml': 300, '180 ml': 580, '375 ml': 1150, '750 ml': 2290 },
+  { Section: 'Whisky', Item: 'Signature Rare', '30 ml': 80, '60 ml': 150, '90 ml': 280, '375 ml': 550, '750 ml': 1080 },
+  { Section: 'Whisky', Item: 'Royal Challenge', '30 ml': 60, '60 ml': 110, '90 ml': 200, '375 ml': 390, '750 ml': 770 },
+  { Section: 'Whisky', Item: 'Royal Stag', '30 ml': 60, '60 ml': 110, '90 ml': 200, '375 ml': 390, '750 ml': 770 },
+  { Section: 'Whisky', Item: 'Imperial Blue', '30 ml': 50, '60 ml': 90, '90 ml': 170, '375 ml': 330, '750 ml': 640 },
 
-  // Vodka (4)
-  { Section: 'Vodka', Item: 'Absolut', '30 ml': 220, '60 ml': 400, '90 ml': 580, '180 ml': 1150 },
-  { Section: 'Vodka', Item: 'Smirnoff No. 21 Red', '30 ml': 160, '60 ml': 300, '90 ml': 430, '180 ml': 820 },
-  { Section: 'Vodka', Item: 'Smirnoff Minty Jamun', '30 ml': 170, '60 ml': 320, '90 ml': 460, '180 ml': 880 },
-  { Section: 'Vodka', Item: 'Smirnoff Green Apple', '30 ml': 170, '60 ml': 320, '90 ml': 460, '180 ml': 880 },
+  // 9. Rum (3)
+  { Section: 'Rum', Item: 'Bacardi Lemon', '30 ml': 90, '60 ml': 170, '90 ml': 330, '375 ml': 640, '750 ml': 1260 },
+  { Section: 'Rum', Item: 'Bacardi White', '30 ml': 90, '60 ml': 170, '90 ml': 320, '375 ml': 620, '750 ml': 1220 },
+  { Section: 'Rum', Item: 'Old Monk', '30 ml': 50, '60 ml': 90, '90 ml': 170, '375 ml': 330, '750 ml': 640 },
 
-  // Rum (2)
-  { Section: 'Rum', Item: 'Bacardi White', '30 ml': 160, '60 ml': 300, '90 ml': 430, '180 ml': 820 },
-  { Section: 'Rum', Item: 'Old Monk', '30 ml': 110, '60 ml': 200, '90 ml': 290, '180 ml': 550 },
+  // 10. Gin (4)
+  { Section: 'Gin', Item: 'Jaisalmer', '30 ml': 180, '60 ml': 350, '90 ml': 690, '375 ml': 1370, '750 ml': 2730 },
+  { Section: 'Gin', Item: 'Hapusa', '30 ml': 180, '60 ml': 350, '90 ml': 690, '375 ml': 1370, '750 ml': 2730 },
+  { Section: 'Gin', Item: 'Bombay Sapphire', '30 ml': 150, '60 ml': 290, '90 ml': 570, '180 ml': 1120, '375 ml': 2230, '750 ml': 4435 },
+  { Section: 'Gin', Item: 'Greater Than London Dry', '30 ml': 100, '60 ml': 190, '90 ml': 360, '180 ml': 710, '375 ml': 1400, '750 ml': 2790 },
 
-  // Mild Beer (10)
-  { Section: 'Mild Beer', Item: 'Budweiser Mild', '330 ml': 220, '650 ml': 380 },
-  { Section: 'Mild Beer', Item: 'Kingfisher Ultra', '330 ml': 240, '650 ml': 420 },
-  { Section: 'Mild Beer', Item: 'Kingfisher Mild', '330 ml': 180, '650 ml': 320 },
-  { Section: 'Mild Beer', Item: 'Tuborg', '330 ml': 180, '650 ml': 320 },
-  { Section: 'Mild Beer', Item: 'Heineken', '330 ml': 260, '650 ml': 450 },
-  { Section: 'Mild Beer', Item: 'Hoegaarden', '330 ml': 340 },
-  { Section: 'Mild Beer', Item: 'Corona', '330 ml': 360 },
-  { Section: 'Mild Beer', Item: 'London Pilsner', '650 ml': 280 },
-  { Section: 'Mild Beer', Item: 'Carlsberg Elephant', '650 ml': 360 },
+  // 11. Tequila (2)
+  { Section: 'Tequila', Item: 'Camino Real Gold', '30 ml': 160, '60 ml': 310, '90 ml': 600, '180 ml': 1190, '375 ml': 2370, '750 ml': 4720 },
+  { Section: 'Tequila', Item: 'Camino Real Silver', '30 ml': 160, '60 ml': 310, '90 ml': 600, '180 ml': 1190, '375 ml': 2370, '750 ml': 4720 },
 
-  // Strong Beer (4)
-  { Section: 'Strong Beer', Item: 'Budweiser Magnum', '650 ml': 420 },
-  { Section: 'Strong Beer', Item: 'Tuborg Strong', '650 ml': 340 },
-  { Section: 'Strong Beer', Item: 'Kingfisher Strong', '650 ml': 340 },
+  // 12. Vodka (8)
+  { Section: 'Vodka', Item: 'Grey Goose', '30 ml': 250, '60 ml': 490, '90 ml': 960, '375 ml': 1910, '750 ml': 3800 },
+  { Section: 'Vodka', Item: 'Absolut', '30 ml': 120, '60 ml': 230, '90 ml': 440, '375 ml': 870, '750 ml': 1730 },
+  { Section: 'Vodka', Item: 'Smirnoff Minty Jamun', '30 ml': 90, '60 ml': 170, '90 ml': 330, '180 ml': 640, '375 ml': 1260, '750 ml': 2505 },
+  { Section: 'Vodka', Item: 'Smirnoff Green Apple', '30 ml': 90, '60 ml': 170, '90 ml': 330, '180 ml': 640, '375 ml': 1260, '750 ml': 2505 },
+  { Section: 'Vodka', Item: 'Smirnoff No. 21 Red', '30 ml': 90, '60 ml': 170, '90 ml': 320, '180 ml': 620, '375 ml': 1220, '750 ml': 2435 },
+  { Section: 'Vodka', Item: 'Magic Moments Vodka', '30 ml': 60, '60 ml': 110, '90 ml': 210, '180 ml': 410, '375 ml': 810, '750 ml': 1610 },
+  { Section: 'Vodka', Item: 'Magic Moments Jamun', '30 ml': 60, '60 ml': 110, '90 ml': 210, '180 ml': 410, '375 ml': 810, '750 ml': 1610 },
+  { Section: 'Vodka', Item: 'Magic Moments Apple', '30 ml': 60, '60 ml': 110, '90 ml': 210, '180 ml': 410, '375 ml': 810, '750 ml': 1610 },
 
-  // Cocktails (7)
-  { Section: 'Cocktails', Item: 'Seaside Balcony - Savoury', Price: 450 },
-  { Section: 'Cocktails', Item: 'Afternoon Garden - Floral', Price: 420 },
-  { Section: 'Cocktails', Item: 'Kitchen pantry - Herbs & Spices', Price: 450 },
-  { Section: 'Cocktails', Item: 'Feni Cellar - Refreshing', Price: 480 },
-  { Section: 'Cocktails', Item: 'Orchard - Fruity / Spicy', Price: 420 },
-  { Section: 'Cocktails', Item: 'Courtyard - Summery', Price: 420 },
-  { Section: 'Cocktails', Item: 'Sunset terrace - Sundowner', Price: 490 },
+  // 13. Liqueur (2)
+  { Section: 'Liqueur', Item: 'Jagermeister', '30 ml': 200, '60 ml': 390, '90 ml': 770, '375 ml': 1520, '750 ml': 3020 },
+  { Section: 'Liqueur', Item: 'Absinthe', '30 ml': 190, '60 ml': 370, '90 ml': 730, '375 ml': 1440, '750 ml': 2870 },
 
-  // Mocktails (7)
-  { Section: 'Mocktails', Item: 'Tropical Grove', Price: 260 },
-  { Section: 'Mocktails', Item: 'Virgin Watermelon & Basil Mojito', Price: 280 },
-  { Section: 'Mocktails', Item: 'Shikanji', Price: 180 },
-  { Section: 'Mocktails', Item: 'Ginger me (Frozen)', Price: 240 },
-  { Section: 'Mocktails', Item: 'Mango Mastani', Price: 260 },
-  { Section: 'Mocktails', Item: 'Guava Mary', Price: 240 },
-  { Section: 'Mocktails', Item: 'Fresh Juice', Price: 220 },
+  // 14. Mahua Spirit (1)
+  { Section: 'Mahua Spirit', Item: 'Six Brothers', '30 ml': 130, '60 ml': 240, '90 ml': 460, '375 ml': 900, '750 ml': 1790 },
 
-  // Breezer (1)
-  { Section: 'Breezer', Item: 'Breezer', '275 ml': 180 },
+  // 15. Feni (1)
+  { Section: 'Feni', Item: 'Tinto Feni', '30 ml': 130, '60 ml': 250, '90 ml': 490, '375 ml': 960, '750 ml': 1900 },
 
-  // Beverage (4)
-  { Section: 'Beverage', Item: 'Bottled Water', '750 ml': 60 },
-  { Section: 'Beverage', Item: 'Cold Drink', Price: 50 },
-  { Section: 'Beverage', Item: 'Soda', Price: 40 }
+  // 16. Local Spirits (3)
+  { Section: 'Local Spirits', Item: 'Orange City Vodka Jamun Mint', '30 ml': 40, '60 ml': 70, '90 ml': 130, '180 ml': 240, '375 ml': 470, '750 ml': 920 },
+  { Section: 'Local Spirits', Item: 'Orange City Vodka', '30 ml': 40, '60 ml': 70, '90 ml': 120, '180 ml': 230, '375 ml': 440, '750 ml': 860 },
+  { Section: 'Local Spirits', Item: 'Orange City Whisky', '30 ml': 40, '60 ml': 70, '90 ml': 120, '180 ml': 230, '375 ml': 440, '750 ml': 860 },
+
+  // 17. Premium Beer (11)
+  { Section: 'Premium Beer', Item: 'Budweiser Mild', '500 ml': 275, '650 ml': 355 },
+  { Section: 'Premium Beer', Item: 'Carlsberg Smooth', '500 ml': 275, '650 ml': 355 },
+  { Section: 'Premium Beer', Item: 'Corona', '330 ml': 290, '650 ml': 360 },
+  { Section: 'Premium Beer', Item: 'Heineken', '500 ml': 290 },
+  { Section: 'Premium Beer', Item: 'Hoegaarden Peach', '500 ml': 360 },
+  { Section: 'Premium Beer', Item: 'Hoegaarden Raspberry', '500 ml': 360 },
+  { Section: 'Premium Beer', Item: 'Hoegaarden', '500 ml': 360 },
+  { Section: 'Premium Beer', Item: 'Kingfisher Mild', '500 ml': 210, '650 ml': 290 },
+  { Section: 'Premium Beer', Item: 'Kingfisher Ultra', '500 ml': 275, '650 ml': 350 },
+  { Section: 'Premium Beer', Item: 'LP Mild', '500 ml': 180, '650 ml': 215 },
+  { Section: 'Premium Beer', Item: 'Tuborg Mild', '500 ml': 275, '650 ml': 290 },
+
+  // 17. Strong Beer (6)
+  { Section: 'Strong Beer', Item: 'Budweiser Magnum', '500 ml': 290, '650 ml': 355 },
+  { Section: 'Strong Beer', Item: 'Carlsberg Elephant', '500 ml': 290, '650 ml': 375 },
+  { Section: 'Strong Beer', Item: 'Kingfisher Strong', '500 ml': 235, '650 ml': 290 },
+  { Section: 'Strong Beer', Item: 'Kingfisher Ultra Max', '500 ml': 290, '650 ml': 375 },
+  { Section: 'Strong Beer', Item: 'LP Strong', '500 ml': 205, '650 ml': 260 },
+  { Section: 'Strong Beer', Item: 'Tuborg Strong', '500 ml': 235, '650 ml': 300 },
+
+  // 17. Craft Beer (3)
+  { Section: 'Craft Beer', Item: 'Hefeweizen', Price: 360 },
+  { Section: 'Craft Beer', Item: 'Lager', Price: 360 },
+  { Section: 'Craft Beer', Item: 'Belgian Wit', Price: 360 }
 ];
+
+// Backward-compatible alias
+export const ANCHOR_HARBOUR_64_MENU_ITEMS = ANCHOR_HARBOUR_BAR_MENU_ITEMS;
 
 export class BarMenuImporter {
   /**
@@ -268,8 +320,14 @@ export class BarMenuImporter {
    * @param {Object} sampleRow 
    * @returns {Array<{ key: string, name: string, ml: number }>}
    */
-  static detectServingColumns(sampleRow) {
-    const keys = Object.keys(sampleRow || {});
+  static detectServingColumns(sampleRowOrRows) {
+    const keySet = new Set();
+    if (Array.isArray(sampleRowOrRows)) {
+      sampleRowOrRows.forEach(r => Object.keys(r || {}).forEach(k => keySet.add(k)));
+    } else {
+      Object.keys(sampleRowOrRows || {}).forEach(k => keySet.add(k));
+    }
+    const keys = Array.from(keySet);
     const servingCols = [];
 
     keys.forEach(k => {
@@ -348,8 +406,7 @@ export class BarMenuImporter {
     let newItemsCount = 0;
     let existingItemsCount = 0;
 
-    const sampleRow = rows[0] || {};
-    const servingCols = this.detectServingColumns(sampleRow);
+    const servingCols = this.detectServingColumns(rows);
 
     rows.forEach((row, idx) => {
       const keys = Object.keys(row || {});
@@ -565,9 +622,22 @@ export class BarMenuImporter {
    * @param {string|null} tenantId 
    * @returns {{ success: boolean, importedCount: number, batchId: string }}
    */
-  static executeImport(previewResult, tenantId = null) {
+  static executeImport(previewResult, tenantId = null, options = { cleanSweep: true }) {
     if (!previewResult || !Array.isArray(previewResult.items)) {
-      return { success: false, importedCount: 0, batchId: null };
+      return { success: false, importedCount: 0, archivedCount: 0, batchId: null };
+    }
+
+    let archivedCount = 0;
+    if (options.cleanSweep !== false) {
+      const newNames = new Set(previewResult.items.map(i => String(i.itemName || '').toLowerCase().trim()));
+      const existingBar = kitchenMenuModel.getAll(tenantId, { domain: 'BAR', showArchived: false });
+      existingBar.forEach(oldItem => {
+        const oldName = String(oldItem.itemName || '').toLowerCase().trim();
+        if (!newNames.has(oldName)) {
+          kitchenMenuModel.archiveItem(oldItem.id);
+          archivedCount++;
+        }
+      });
     }
 
     let count = 0;
@@ -591,6 +661,7 @@ export class BarMenuImporter {
       timestamp: new Date().toISOString(),
       totalRows: previewResult.totalRows,
       importedCount: count,
+      archivedCount,
       newItemsCount: previewResult.newItemsCount,
       existingItemsCount: previewResult.existingItemsCount,
       performedBy: 'Bar Manager'
@@ -603,6 +674,7 @@ export class BarMenuImporter {
     return {
       success: true,
       importedCount: count,
+      archivedCount,
       batchId: previewResult.importBatchId
     };
   }

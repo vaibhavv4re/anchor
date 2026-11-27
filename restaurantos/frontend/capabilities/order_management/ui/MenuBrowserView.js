@@ -204,6 +204,7 @@ export class MenuBrowserView {
                 ${item.portionSize ? `<span style="font-size:0.7rem; color:var(--text-muted); background:var(--bg-surface-2); padding:1px 6px; border-radius:4px;">${item.portionSize}</span>` : ''}
               </div>
               <div style="display:flex; gap:4px; align-items:center;">
+                ${(!item.recipeId && !item.linkedInventorySku && item.consumptionMode !== 'DIRECT_POUR' && item.consumptionMode !== 'DIRECT_UNIT') ? `<span style="font-size:0.65rem; color:#d97706; background:rgba(217,119,6,0.12); border:1px solid rgba(217,119,6,0.3); padding:1px 5px; border-radius:4px; font-weight:600;" title="Recipe BOM pending — order will sell normally">⚠️ Recipe Pending</span>` : ''}
                 ${spiceIndicator ? `<span style="font-size:0.7rem; color:#ef4444; background:rgba(239,68,68,0.1); padding:1px 6px; border-radius:4px; font-weight:600;">${spiceIndicator}</span>` : ''}
                 ${inCartQty > 0 ? `<span class="badge badge-info" style="font-size:0.7rem; padding:2px 6px; font-weight:700;">${inCartQty} in cart</span>` : ''}
               </div>
@@ -242,7 +243,7 @@ export class MenuBrowserView {
           <!-- Bottom Row: Price & High-Contrast Touch Add Button -->
           <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid var(--border-subtle); padding-top:8px; margin-top:4px;">
             <div>
-              <span style="font-size:1.15rem; color:var(--accent-primary); font-weight:800;">₹${item.price}</span>
+              <span style="font-size:1.15rem; color:var(--accent-primary); font-weight:800;">${item.isMarketPrice ? 'As per catch' : `₹${item.price}`}</span>
               ${item.itemCode ? `<span style="font-size:0.7rem; color:var(--text-muted); margin-left:4px; font-family:monospace;">${item.itemCode}</span>` : ''}
             </div>
 

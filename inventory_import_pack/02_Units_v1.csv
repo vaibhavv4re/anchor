@@ -21,3 +21,4 @@ CASE,Case,COUNT,false,,true,true
 TRAY,Tray,COUNT,false,,true,true
 SACHET,Sachet / Pouch,COUNT,false,,true,false
 ROLL,Roll,COUNT,false,,true,false
+KEG,Keg (Draft Beer),COUNT,false,,true,true

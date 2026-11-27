@@ -35,10 +35,24 @@ export class SupabaseClient {
     });
   }
 
+  _resolveSessionTenantId() {
+    if (typeof sessionStorage !== 'undefined') {
+      try {
+        const s = JSON.parse(sessionStorage.getItem('ros_session') || '{}');
+        if (s.tenantId) return s.tenantId;
+      } catch (_) {}
+    }
+    return null;
+  }
+
   getFilterKey(tableName, id) {
     if (tableName === 'tenants') return `tenant_id=eq.${id}`;
     if (tableName === 'inventory') {
-      return (typeof id === 'string' && id.startsWith('uuid-')) ? `uuid=eq.${id}` : `item_code=eq.${id}`;
+      const s = String(id || '');
+      if (s.startsWith('uuid-') || /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(s)) {
+        return `uuid=eq.${s}`;
+      }
+      return `item_code=eq.${s}`;
     }
     if (tableName === 'suppliers') {
       return (typeof id === 'string' && id.startsWith('sup-')) ? `id=eq.${id}` : `supplier_code=eq.${id}`;
@@ -114,7 +128,11 @@ export class SupabaseClient {
       
       const data = await resp.json();
       if (Array.isArray(data) && data.length === 0) {
-        return this.createRecord(tableName, patch);
+        if (tableName === 'inventory' && !patch.itemCode && !patch.item_code && !patch.itemName && !patch.item_name) {
+          return { success: true, data: patch };
+        }
+        const resolvedTenant = patch.tenantId || patch.tenant_id || this._resolveSessionTenantId();
+        return this.createRecord(tableName, { ...patch, ...(resolvedTenant ? { tenantId: resolvedTenant } : {}) });
       }
 
       const resultData = Array.isArray(data) && data.length > 0 ? data[0] : patch;
@@ -267,7 +285,7 @@ export function formatRecordForTable(entityName, job) {
   if (entityName === 'inventory') {
     return {
       uuid: p.uuid || ('uuid-' + Math.random().toString(36).substring(2, 9)),
-      tenant_id: job.tenantId || p.tenantId || '',
+      tenant_id: job.tenantId || job.tenant_id || p.tenantId || p.tenant_id || '',
       item_code: p.itemCode || '',
       item_name: p.itemName || '',
       item_type: p.itemType || 'Raw Material',
@@ -1059,8 +1077,8 @@ export function formatPatchForTable(entityName, patch) {
     copyIfPresent('defaultLocationCode', 'default_location_code');
     copyIfPresent('defaultSupplierCode', 'default_supplier_code');
     copyIfPresent('version', 'version', v => parseInt(v) || 1);
-    copyIfPresent('status', 'status');
     copyIfPresent('active', 'status', v => (v === false ? 'INACTIVE' : (v === true ? 'ACTIVE' : v)));
+    copyIfPresent('status', 'status');
   } else if (entityName === 'tenants') {
     copyIfPresent('tenantId', 'tenant_id');
     copyIfPresent('name', 'name');

@@ -10,6 +10,7 @@
  */
 
 import { kitchenMenuModel } from '../../../../../businessos/platform/kitchen/kitchenMenuModel.js';
+import { masterMenuWorkbookService } from '../../../../../businessos/platform/kitchen/masterMenuWorkbookService.js';
 
 export class KitchenMenuView {
   constructor(deps = {}) {
@@ -37,6 +38,7 @@ export class KitchenMenuView {
     this.importPreviewRows = [];
     this.importErrors = [];
     this.importFileName = '';
+    this.workbookAnalysis = null;
   }
 
   /**
@@ -86,7 +88,10 @@ export class KitchenMenuView {
               </p>
             </div>
 
-            <div style="display:flex; gap:var(--space-sm);">
+            <div style="display:flex; gap:var(--space-sm); align-items:center;">
+              <button class="btn-secondary btn-export-master-excel" style="display:flex; align-items:center; gap:6px; font-weight:600;">
+                📤 Export Master Excel (.xlsx)
+              </button>
               <button class="btn-secondary btn-tab-trigger ${this.activeTab === 'import' ? 'active' : ''}" data-tab="import">
                 📥 Import Menu
               </button>
@@ -322,93 +327,147 @@ export class KitchenMenuView {
 
   // 3. 📥 IMPORT MENU TAB
   renderImportTab(tenantId) {
+    if (this.workbookAnalysis) {
+      const a = this.workbookAnalysis;
+      const k = a.kpis;
+      const d = a.diff;
+      const v = a.validation;
+
+      return `
+        <div class="animate-fade-in" style="display:flex; flex-direction:column; gap:var(--space-lg);">
+          <!-- Top Status Banner -->
+          <div class="card" style="background:var(--bg-surface-1); padding:var(--space-lg); border-left:4px solid ${a.valid ? 'var(--status-success)' : 'var(--status-danger)'};">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;">
+              <div>
+                <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">PRE-IMPORT WORKBOOK ANALYSIS</div>
+                <h3 style="font-size:1.4rem; margin-top:2px;">
+                  ${a.valid ? '🟢 Master Workbook Validated & Ready to Commit' : '🔴 Validation Errors Found'}
+                </h3>
+                <div style="font-size:0.875rem; color:var(--text-muted); margin-top:2px;">
+                  File: <code>${this.importFileName}</code> • ${k.totalCategories} Categories, ${k.foodTotal} Food Dishes, ${k.barTotal} Bar Drinks, ${a.parsedPayload.recipesGrouped.length} Recipes.
+                </div>
+              </div>
+              <div style="display:flex; gap:10px;">
+                <button class="btn-secondary btn-cancel-workbook-import" style="padding:10px 18px; font-weight:600;">
+                  ✕ Cancel / Re-upload
+                </button>
+                <button class="btn-primary btn-commit-workbook-import" ${!a.valid ? 'disabled style="opacity:0.5; cursor:not-allowed;"' : ''} style="padding:10px 22px; font-weight:700; background:var(--status-success);">
+                  🚀 Commit & Synchronize Menu
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- KPI Summary Strip -->
+          <div class="grid grid-cols-4 gap-md">
+            <div class="card" style="background:var(--bg-surface-1); padding:16px; border-left:4px solid #3b82f6;">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">TOTAL MENU ITEMS</div>
+              <div style="font-size:1.8rem; font-weight:800; color:#3b82f6; margin-top:4px;">${k.foodTotal + k.barTotal}</div>
+              <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">${k.foodTotal} Food + ${k.barTotal} Bar</div>
+            </div>
+            <div class="card" style="background:var(--bg-surface-1); padding:16px; border-left:4px solid #10b981;">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">RECIPE & SKU COVERAGE</div>
+              <div style="font-size:1.8rem; font-weight:800; color:#10b981; margin-top:4px;">${k.overallCoveragePct}%</div>
+              <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">${k.foodLinked + k.barDirectMapped + k.cocktailsLinked} Linked</div>
+            </div>
+            <div class="card" style="background:var(--bg-surface-1); padding:16px; border-left:4px solid #f59e0b;">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">RECIPE MISSING (NON-BLOCKING)</div>
+              <div style="font-size:1.8rem; font-weight:800; color:#f59e0b; margin-top:4px;">${k.foodMissing + k.cocktailsMissing}</div>
+              <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Will sell without auto-deduction</div>
+            </div>
+            <div class="card" style="background:var(--bg-surface-1); padding:16px; border-left:4px solid #8b5cf6;">
+              <div style="font-size:0.7rem; color:var(--text-muted); font-weight:700;">SIMULATED AVG FOOD COST</div>
+              <div style="font-size:1.8rem; font-weight:800; color:#8b5cf6; margin-top:4px;">${k.avgFoodCost}%</div>
+              <div style="font-size:0.75rem; color:var(--text-muted); margin-top:2px;">Healthy benchmark &lt; 32%</div>
+            </div>
+          </div>
+
+          <!-- Database Diff Matrix Card -->
+          <div class="card" style="background:var(--bg-surface-1); padding:var(--space-lg);">
+            <h4 style="font-size:1rem; margin-bottom:12px; font-weight:700; text-transform:uppercase; letter-spacing:0.04em;">
+              🔄 Database Synchronization Diff
+            </h4>
+            <div class="grid grid-cols-3 gap-md">
+              <div style="padding:14px; background:var(--bg-surface-2); border-radius:6px; border-left:3px solid var(--status-success);">
+                <div style="font-weight:700; color:var(--status-success);">➕ Items to Create: ${d.toCreateCount}</div>
+                <div style="font-size:0.8rem; color:var(--text-muted); margin-top:4px;">New dish/drink codes added to menu</div>
+              </div>
+              <div style="padding:14px; background:var(--bg-surface-2); border-radius:6px; border-left:3px solid #3b82f6;">
+                <div style="font-weight:700; color:#3b82f6;">✏️ Items to Update: ${d.toUpdateCount}</div>
+                <div style="font-size:0.8rem; color:var(--text-muted); margin-top:4px;">Prices, variants, or categories updated</div>
+              </div>
+              <div style="padding:14px; background:var(--bg-surface-2); border-radius:6px; border-left:3px solid #6b7280;">
+                <div style="font-weight:700; color:var(--text-muted);">📦 Omissions to Archive: ${d.toArchiveCount}</div>
+                <div style="font-size:0.8rem; color:var(--text-muted); margin-top:4px;">Zero hard-deletes; moved to ARCHIVED to protect past sales ledger</div>
+              </div>
+            </div>
+          </div>
+
+          ${v.errors.length > 0 ? `
+            <div class="card" style="background:rgba(239, 68, 68, 0.08); border:1px solid var(--status-danger); padding:var(--space-md);">
+              <div style="font-weight:800; color:var(--status-danger); margin-bottom:6px;">🛑 Validation Errors (${v.errors.length}):</div>
+              <ul style="margin:0 0 0 16px; font-size:0.85rem; color:var(--status-danger); line-height:1.5;">
+                ${v.errors.map(err => `<li>${err}</li>`).join('')}
+              </ul>
+            </div>
+          ` : ''}
+
+          ${v.warnings.length > 0 ? `
+            <div class="card" style="background:rgba(245, 158, 11, 0.08); border:1px solid var(--status-warning); padding:var(--space-md);">
+              <div style="font-weight:800; color:var(--status-warning); margin-bottom:6px;">⚠️ Advisory Notices (${v.warnings.length}):</div>
+              <ul style="margin:0 0 0 16px; font-size:0.85rem; color:var(--text-muted); line-height:1.5;">
+                ${v.warnings.slice(0, 10).map(w => `<li>${w}</li>`).join('')}
+                ${v.warnings.length > 10 ? `<li><em>...and ${v.warnings.length - 10} more advisory notices.</em></li>` : ''}
+              </ul>
+            </div>
+          ` : ''}
+        </div>
+      `;
+    }
+
     return `
       <div style="display:flex; flex-direction:column; gap:var(--space-lg);">
         <div class="grid grid-cols-2 gap-lg">
-          <!-- 1-Click Actual Menu Dataset Importer Card -->
+          <!-- Card 1: 5-Tab Master Excel Workbook -->
           <div class="card" style="background:var(--bg-surface-1); padding:var(--space-lg); border-left:4px solid var(--accent-primary);">
-            <div style="font-size:0.75rem; color:var(--accent-primary); font-weight:700; text-transform:uppercase;">RECOMMENDED INITIAL DATASET</div>
-            <h3 style="font-size:1.3rem; margin-top:4px;">✨ Load Actual Anchor Coastal Menu</h3>
+            <div style="font-size:0.75rem; color:var(--accent-primary); font-weight:700; text-transform:uppercase;">COORDINATED 5-TAB WORKBOOK (RECOMMENDED)</div>
+            <h3 style="font-size:1.3rem; margin-top:4px;">📊 Master Menu & Recipes Workbook (.xlsx)</h3>
             <p style="font-size:0.875rem; color:var(--text-muted); margin-top:6px;">
-              Instantly import the complete 70 actual coastal dishes extracted from the Anchor restaurant menu document (Soups, Starters, Mains, Breads, Drinks).
+              Manage Categories, Food Dishes, Bar Drinks, and Recipe BOMs in one coordinated Excel workbook with real-time referential validation.
             </p>
 
-            <div style="margin-top:16px;">
-              <button class="btn-primary btn-load-actual-menu" style="padding:12px 20px; font-weight:700; width:100%;">
-                ✨ Import Actual Anchor Coastal Menu (70 Items)
+            <div style="display:flex; gap:8px; margin-top:16px; flex-wrap:wrap;">
+              <button class="btn-primary btn-export-master-excel" style="padding:10px 16px; font-weight:700; flex:1; min-width:180px;">
+                📤 Export Live Master (.xlsx)
+              </button>
+              <button class="btn-secondary btn-download-master-template" style="padding:10px 16px; font-weight:600; flex:1; min-width:180px;">
+                📄 Download Starter Template
               </button>
             </div>
-          </div>
 
-          <!-- Custom CSV / Excel Upload Card -->
-          <div class="card" style="background:var(--bg-surface-1); padding:var(--space-lg);">
-            <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">CUSTOM BULK UPLOAD</div>
-            <h3 style="font-size:1.3rem; margin-top:4px;">📁 Upload Excel / CSV Menu</h3>
-            <p style="font-size:0.875rem; color:var(--text-muted); margin-top:6px;">
-              Upload custom restaurant menu files in <code>.xlsx</code>, <code>.xls</code>, or <code>.csv</code> format.
-            </p>
-
-            <div style="margin-top:16px; display:flex; gap:var(--space-sm);">
-              <button class="btn-secondary btn-download-template" style="flex:1; font-weight:600;">
-                📄 Download CSV Template
-              </button>
-              <label class="btn-secondary" style="flex:1; font-weight:600; text-align:center; cursor:pointer;">
-                📁 Choose File
-                <input type="file" id="inp-upload-menu-file" accept=".csv, .xlsx, .xls" style="display:none;">
+            <div style="margin-top:14px;">
+              <label class="btn-secondary" style="display:block; text-align:center; padding:12px; font-weight:700; cursor:pointer; background:var(--bg-surface-2); border:1px dashed var(--accent-primary);">
+                📁 Upload & Analyze Master Excel (.xlsx)
+                <input type="file" id="inp-upload-master-workbook" accept=".xlsx, .xls" style="display:none;">
               </label>
             </div>
           </div>
-        </div>
 
-        <!-- Import Validation & Preview Area -->
-        ${this.importFileName ? `
+          <!-- Card 2: 1-Click Final Food Menu Clean Sweep -->
           <div class="card" style="background:var(--bg-surface-1); padding:var(--space-lg);">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:var(--space-md);">
-              <h3 style="font-size:1.1rem; margin:0;">
-                File Selected: <code>${this.importFileName}</code> (${this.importPreviewRows.length} rows)
-              </h3>
-              <button class="btn-primary btn-confirm-import" ${this.importPreviewRows.length === 0 ? 'disabled' : ''}>
-                ✅ Commit Import (${this.importPreviewRows.length} Items)
+            <div style="font-size:0.75rem; color:var(--text-muted); font-weight:700; text-transform:uppercase;">CLEAN-SWEEP FINAL MENU</div>
+            <h3 style="font-size:1.3rem; margin-top:4px;">✨ Load Final Food Menu (54 Dishes)</h3>
+            <p style="font-size:0.875rem; color:var(--text-muted); margin-top:6px;">
+              Archives obsolete food items and loads the final Chef Varun Inamdar menu (Soups, Sharing Plates, Tandoor, Wood Grill, Chinese, Regional Curries, Breads, Desserts).
+            </p>
+
+            <div style="margin-top:16px;">
+              <button class="btn-secondary btn-load-actual-menu" style="padding:12px 20px; font-weight:700; width:100%;">
+                ✨ Clean-Sweep Import Final Food Menu (54 Dishes)
               </button>
             </div>
-
-            ${this.importErrors.length > 0 ? `
-              <div style="padding:12px; background:rgba(239, 68, 68, 0.1); border:1px solid var(--status-danger); border-radius:6px; margin-bottom:16px;">
-                <div style="font-weight:700; color:var(--status-danger);">⚠️ Validation Alerts:</div>
-                <ul style="margin:4px 0 0 16px; font-size:0.85rem; color:var(--status-danger);">
-                  ${this.importErrors.map(err => `<li>${err}</li>`).join('')}
-                </ul>
-              </div>
-            ` : ''}
-
-            <div class="table-responsive" style="max-height:300px; overflow-y:auto;">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>#</th>
-                    <th>Item Name</th>
-                    <th>Category</th>
-                    <th>Price</th>
-                    <th>Dietary Type</th>
-                    <th>Portion</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${this.importPreviewRows.slice(0, 50).map((r, idx) => `
-                    <tr>
-                      <td>${idx + 1}</td>
-                      <td style="font-weight:600;">${r['Item Name'] || r['item_name'] || r['itemName'] || '—'}</td>
-                      <td><span class="badge badge-info">${r['Category'] || r['category'] || 'GENERAL'}</span></td>
-                      <td style="font-weight:700;">₹${r['Price'] || r['selling_price'] || r['sellingPrice'] || 0}</td>
-                      <td>${r['Dietary Type'] || r['dietary_type'] || 'VEG'}</td>
-                      <td>${r['Portion Size'] || r['portion_size'] || '1 Portion'}</td>
-                    </tr>
-                  `).join('')}
-                </tbody>
-              </table>
-            </div>
           </div>
-        ` : ''}
+        </div>
       </div>
     `;
   }
@@ -628,6 +687,87 @@ export class KitchenMenuView {
         alert(`✨ Successfully imported ${res.importedCount} actual Anchor coastal menu items!`);
         this.activeTab = 'catalog';
         this.updateContent();
+      });
+    }
+
+    // Export Master Workbook (.xlsx)
+    this.container.querySelectorAll('.btn-export-master-excel').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        try {
+          btn.disabled = true;
+          const origText = btn.innerHTML;
+          btn.innerHTML = '⏳ Exporting...';
+          await masterMenuWorkbookService.exportMasterWorkbook(tenantId);
+          btn.disabled = false;
+          btn.innerHTML = origText;
+        } catch (err) {
+          alert(`Export failed: ${err.message}`);
+          btn.disabled = false;
+        }
+      });
+    });
+
+    // Download Master Template (.xlsx)
+    const dlTemplateBtn = this.container.querySelector('.btn-download-master-template');
+    if (dlTemplateBtn) {
+      dlTemplateBtn.addEventListener('click', async () => {
+        try {
+          dlTemplateBtn.disabled = true;
+          await masterMenuWorkbookService.exportMasterWorkbook(tenantId, { fileName: 'Anchor_Menu_Master_Template.xlsx' });
+          dlTemplateBtn.disabled = false;
+        } catch (err) {
+          alert(`Download failed: ${err.message}`);
+          dlTemplateBtn.disabled = false;
+        }
+      });
+    }
+
+    // Upload & Analyze Master Workbook (.xlsx)
+    const masterFileInp = this.container.querySelector('#inp-upload-master-workbook');
+    if (masterFileInp) {
+      masterFileInp.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+          this.importFileName = file.name;
+          const analysis = await masterMenuWorkbookService.analyzeWorkbook(file, tenantId);
+          this.workbookAnalysis = analysis;
+          this.updateContent();
+        } catch (err) {
+          alert(`Analysis failed: ${err.message}`);
+        }
+      });
+    }
+
+    // Cancel / Re-upload Workbook
+    const cancelWbBtn = this.container.querySelector('.btn-cancel-workbook-import');
+    if (cancelWbBtn) {
+      cancelWbBtn.addEventListener('click', () => {
+        this.workbookAnalysis = null;
+        this.importFileName = '';
+        this.updateContent();
+      });
+    }
+
+    // Commit Synchronized Master Workbook
+    const commitWbBtn = this.container.querySelector('.btn-commit-workbook-import');
+    if (commitWbBtn) {
+      commitWbBtn.addEventListener('click', async () => {
+        if (!this.workbookAnalysis || !this.workbookAnalysis.valid) return;
+        try {
+          commitWbBtn.disabled = true;
+          commitWbBtn.innerHTML = '⏳ Synchronizing...';
+          const res = await masterMenuWorkbookService.commitImport(this.workbookAnalysis, tenantId);
+          alert(`🎉 ${res.message}`);
+          this.workbookAnalysis = null;
+          this.importFileName = '';
+          this.activeTab = 'catalog';
+          this.updateContent();
+        } catch (err) {
+          alert(`Commit failed: ${err.message}`);
+          commitWbBtn.disabled = false;
+          commitWbBtn.innerHTML = '🚀 Commit & Synchronize Menu';
+        }
       });
     }
 
@@ -1156,6 +1296,87 @@ export class KitchenMenuView {
         alert(`✨ Successfully imported ${res.importedCount} actual Anchor coastal menu items!`);
         this.activeTab = 'catalog';
         this.updateContent();
+      });
+    }
+
+    // Export Master Workbook (.xlsx)
+    this.container.querySelectorAll('.btn-export-master-excel').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        try {
+          btn.disabled = true;
+          const origText = btn.innerHTML;
+          btn.innerHTML = '⏳ Exporting...';
+          await masterMenuWorkbookService.exportMasterWorkbook(tenantId);
+          btn.disabled = false;
+          btn.innerHTML = origText;
+        } catch (err) {
+          alert(`Export failed: ${err.message}`);
+          btn.disabled = false;
+        }
+      });
+    });
+
+    // Download Master Template (.xlsx)
+    const dlTemplateBtn = this.container.querySelector('.btn-download-master-template');
+    if (dlTemplateBtn) {
+      dlTemplateBtn.addEventListener('click', async () => {
+        try {
+          dlTemplateBtn.disabled = true;
+          await masterMenuWorkbookService.exportMasterWorkbook(tenantId, { fileName: 'Anchor_Menu_Master_Template.xlsx' });
+          dlTemplateBtn.disabled = false;
+        } catch (err) {
+          alert(`Download failed: ${err.message}`);
+          dlTemplateBtn.disabled = false;
+        }
+      });
+    }
+
+    // Upload & Analyze Master Workbook (.xlsx)
+    const masterFileInp = this.container.querySelector('#inp-upload-master-workbook');
+    if (masterFileInp) {
+      masterFileInp.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        try {
+          this.importFileName = file.name;
+          const analysis = await masterMenuWorkbookService.analyzeWorkbook(file, tenantId);
+          this.workbookAnalysis = analysis;
+          this.updateContent();
+        } catch (err) {
+          alert(`Analysis failed: ${err.message}`);
+        }
+      });
+    }
+
+    // Cancel / Re-upload Workbook
+    const cancelWbBtn = this.container.querySelector('.btn-cancel-workbook-import');
+    if (cancelWbBtn) {
+      cancelWbBtn.addEventListener('click', () => {
+        this.workbookAnalysis = null;
+        this.importFileName = '';
+        this.updateContent();
+      });
+    }
+
+    // Commit Synchronized Master Workbook
+    const commitWbBtn = this.container.querySelector('.btn-commit-workbook-import');
+    if (commitWbBtn) {
+      commitWbBtn.addEventListener('click', async () => {
+        if (!this.workbookAnalysis || !this.workbookAnalysis.valid) return;
+        try {
+          commitWbBtn.disabled = true;
+          commitWbBtn.innerHTML = '⏳ Synchronizing...';
+          const res = await masterMenuWorkbookService.commitImport(this.workbookAnalysis, tenantId);
+          alert(`🎉 ${res.message}`);
+          this.workbookAnalysis = null;
+          this.importFileName = '';
+          this.activeTab = 'catalog';
+          this.updateContent();
+        } catch (err) {
+          alert(`Commit failed: ${err.message}`);
+          commitWbBtn.disabled = false;
+          commitWbBtn.innerHTML = '🚀 Commit & Synchronize Menu';
+        }
       });
     }
 

@@ -21,7 +21,9 @@ import { productionBatchModel } from '../../../../../businessos/platform/kitchen
 import { inventoryItemModel } from '../../../../../businessos/platform/inventory/inventoryItemModel.js';
 import { inventoryProjectionService } from '../../../../../businessos/platform/inventory/inventoryProjectionService.js';
 import { BarMenuImporter, ANCHOR_HARBOUR_64_MENU_ITEMS } from '../../../../../businessos/platform/kitchen/barMenuImporter.js';
+import { masterMenuWorkbookService } from '../../../../../businessos/platform/kitchen/masterMenuWorkbookService.js';
 import { barConsumptionModel } from '../../../../../businessos/platform/kitchen/barConsumptionModel.js';
+import { resolveBarConsumption } from '../../../../../businessos/platform/bar/barConsumptionMapping.js';
 import { modifierGroupModel } from '../../../../../businessos/platform/kitchen/modifierGroupModel.js';
 import { offlineStore } from '../../../../../businessos/platform/offline_store/offlineStore.js';
 import { platformEventBus } from '../../../../../businessos/platform/events/platformEvents.js';
@@ -604,13 +606,26 @@ export class BarWorkspaceView {
       if (!mergedDrinkItemsMap.has(nameKey)) {
         mergedDrinkItemsMap.set(nameKey, {
           id: item.id,
+          itemCode: item.itemCode || item.item_code || null,
           itemName: item.itemName || item.name,
           category: item.category || 'BAR',
           price: item.price || item.sellingPrice || 0,
+          recipeId: item.recipeId || item.recipe_id || null,
+          linkedInventorySku: item.linkedInventorySku || item.linked_inventory_sku || null,
+          consumptionMode: item.consumptionMode || item.consumption_mode || null,
           variants: Array.isArray(item.variants) ? [...item.variants] : []
         });
       } else {
         const existing = mergedDrinkItemsMap.get(nameKey);
+        if (!existing.recipeId && (item.recipeId || item.recipe_id)) {
+          existing.recipeId = item.recipeId || item.recipe_id;
+        }
+        if (!existing.linkedInventorySku && (item.linkedInventorySku || item.linked_inventory_sku)) {
+          existing.linkedInventorySku = item.linkedInventorySku || item.linked_inventory_sku;
+        }
+        if (!existing.consumptionMode && (item.consumptionMode || item.consumption_mode)) {
+          existing.consumptionMode = item.consumptionMode || item.consumption_mode;
+        }
         const newVars = Array.isArray(item.variants) ? item.variants : [];
         newVars.forEach(nv => {
           if (!existing.variants.some(v => v.id === nv.id || v.name === nv.name)) {
@@ -631,10 +646,28 @@ export class BarWorkspaceView {
 
       const suggestedType = BarMenuImporter.classifySuggestedConsumptionType(item.category, item.itemName || item.name);
 
+      const invMaster = inventoryItemModel.getAllItems() || [];
       variants.forEach(v => {
         // Match dedicated consumption definition (POUR / UNIT / RECIPE / COMPOSITE)
-        const def = barConsumptionModel.getDefinitionForVariant(item.id, v.id);
-        const activeRecipe = recipes.find(r => r.menuItemId === item.id && (r.variantId === v.id || r.variantName === v.name));
+        let def = barConsumptionModel.getDefinitionForVariant(item.id, v.id);
+        if (!def && suggestedType !== 'RECIPE') {
+          const barRes = resolveBarConsumption(item, v, { orderQty: 1, inventoryMaster: invMaster });
+          if (barRes && barRes.success && (barRes.mode === 'POUR' || barRes.mode === 'UNIT') && barRes.inventoryItemCode) {
+            def = {
+              consumptionType: barRes.mode,
+              inventoryItemCode: barRes.inventoryItemCode,
+              inventoryItemName: barRes.inventoryItemName || barRes.inventoryItemCode,
+              quantity: barRes.totalDeduction,
+              uom: barRes.baseUom || 'LTR'
+            };
+          }
+        }
+        const targetRecId = v.recipeId || item.recipeId || null;
+        const activeRecipe = suggestedType === 'RECIPE' ? (
+          recipes.find(r => (r.menuItemId === item.id || r.menu_item_id === item.id) && (r.variantId === v.id || (v.name && r.variantName === v.name))) ||
+          (targetRecId ? recipes.find(r => r.id === targetRecId || r.recipeCode === targetRecId) : null) ||
+          recipes.find(r => (r.menuItemId === item.id || r.menu_item_id === item.id || (item.itemCode && (r.menuItemCode === item.itemCode || r.menu_item_code === item.itemCode))) && !r.variantId && !r.variantName)
+        ) : null;
 
         let statusTag = '⚠️ RECIPE MISSING';
         let badgeClass = 'badge-danger';
@@ -1321,11 +1354,14 @@ export class BarWorkspaceView {
               </p>
               <input type="file" id="input-bar-menu-file-page" accept=".xlsx, .xls, .csv" style="display:none;">
               <div style="display:flex; justify-content:center; gap:12px; flex-wrap:wrap;">
+                <button id="btn-export-master-excel-bar" class="btn-secondary" style="padding:12px 24px; font-weight:800; font-size:0.92rem; border-color:var(--accent-primary); color:var(--accent-primary); cursor:pointer;">
+                  📤 Export Master Workbook (.xlsx)
+                </button>
                 <button id="btn-trigger-file-select-page" class="btn-primary" style="padding:12px 24px; font-weight:900; font-size:0.92rem; background:linear-gradient(90deg,#ec4899,#8b5cf6); color:#fff; border:none; border-radius:8px; cursor:pointer; box-shadow:0 4px 16px rgba(236,72,153,0.35);">
                   📁 Select Excel / CSV File to Analyze
                 </button>
                 <button id="btn-load-anchor-harbour-preset" class="btn-secondary" style="padding:12px 24px; font-weight:800; font-size:0.92rem; border-color:var(--accent-primary); color:var(--accent-primary); cursor:pointer;">
-                  ⚡ Load Anchor Harbour Bar &amp; Kitchen (64 Items)
+                  ⚡ Clean-Sweep Load Final Bar Menu (107 Items)
                 </button>
               </div>
             </div>
@@ -2157,6 +2193,24 @@ export class BarWorkspaceView {
           } catch (err) {
             alert(`⚠️ Error analyzing Excel/CSV file: ${err.message}`);
           }
+        }
+      });
+    }
+
+    // Export Master Workbook Button (Bar Workspace)
+    const btnExportMasterBar = this.container.querySelector('#btn-export-master-excel-bar');
+    if (btnExportMasterBar) {
+      btnExportMasterBar.addEventListener('click', async () => {
+        try {
+          btnExportMasterBar.disabled = true;
+          const orig = btnExportMasterBar.innerHTML;
+          btnExportMasterBar.innerHTML = '⏳ Exporting...';
+          await masterMenuWorkbookService.exportMasterWorkbook();
+          btnExportMasterBar.disabled = false;
+          btnExportMasterBar.innerHTML = orig;
+        } catch (err) {
+          alert(`Export failed: ${err.message}`);
+          btnExportMasterBar.disabled = false;
         }
       });
     }
